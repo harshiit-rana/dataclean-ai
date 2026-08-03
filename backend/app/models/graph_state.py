@@ -7,7 +7,7 @@ from typing import Annotated, Literal, Optional
 
 from pydantic import BaseModel, Field
 
-from app.models.suggestion_card import ActionLogEntry, SuggestionCard
+from app.models.suggestion_card import ActionLogEntry, SuggestionCard  # noqa: F401 -- re-exported for callers that validate state dicts back into models
 
 UseCase = Literal["ml_training", "reporting", "analysis", "pipeline_validation"]
 CleaningAggression = Literal["conservative", "moderate", "thorough"]
@@ -49,6 +49,19 @@ class GraphState(BaseModel):
     session_id doubles as the LangGraph thread_id. Fields accumulated across nodes
     (action_log, conversation_history) use operator.add reducers so parallel/sequential
     node writes append rather than overwrite, per LangGraph's Annotated-reducer convention.
+
+    IMPORTANT -- why the collections below are `list[dict]` and not `list[ColumnIssue]` /
+    `list[SuggestionCard]` / `list[ActionLogEntry]`:
+
+    The checkpointer serializes nested Pydantic models into LangChain's envelope form
+    (`{"lc": 2, "type": "constructor", "id": [...], "kwargs": {...}}`). Whether those get
+    reconstructed on read is version-dependent -- when they aren't, the raw envelope dict
+    is handed straight to GraphState validation and every field reads as missing, so
+    resuming a checkpointed session dies with a wall of "Field required" errors.
+
+    Keeping state JSON-native makes round-tripping independent of the serializer's type
+    registry. Nodes validate into the real models at the edges (ColumnIssue.model_validate
+    etc.) for type-safe logic, then store model_dump() back into state.
     """
 
     session_id: str
@@ -60,14 +73,15 @@ class GraphState(BaseModel):
     goal_context: Optional[GoalContext] = None
 
     raw_profile: Optional[dict] = None
-    issues: list[ColumnIssue] = Field(default_factory=list)
-    suggestion_cards: list[SuggestionCard] = Field(default_factory=list)
+    issues: list[dict] = Field(default_factory=list)  # ColumnIssue.model_dump()
+    suggestion_cards: list[dict] = Field(default_factory=list)  # SuggestionCard.model_dump()
 
     approved_action_ids: list[str] = Field(default_factory=list)
     skipped_action_ids: list[str] = Field(default_factory=list)
     skip_reasons: dict[str, str] = Field(default_factory=dict)
 
-    action_log: Annotated[list[ActionLogEntry], operator.add] = Field(default_factory=list)
+    # ActionLogEntry.model_dump()
+    action_log: Annotated[list[dict], operator.add] = Field(default_factory=list)
     conversation_history: Annotated[list[dict], operator.add] = Field(default_factory=list)
 
     current_agent: Optional[str] = None

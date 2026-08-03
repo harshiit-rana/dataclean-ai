@@ -94,8 +94,8 @@ async def test_graph_pauses_at_human_approval(graph, fixtures_dir):
     assert len(values["suggestion_cards"]) == len(values["issues"])
     assert values["current_agent"] == "explanation_agent"
     for card in values["suggestion_cards"]:
-        assert card.found
-        assert card.proposed_action
+        assert card["found"]
+        assert card["proposed_action"]
 
 
 @pytest.mark.asyncio
@@ -135,15 +135,16 @@ async def test_resume_applies_only_approved_fixes(graph, fixtures_dir, tmp_path)
     cards = state.values["suggestion_cards"]
     assert len(cards) >= 2
     # every card got a usable operation parsed off the OPERATION line
-    assert all(c.operation == "drop_rows_with_nulls" for c in cards)
+    assert all(c["operation"] == "drop_rows_with_nulls" for c in cards)
 
     approved, rejected = cards[0], cards[1]
+    approved_id, rejected_id = approved["card_id"], rejected["card_id"]
     await graph.ainvoke(
         Command(
             resume={
-                "approved_action_ids": [approved.card_id],
-                "skipped_action_ids": [rejected.card_id],
-                "skip_reasons": {rejected.card_id: "I need those rows."},
+                "approved_action_ids": [approved_id],
+                "skipped_action_ids": [rejected_id],
+                "skip_reasons": {rejected_id: "I need those rows."},
             }
         ),
         config,
@@ -151,23 +152,23 @@ async def test_resume_applies_only_approved_fixes(graph, fixtures_dir, tmp_path)
 
     final = (await graph.aget_state(config)).values
     log = final["action_log"]
-    by_status = {e.status for e in log}
+    by_status = {e["status"] for e in log}
     assert "applied" in by_status and "rejected" in by_status
 
-    applied = [e for e in log if e.status == "applied"]
+    applied = [e for e in log if e["status"] == "applied"]
     assert len(applied) == 1
-    assert applied[0].card_id == approved.card_id
-    assert applied[0].before_stats["null_count"] > 0
-    assert applied[0].after_stats["null_count"] == 0
-    assert applied[0].after_stats["row_count"] < applied[0].before_stats["row_count"]
+    assert applied[0]["card_id"] == approved_id
+    assert applied[0]["before_stats"]["null_count"] > 0
+    assert applied[0]["after_stats"]["null_count"] == 0
+    assert applied[0]["after_stats"]["row_count"] < applied[0]["before_stats"]["row_count"]
 
     # the rejection reason is preserved verbatim (FR-30)
-    rejected_entry = next(e for e in log if e.card_id == rejected.card_id)
-    assert rejected_entry.rejection_reason == "I need those rows."
+    rejected_entry = next(e for e in log if e["card_id"] == rejected_id)
+    assert rejected_entry["rejection_reason"] == "I need those rows."
 
     # cleaned output written to a separate file; the uploaded copy is untouched
     cleaned_path = final["cleaned_file_path"]
     assert cleaned_path.endswith("cleaned.csv")
     assert working.read_bytes() == original_bytes
     cleaned = pd.read_csv(cleaned_path)
-    assert cleaned[approved.column_name].isna().sum() == 0
+    assert cleaned[approved["column_name"]].isna().sum() == 0

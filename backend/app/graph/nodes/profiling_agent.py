@@ -93,4 +93,9 @@ async def profiling_agent(state: GraphState) -> dict:
         }
     )
 
-    return {"issues": issues, "raw_profile": raw_profile, "current_agent": "profiling_agent"}
+    # Stored as plain dicts -- see GraphState's docstring on checkpoint round-tripping.
+    return {
+        "issues": [issue.model_dump() for issue in issues],
+        "raw_profile": raw_profile,
+        "current_agent": "profiling_agent",
+    }

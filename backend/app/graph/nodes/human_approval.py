@@ -16,11 +16,8 @@ from app.models.graph_state import GraphState
 
 
 def human_approval(state: GraphState) -> dict:
-    user_selections = interrupt(
-        {
-            "suggestion_cards": [card.model_dump() for card in state.suggestion_cards],
-        }
-    )
+    # suggestion_cards are already plain dicts in state (see GraphState docstring).
+    user_selections = interrupt({"suggestion_cards": state.suggestion_cards})
 
     return {
         "approved_action_ids": user_selections.get("approved_action_ids", []),

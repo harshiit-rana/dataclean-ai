@@ -24,7 +24,7 @@ import pandas as pd
 from langgraph.config import get_stream_writer
 
 from app.models.graph_state import GraphState
-from app.models.suggestion_card import ActionLogEntry
+from app.models.suggestion_card import ActionLogEntry, SuggestionCard
 from app.services import operations
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,9 @@ async def cleaning_agent(state: GraphState) -> dict:
     action_log: list[ActionLogEntry] = []
     applied_count = 0
 
-    for card in state.suggestion_cards:
+    for card_data in state.suggestion_cards:
+        # state holds plain dicts (see GraphState docstring); validate for typed access.
+        card = SuggestionCard.model_validate(card_data)
         if card.card_id in skipped or card.card_id not in approved:
             action_log.append(
                 ActionLogEntry(
@@ -151,6 +153,6 @@ async def cleaning_agent(state: GraphState) -> dict:
 
     return {
         "cleaned_file_path": str(cleaned_path),
-        "action_log": action_log,
+        "action_log": [entry.model_dump() for entry in action_log],
         "current_agent": "cleaning_agent",
     }

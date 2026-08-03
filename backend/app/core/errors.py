@@ -3,10 +3,15 @@ covering the error table in PRD §14."""
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
+from app.config import get_settings
 from app.models.api_schemas import ErrorResponse
+
+logger = logging.getLogger(__name__)
 
 
 class AppError(Exception):
@@ -88,4 +93,21 @@ def register_exception_handlers(app: FastAPI) -> None:
         return JSONResponse(
             status_code=exc.status_code,
             content=ErrorResponse(error=exc.error, detail=exc.detail).model_dump(),
+        )
+
+    @app.exception_handler(Exception)
+    async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+        """Unhandled errors otherwise return a bare "Internal Server Error" body with the
+        traceback only in the server's stdout -- painful to debug behind Docker. Always log
+        it, and in development echo the exception back so the cause is visible from the
+        client too. Never leaks internals when APP_ENV isn't development."""
+        logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+
+        detail = "Something went wrong on our end. Please try again."
+        if get_settings().app_env == "development":
+            detail = f"{type(exc).__name__}: {exc}"
+
+        return JSONResponse(
+            status_code=500,
+            content=ErrorResponse(error="Internal server error", detail=detail).model_dump(),
         )
