@@ -1,0 +1,21 @@
+employee_id,full_name,department,salary,performance_score,hire_date,manager
+E001,Alice Johnson,Engineering,95000,88,2020-03-15,Robert King
+E002,Bob Martinez,Sales,72000,79,2019-07-01,Linda Chen
+E003,Carol White,Engineering,98000,91,2021-01-10,Robert King
+E004,David Lee,Marketing,68000,,2018-11-20,Susan Park
+E005,Eva Green,Engineering,102000,85,03/15/2022,Robert King
+E006,Frank Moore,Sales,,76,2020-06-05,Linda Chen
+E007,Grace Kim,engineering,99000,90,2021-09-01,robert king
+E008,Henry Adams,Marketing,71000,82,2019-02-14,Susan Park
+E009,Ivy Chen,Engineering,97000,89,2020-03-15,Robert King
+E010,Jack Brown,Sales,73000,74,04/01/2019,Linda Chen
+E011,Karen White,Engineering,850000,92,2021-05-20,Robert King
+E012,Liam Scott,Marketing,69000,80,2018-12-01,Susan Park
+E013,Mia Turner,Sales,74000,-15,2020-08-15,Linda Chen
+E014,Noah Wright,Engineering,101000,87,2022-02-01,Robert King
+E015,Olivia Hall,Marketing,70000,83,2019-04-10,Susan Park
+E016,Alice Johnson,Engineering,95000,88,2020-03-15,Robert King
+E017,Paul Young,Sales,75000,77,2021-03-01,Linda Chen
+E018,Quinn Baker,Engineering,96000,86,2020-11-15,Robert King
+E019,Rachel Nelson,Marketing,,81,2019-09-01,Susan Park
+E020,Sam Rivera,Sales,72500,78,2020-01-20,Linda Chen

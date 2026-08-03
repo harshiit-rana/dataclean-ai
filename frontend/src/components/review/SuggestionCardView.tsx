@@ -1,0 +1,61 @@
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
+import type { SuggestionCard } from "@/api/types";
+
+interface SuggestionCardViewProps {
+  card: SuggestionCard;
+  decision: "approved" | "rejected" | null;
+  onDecide: (cardId: string, decision: "approved" | "rejected") => void;
+}
+
+/** PRD §12.2/US-04: renders one suggestion card (Found / Proposed Action / Reasoning /
+ * Tradeoff) with per-card approve/reject controls. Decisions are held in ReviewPage state;
+ * submitting them to POST /api/resume is wired up once that endpoint is implemented
+ * (currently a 501 stub -- see backend/app/api/routes_resume.py). */
+export function SuggestionCardView({ card, decision, onDecide }: SuggestionCardViewProps) {
+  return (
+    <Card className={cn(decision === "rejected" && "opacity-60")}>
+      <CardHeader className="flex-row items-center justify-between">
+        <CardTitle className="text-base">{card.column_name}</CardTitle>
+        {decision && <Badge variant={decision === "approved" ? "low" : "default"}>{decision}</Badge>}
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3 text-sm">
+        <div>
+          <p className="font-medium text-muted-foreground">Found</p>
+          <p>{card.found}</p>
+        </div>
+        <div>
+          <p className="font-medium text-muted-foreground">Proposed action</p>
+          <p>{card.proposed_action}</p>
+        </div>
+        <div>
+          <p className="font-medium text-muted-foreground">Reasoning</p>
+          <p>{card.reasoning}</p>
+        </div>
+        <div>
+          <p className="font-medium text-muted-foreground">Tradeoff</p>
+          <p>{card.tradeoff}</p>
+        </div>
+
+        <div className="mt-2 flex gap-2">
+          <Button
+            size="sm"
+            variant={decision === "approved" ? "default" : "outline"}
+            onClick={() => onDecide(card.card_id, "approved")}
+          >
+            Approve
+          </Button>
+          <Button
+            size="sm"
+            variant={decision === "rejected" ? "destructive" : "outline"}
+            onClick={() => onDecide(card.card_id, "rejected")}
+          >
+            Reject
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

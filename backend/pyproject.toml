@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/graph/nodes/cleaning_agent.py", "app/graph/nodes/conversational_loop.py", "app/graph/nodes/audit_agent.py"]

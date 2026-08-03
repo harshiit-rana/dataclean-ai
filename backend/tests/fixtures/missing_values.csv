@@ -1,0 +1,11 @@
+id,name,age,city,email
+1,Alice,34,NY,alice@x.com
+2,Bob,,LA,bob@x.com
+3,,29,SF,carol@x.com
+4,Dave,41,,dave@x.com
+5,,38,Chicago,eve@x.com
+6,Frank,,Boston,frank@x.com
+7,,45,Miami,gina@x.com
+8,Heidi,31,Seattle,heidi@x.com
+9,,27,Austin,ivan@x.com
+10,Judy,33,Denver,judy@x.com

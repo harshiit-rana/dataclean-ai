@@ -1,0 +1,21 @@
+order_id,product,quantity,unit_price,order_date,region
+5001,Wireless Mouse,2,19.99,2024-01-05,West
+5002,Mechanical Keyboard,1,89.99,2024-01-06,East
+5003,USB-C Hub,3,N/A,2024-01-07,West
+5004,Webcam,1,45.50,01/08/2024,South
+5005,Monitor Stand,4,25.00,2024-01-09,North
+5006,Wireless Mouse,2,19.99,2024-01-05,West
+5007,Laptop Sleeve,5,15.75,01/12/2024,East
+5008,Desk Lamp,1,unknown,2024-01-13,South
+5009,Mechanical Keyboard,1,89.99,2024-01-14,East
+5010,Monitor Stand,2,25.00,01/15/2024,North
+5011,Wireless Mouse,150,19.99,2024-01-16,West
+5012,USB-C Hub,3,29.99,2024-01-17,South
+5013,Webcam,1,45.50,2024-01-18,East
+5014,Laptop Sleeve,2,15.75,2024-01-19,North
+5015,Desk Lamp,1,22.00,01/20/2024,South
+5016,Monitor Stand,3,25.00,2024-01-21,West
+5017,Mechanical Keyboard,25000,89.99,2024-01-22,East
+5018,Wireless Mouse,1,19.99,2024-01-23,North
+5019,USB-C Hub,2,29.99,01/24/2024,South
+5020,Webcam,3,45.50,2024-01-25,West
