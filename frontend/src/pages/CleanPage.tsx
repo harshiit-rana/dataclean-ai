@@ -1,10 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { buttonClasses } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ActionLog } from "@/components/clean/ActionLog";
+import { AppliedActions } from "@/components/clean/AppliedActions";
 import { useCleaningRun } from "@/hooks/useCleaningRun";
-import { API_BASE_URL } from "@/api/client";
+import { API_BASE_URL, fetchActionLog, type ActionLogEntry } from "@/api/client";
 
 /** Page 3, PRD §12.3: runs the approved fixes and hands back the cleaned CSV.
  *
@@ -15,6 +16,7 @@ export function CleanPage() {
   const location = useLocation();
   const run = useCleaningRun(sessionId ?? null);
   const startedRef = useRef(false);
+  const [actionLog, setActionLog] = useState<ActionLogEntry[] | null>(null);
 
   const decisions =
     (location.state as { decisions?: Record<string, "approved" | "rejected"> } | null)
@@ -26,6 +28,14 @@ export function CleanPage() {
     startedRef.current = true;
     run.start(decisions, {});
   }, [sessionId, decisions, run]);
+
+  // Once the run finishes, swap the live view for the persisted log so fixes can be undone.
+  useEffect(() => {
+    if (run.status !== "done" || !sessionId || actionLog !== null) return;
+    fetchActionLog(sessionId)
+      .then((data) => setActionLog(data.actions))
+      .catch(() => setActionLog(null)); // keep the live view rather than blanking the page
+  }, [run.status, sessionId, actionLog]);
 
   if (!decisions) {
     return (
@@ -54,7 +64,16 @@ export function CleanPage() {
 
       {run.status === "error" && <p className="text-sm text-destructive">{run.error}</p>}
 
-      <ActionLog actions={run.actions} status={run.status} />
+      {/* Live progress while the run streams, then the persisted log with undo controls. */}
+      {actionLog === null ? (
+        <ActionLog actions={run.actions} status={run.status} />
+      ) : (
+        <AppliedActions
+          sessionId={sessionId!}
+          actions={actionLog}
+          onChange={setActionLog}
+        />
+      )}
 
       {run.status === "done" && (
         <Card>

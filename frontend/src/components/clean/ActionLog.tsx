@@ -1,28 +1,12 @@
 import { Card, CardContent } from "@/components/ui/card";
 import type { AppliedAction } from "@/hooks/useCleaningRun";
 import type { ColumnStats } from "@/api/types";
+import { OPERATION_LABELS } from "@/lib/operations";
 
 interface ActionLogProps {
   actions: AppliedAction[];
   status: "idle" | "running" | "done" | "error";
 }
-
-const OPERATION_LABELS: Record<string, string> = {
-  fill_median: "Filled missing values with the median",
-  fill_mean: "Filled missing values with the mean",
-  fill_mode: "Filled missing values with the most common value",
-  fill_constant: "Filled missing values with a fixed value",
-  drop_rows_with_nulls: "Dropped rows with missing values",
-  drop_duplicate_rows: "Removed duplicate rows",
-  cast_to_numeric: "Converted to numbers",
-  cast_to_datetime: "Converted to dates",
-  standardize_case: "Made capitalization consistent",
-  trim_whitespace: "Removed extra spaces",
-  standardize_dates: "Standardized date formats",
-  cap_outliers: "Clamped extreme values",
-  drop_outlier_rows: "Dropped rows with extreme values",
-  drop_column: "Removed the column",
-};
 
 /** Renders one human-readable "what changed" line per stat that actually moved, so the
  * user sees concrete impact rather than a raw stats dump. */

@@ -77,7 +77,8 @@ def build_markdown_report(
 ) -> str:
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     applied = [a for a in action_log if a["status"] == "applied"]
-    declined = [a for a in action_log if a["status"] != "applied"]
+    undone = [a for a in action_log if a["status"] == "undone"]
+    declined = [a for a in action_log if a["status"] == "rejected"]
 
     lines: list[str] = [
         "# Data Cleaning Audit Report",
@@ -99,6 +100,8 @@ def build_markdown_report(
         f"| Changes applied | {len(applied)} |",
         f"| Changes declined | {len(declined)} |",
     ]
+    if undone:
+        lines.append(f"| Changes applied then undone | {len(undone)} |")
 
     if goal_context:
         lines += [
@@ -135,6 +138,23 @@ def build_markdown_report(
             lines += ["**Reason given by the user, verbatim:**", "", f"> {reason}", ""]
         else:
             lines += ["_No reason was recorded._", ""]
+
+    # Kept distinct from declined changes: these were applied to the data and then reverted,
+    # which is a materially different history than never having been applied at all.
+    if undone:
+        lines += ["## Changes applied then undone", ""]
+        for entry in undone:
+            label = _OPERATION_LABELS.get(entry["operation"], entry["operation"])
+            lines += [
+                f"### {entry['column_name']} — {label}",
+                "",
+                "This change was applied during the session and later reverted by the user. "
+                "It is **not** reflected in the exported data.",
+                "",
+            ]
+            reason = entry.get("rejection_reason")
+            if reason:
+                lines += [f"_{reason}_", ""]
 
     lines += [
         "## Issues detected during profiling",

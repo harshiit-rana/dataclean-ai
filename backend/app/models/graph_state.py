@@ -47,8 +47,9 @@ class GraphState(BaseModel):
     """PRD §9.1. Central state object carried through the LangGraph pipeline.
 
     session_id doubles as the LangGraph thread_id. Fields accumulated across nodes
-    (action_log, conversation_history) use operator.add reducers so parallel/sequential
-    node writes append rather than overwrite, per LangGraph's Annotated-reducer convention.
+    conversation_history uses an operator.add reducer so successive node writes append rather
+    than overwrite, per LangGraph's Annotated-reducer convention. action_log deliberately
+    does not -- see the note on that field.
 
     IMPORTANT -- why the collections below are `list[dict]` and not `list[ColumnIssue]` /
     `list[SuggestionCard]` / `list[ActionLogEntry]`:
@@ -80,8 +81,11 @@ class GraphState(BaseModel):
     skipped_action_ids: list[str] = Field(default_factory=list)
     skip_reasons: dict[str, str] = Field(default_factory=dict)
 
-    # ActionLogEntry.model_dump()
-    action_log: Annotated[list[dict], operator.add] = Field(default_factory=list)
+    # ActionLogEntry.model_dump(). Deliberately NOT an operator.add reducer: undo (US-10)
+    # has to rewrite entries in place to mark them "undone", and an append-only reducer makes
+    # replacement impossible. Writers return the full list instead (read-modify-write), which
+    # is explicit and keeps correction possible.
+    action_log: list[dict] = Field(default_factory=list)
     conversation_history: Annotated[list[dict], operator.add] = Field(default_factory=list)
 
     audit_markdown_path: Optional[str] = None

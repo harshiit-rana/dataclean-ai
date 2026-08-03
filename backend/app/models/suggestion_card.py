@@ -38,6 +38,9 @@ class ActionLogEntry(BaseModel):
     card_id: Optional[str] = None  # None for conversational-instruction-originated actions
     column_name: str
     operation: str
+    # Recorded so an action can be re-applied during undo's replay (services/undo.py) --
+    # without it, parameters like case="upper" would be lost and the replay would diverge.
+    operation_params: dict = Field(default_factory=dict)
     status: Literal["applied", "rejected", "undone"]
     rejection_reason: Optional[str] = None  # verbatim, never paraphrased (FR-30)
     before_stats: Optional[dict] = None

@@ -129,3 +129,33 @@ def test_prompt_payload_is_json_serializable(entry):
     start = body.index("[")
     end = body.rindex("]") + 1
     assert json.loads(body[start:end])
+
+
+UNDONE = {
+    "action_id": "a3",
+    "column_name": "salary",
+    "operation": "drop_outlier_rows",
+    "status": "undone",
+}
+
+
+def test_undone_changes_are_reported_separately_from_declined():
+    """An undone change was applied and then reverted -- materially different history from
+    one that was never applied, so the report must not conflate them (US-13)."""
+    report = _report(action_log=[APPLIED, DECLINED, UNDONE], dispositions={})
+
+    assert "## Changes applied then undone" in report
+    assert "| Changes applied then undone | 1 |" in report
+    assert "not** reflected in the exported data" in report
+
+    # the undone entry must live in its own section, not inside the declined one
+    declined_section = report[
+        report.index("## Changes declined") : report.index("## Changes applied then undone")
+    ]
+    assert "Dropped rows with extreme values" not in declined_section
+
+
+def test_no_undone_section_when_nothing_was_undone():
+    report = _report()
+    assert "## Changes applied then undone" not in report
+    assert "| Changes applied then undone |" not in report

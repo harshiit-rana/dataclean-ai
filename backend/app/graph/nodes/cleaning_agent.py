@@ -126,6 +126,7 @@ async def cleaning_agent(state: GraphState) -> dict:
                 card_id=card.card_id,
                 column_name=card.column_name,
                 operation=card.operation,
+                operation_params=card.operation_params,
                 status="applied",
                 before_stats=before_stats,
                 after_stats=after_stats,

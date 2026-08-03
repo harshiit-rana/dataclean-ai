@@ -56,6 +56,34 @@ export async function fetchAuditReport(sessionId: string): Promise<AuditReportRe
   return handleResponse<AuditReportResponse>(response);
 }
 
+export interface ActionLogEntry {
+  action_id: string;
+  card_id: string | null;
+  column_name: string;
+  operation: string;
+  status: "applied" | "rejected" | "undone";
+  rejection_reason: string | null;
+  before_stats: Record<string, number> | null;
+  after_stats: Record<string, number> | null;
+}
+
+export async function fetchActionLog(sessionId: string): Promise<{ actions: ActionLogEntry[] }> {
+  const response = await fetch(`${API_BASE_URL}/api/actions/${sessionId}`);
+  return handleResponse<{ actions: ActionLogEntry[] }>(response);
+}
+
+export async function undoAction(
+  sessionId: string,
+  actionId: string
+): Promise<{ actions: ActionLogEntry[]; report_regenerated: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/api/undo/${sessionId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action_id: actionId }),
+  });
+  return handleResponse<{ actions: ActionLogEntry[]; report_regenerated: boolean }>(response);
+}
+
 export async function submitGoalContext(
   sessionId: string,
   goal: GoalContext

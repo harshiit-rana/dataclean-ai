@@ -59,10 +59,20 @@ async def _write_prose(state: GraphState, client) -> tuple[str, dict[str, str]]:
     return "", {}
 
 
-async def audit_agent(state: GraphState) -> dict:
-    writer = get_stream_writer()
-    writer({"event": "agent_start", "agent": "audit_agent", "message": "Writing your audit report..."})
+def _no_op(_event: dict) -> None:
+    pass
 
+
+async def generate_audit_artifacts(state: GraphState, emit=_no_op) -> dict:
+    """Writes audit_report.md (and audit_report.pdf when WeasyPrint can run) for this
+    session, returning the paths.
+
+    Split out from the node so it can also be called outside a graph run -- undoing an
+    action changes the data and the action log, which makes any previously written report
+    wrong, so the undo endpoint regenerates it through here. `emit` takes the node's stream
+    writer during a graph run and defaults to a no-op elsewhere (get_stream_writer() is only
+    valid inside one).
+    """
     settings = get_settings()
     client = get_llm_client(settings, streaming=False)
     executive_summary, dispositions = await _write_prose(state, client)
@@ -86,7 +96,7 @@ async def audit_agent(state: GraphState) -> dict:
         pdf_path = render_pdf(markdown_text, session_dir / "audit_report.pdf")
     except Exception as exc:  # noqa: BLE001 -- WeasyPrint needs OS libs that may be absent
         logger.exception("PDF rendering failed; markdown report was still written")
-        writer(
+        emit(
             {
                 "event": "error",
                 "error": "PDF could not be generated",
@@ -94,10 +104,17 @@ async def audit_agent(state: GraphState) -> dict:
             }
         )
 
-    writer({"event": "audit_complete", "has_pdf": pdf_path is not None})
+    emit({"event": "audit_complete", "has_pdf": pdf_path is not None})
 
     return {
         "audit_markdown_path": str(markdown_path),
         "audit_pdf_path": str(pdf_path) if pdf_path else None,
-        "current_agent": "audit_agent",
     }
+
+
+async def audit_agent(state: GraphState) -> dict:
+    writer = get_stream_writer()
+    writer({"event": "agent_start", "agent": "audit_agent", "message": "Writing your audit report..."})
+
+    artifacts = await generate_audit_artifacts(state, emit=writer)
+    return {**artifacts, "current_agent": "audit_agent"}
