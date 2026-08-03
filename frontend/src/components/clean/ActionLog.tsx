@@ -88,12 +88,21 @@ export function ActionLog({ actions, status }: ActionLogProps) {
                 )}
               </div>
 
-              {changes.length > 0 && (
+              {changes.length > 0 ? (
                 <ul className="flex flex-col gap-0.5 text-xs text-muted-foreground">
                   {changes.map((c) => (
                     <li key={c}>{c}</li>
                   ))}
                 </ul>
+              ) : (
+                done && (
+                  // Reformatting operations (date/case/whitespace) rewrite values without
+                  // moving row counts, null counts, or distinct counts -- without this the
+                  // row just reads "done" with no evidence anything happened.
+                  <p className="text-xs text-muted-foreground">
+                    values rewritten in place — row and value counts unchanged
+                  </p>
+                )
               )}
             </CardContent>
           </Card>
