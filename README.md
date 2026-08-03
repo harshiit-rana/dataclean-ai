@@ -5,12 +5,12 @@ tell it what you're trying to do, and it profiles your data, ranks issues by rel
 your goal, and proposes fixes as suggestion cards -- Found / Proposed Action / Reasoning /
 Tradeoff. Nothing changes until you approve it, card by card.
 
-## Before you start: get an Anthropic API key
+## Before you start: get an LLM API key
 
-This project calls the Claude API directly and does not ship with a shared/default key.
-Get your own key at **[console.anthropic.com](https://console.anthropic.com)**, then put it
-in `.env` as `ANTHROPIC_API_KEY` (see "Getting started" below). Without it, the Profiling
-and Explanation agents cannot run.
+This project doesn't ship with a shared/default key for either provider it supports --
+pick one, get your own key, and put it in `.env` (see "Getting started" below and the
+"LLM provider" section for the tradeoff between them). Without a key, the Profiling and
+Explanation agents cannot run.
 
 ## Getting started (Docker, recommended)
 
@@ -18,7 +18,7 @@ and Explanation agents cannot run.
 git clone <this-repo-url>
 cd dataclean-ai
 cp .env.example .env
-# edit .env and set ANTHROPIC_API_KEY
+# edit .env: set LLM_PROVIDER (anthropic or groq) and the matching API key
 
 docker-compose up
 ```
@@ -55,14 +55,32 @@ npm run dev
   cleaning_agent -> conversational_loop -> audit_agent`). The graph pauses at
   `human_approval` using LangGraph's native `interrupt()`, checkpointed to Redis so a
   session survives a server restart while it's waiting on you.
-- **Agents**: `langchain-anthropic` (`ChatAnthropic`), model configurable via
-  `CLAUDE_MODEL` in `.env` (defaults to `claude-sonnet-5`; `claude-haiku-4-5` is a cheaper
-  swap-in, see `.env.example`).
+- **Agents**: any LangChain `BaseChatModel` -- provider picked at runtime by `LLM_PROVIDER`
+  (`app/services/llm_client.py`), so nodes never call anything provider-specific. See "LLM
+  provider" below.
 - **Profiling**: deterministic pandas/IQR-based detectors, independent of `ydata-profiling`
-  (which is wrapped defensively and never allowed to crash a session) -- Claude only adds
+  (which is wrapped defensively and never allowed to crash a session) -- the LLM only adds
   semantic interpretation and goal-aware re-prioritization on top.
 - **Frontend**: React + Vite + Tailwind, SSE consumed via `@microsoft/fetch-event-source`
   (native `EventSource` can't do POST, and starting the graph requires one).
+
+## LLM provider
+
+Set `LLM_PROVIDER` in `.env` to `anthropic` (default) or `groq`:
+
+- **`anthropic`** (Claude, default `claude-sonnet-5`): the better-verified option for this
+  app specifically. Two of the three LLM calls need reliable structured output -- the
+  Profiling Agent needs a strict JSON array back (has a retry-once on parse failure, falls
+  back to baseline scores rather than crashing), and the Explanation Agent needs an exact
+  `FOUND:`/`PROPOSED_ACTION:`/`REASONING:`/`TRADEOFF:` marker format with **no retry today**,
+  so a model that drifts from the format silently produces blank suggestion cards. Cheaper
+  alternative: `claude-haiku-4-5` via `CLAUDE_MODEL`.
+- **`groq`** (default `llama-3.3-70b-versatile`): far cheaper, generous free tier, fast
+  inference. Llama 3.3 70B is a solid instruction-follower and should handle both structured
+  calls fine, but it's less battle-tested here than Claude -- if you see blank suggestion
+  cards, that's the marker-format gap above, not a bug elsewhere.
+
+Only the API key matching your chosen provider is required (see `.env.example`).
 
 ## Project status
 
@@ -97,7 +115,7 @@ Fixture datasets in `backend/tests/fixtures/` are built to guarantee specific is
 (missing values, duplicates, mixed types, inconsistent date formats, outliers) so the
 profiler's detectors have known-good test targets. The end-to-end graph test
 (`tests/integration/test_graph_end_to_end.py`) uses LangGraph's in-memory checkpointer and
-mocked Claude responses, so it doesn't need Redis or a real API key.
+a mocked LLM client, so it doesn't need Redis or a real API key.
 
 ```bash
 cd frontend

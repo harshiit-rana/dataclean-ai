@@ -10,8 +10,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
+    llm_provider: str = "anthropic"  # "anthropic" or "groq" -- see services/llm_client.py
+
     anthropic_api_key: str = ""
     claude_model: str = "claude-sonnet-5"
+
+    groq_api_key: str = ""
+    groq_model: str = "llama-3.3-70b-versatile"
 
     redis_host: str = "localhost"
     redis_port: int = 6379

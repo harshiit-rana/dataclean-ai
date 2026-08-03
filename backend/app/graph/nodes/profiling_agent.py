@@ -17,7 +17,7 @@ from langgraph.config import get_stream_writer
 from app.config import get_settings
 from app.models.graph_state import GraphState
 from app.services import profiling
-from app.services.claude_client import get_claude_client
+from app.services.llm_client import get_llm_client
 from app.services.prompts.profiling_prompts import (
     build_profiling_agent_messages,
     build_retry_messages,
@@ -64,7 +64,7 @@ async def profiling_agent(state: GraphState) -> dict:
 
     if issues:
         settings = get_settings()
-        client = get_claude_client(settings, streaming=False)
+        client = get_llm_client(settings, streaming=False)
         updates = await _enrich_with_llm(issues, state.goal_context, client)
         for issue in issues:
             update = updates.get(issue.issue_id)

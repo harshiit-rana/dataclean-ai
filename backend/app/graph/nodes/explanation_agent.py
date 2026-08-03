@@ -14,7 +14,7 @@ from langgraph.config import get_stream_writer
 from app.config import get_settings
 from app.models.graph_state import GraphState
 from app.models.suggestion_card import SuggestionCard
-from app.services.claude_client import get_claude_client
+from app.services.llm_client import get_llm_client
 from app.services.prompts.explanation_prompts import (
     build_explanation_messages,
     parse_card_sections,
@@ -32,7 +32,7 @@ async def explanation_agent(state: GraphState) -> dict:
     )
 
     settings = get_settings()
-    client = get_claude_client(settings, streaming=True)
+    client = get_llm_client(settings, streaming=True)
 
     cards: list[SuggestionCard] = []
     for issue in state.issues:

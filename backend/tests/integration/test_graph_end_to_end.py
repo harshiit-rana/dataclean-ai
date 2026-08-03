@@ -44,11 +44,11 @@ class _FakeStreamClient:
 @pytest.fixture
 def graph(monkeypatch):
     monkeypatch.setattr(
-        "app.graph.nodes.profiling_agent.get_claude_client",
+        "app.graph.nodes.profiling_agent.get_llm_client",
         lambda settings, streaming=False: _FakeInvokeClient(),
     )
     monkeypatch.setattr(
-        "app.graph.nodes.explanation_agent.get_claude_client",
+        "app.graph.nodes.explanation_agent.get_llm_client",
         lambda settings, streaming=False: _FakeStreamClient(),
     )
     return build_graph(MemorySaver())

@@ -6,10 +6,10 @@ from functools import lru_cache
 
 import redis.asyncio as redis_asyncio
 from fastapi import Depends, Request
-from langchain_anthropic import ChatAnthropic
+from langchain_core.language_models.chat_models import BaseChatModel
 
 from app.config import Settings, get_settings
-from app.services.claude_client import get_claude_client as _get_claude_client
+from app.services.llm_client import get_llm_client as _get_llm_client
 from app.services.session_store import session_dir
 
 
@@ -23,8 +23,8 @@ def get_redis(settings: Settings = Depends(get_settings)) -> redis_asyncio.Redis
     return redis_asyncio.Redis(connection_pool=pool)
 
 
-def get_claude_client(settings: Settings = Depends(get_settings)) -> ChatAnthropic:
-    return _get_claude_client(settings, streaming=True)
+def get_llm_client(settings: Settings = Depends(get_settings)) -> BaseChatModel:
+    return _get_llm_client(settings, streaming=True)
 
 
 def get_session_dir(session_id: str, settings: Settings = Depends(get_settings)):
