@@ -6,7 +6,7 @@ import { DataTable } from "@/components/review/DataTable";
 import { IssueCountSummary } from "@/components/review/IssueCountSummary";
 import { SuggestionCardView } from "@/components/review/SuggestionCardView";
 import { useProfileStream } from "@/hooks/useProfileStream";
-import { fetchPreview } from "@/api/client";
+import { ApiError, fetchPreview } from "@/api/client";
 import type { ColumnIssue, PreviewResponse } from "@/api/types";
 
 /** Page 2, PRD US-04/US-06: shows the uploaded data as a table (click a column header to
@@ -18,13 +18,23 @@ export function ReviewPage() {
   const stream = useProfileStream(sessionId ?? null);
   const [decisions, setDecisions] = useState<Record<string, "approved" | "rejected">>({});
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const [selectedColumn, setSelectedColumn] = useState<string | null>(null);
 
   useEffect(() => {
     if (!sessionId) return;
+    setPreviewError(null);
     fetchPreview(sessionId)
-      .then(setPreview)
-      .catch(() => setPreview(null));
+      .then((data) => {
+        setPreview(data);
+        setPreviewError(null);
+      })
+      .catch((err) => {
+        setPreview(null);
+        setPreviewError(
+          err instanceof ApiError ? `${err.error}: ${err.detail}` : String(err?.message ?? err)
+        );
+      });
   }, [sessionId]);
 
   const issuesByColumn = useMemo(() => {
@@ -65,6 +75,13 @@ export function ReviewPage() {
       </div>
 
       {stream.status === "error" && <p className="text-sm text-destructive">{stream.error}</p>}
+
+      {previewError && (
+        <div className="rounded-md border border-destructive/50 p-3 text-sm text-destructive">
+          <p className="font-medium">Couldn't load the data table</p>
+          <p className="text-xs">{previewError}</p>
+        </div>
+      )}
 
       {preview && (
         <DataTable
