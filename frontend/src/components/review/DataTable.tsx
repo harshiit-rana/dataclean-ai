@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { cn } from "@/lib/utils";
 import type { ColumnIssue, PreviewResponse, Severity } from "@/api/types";
 
@@ -28,7 +29,10 @@ function formatCell(value: string | number | boolean | null) {
   return { text: String(value), isNull: false };
 }
 
-export function DataTable({
+/** Memoized: the review page re-renders as suggestion text streams in, but the table's
+ * inputs only change when profiling finishes or a column is selected. Re-rendering every
+ * cell on each token flush is pure waste. */
+export const DataTable = memo(function DataTable({
   preview,
   issuesByColumn,
   selectedColumn,
@@ -106,4 +110,4 @@ export function DataTable({
       </div>
     </div>
   );
-}
+});

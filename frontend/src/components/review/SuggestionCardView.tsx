@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,7 +15,11 @@ interface SuggestionCardViewProps {
  * Tradeoff) with per-card approve/reject controls. Decisions are held in ReviewPage state;
  * submitting them to POST /api/resume is wired up once that endpoint is implemented
  * (currently a 501 stub -- see backend/app/api/routes_resume.py). */
-export function SuggestionCardView({ card, decision, onDecide }: SuggestionCardViewProps) {
+export const SuggestionCardView = memo(function SuggestionCardView({
+  card,
+  decision,
+  onDecide,
+}: SuggestionCardViewProps) {
   return (
     <Card className={cn(decision === "rejected" && "opacity-60")}>
       <CardHeader className="flex-row items-center justify-between">
@@ -58,4 +63,4 @@ export function SuggestionCardView({ card, decision, onDecide }: SuggestionCardV
       </CardContent>
     </Card>
   );
-}
+});

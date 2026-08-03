@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { AgentStatusBar } from "@/components/review/AgentStatusBar";
 import { ApprovalBar } from "@/components/review/ApprovalBar";
@@ -54,9 +54,15 @@ export function ReviewPage() {
 
   const selectedColumnMeta = preview?.columns.find((c) => c.name === selectedColumn) ?? null;
 
-  const handleDecide = (cardId: string, decision: "approved" | "rejected") => {
+  // Stable identities so the memoized DataTable and the suggestion cards don't re-render
+  // on every streamed-text flush.
+  const handleDecide = useCallback((cardId: string, decision: "approved" | "rejected") => {
     setDecisions((prev) => ({ ...prev, [cardId]: decision }));
-  };
+  }, []);
+
+  const handleSelectColumn = useCallback((name: string) => {
+    setSelectedColumn((cur) => (cur === name ? null : name));
+  }, []);
 
   const decisionCounts = useMemo(() => {
     const values = stream.cards.map((c) => decisions[c.card_id]);
@@ -105,7 +111,7 @@ export function ReviewPage() {
           preview={preview}
           issuesByColumn={issuesByColumn}
           selectedColumn={selectedColumn}
-          onSelectColumn={(name) => setSelectedColumn((cur) => (cur === name ? null : name))}
+          onSelectColumn={handleSelectColumn}
         />
       )}
 
