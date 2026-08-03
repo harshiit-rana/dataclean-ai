@@ -28,3 +28,6 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# Source design doc -- kept locally, not published to the public repo
+DataClean_AI_PRD_v1.0.docx

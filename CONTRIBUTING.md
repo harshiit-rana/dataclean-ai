@@ -30,7 +30,8 @@ are both running locally, you're ready to make changes.
 
 ## Picking up a stub
 
-If you're implementing one of the stub nodes/routes, read the PRD section referenced in its
-docstring/TODO first (`DataClean_AI_PRD_v1.0.docx`) -- the surrounding real code (e.g.
-`explanation_agent.py` for streaming patterns, `profiling_agent.py` for the retry pattern)
-is the best reference for the conventions this codebase already follows.
+If you're implementing one of the stub nodes/routes, ask the maintainer for the PRD section
+referenced in its docstring/TODO (the source design doc isn't published in this repo) --
+the surrounding real code (e.g. `explanation_agent.py` for streaming patterns,
+`profiling_agent.py` for the retry pattern) is the best reference for the conventions this
+codebase already follows.
