@@ -1,4 +1,6 @@
-FROM python:3.12-slim
+FROM python:3.12-slim-bookworm
+# Pinned to Debian 12 (bookworm) rather than the floating "slim" tag -- that tag moved to
+# Debian 13 (trixie), which renamed libgdk-pixbuf2.0-0 and broke the apt-get layer below.
 
 # WeasyPrint (PDF audit report export, §8.3) needs Pango/Cairo/GDK-Pixbuf at the OS level --
 # pip alone can't provide these, hence this apt-get layer.
