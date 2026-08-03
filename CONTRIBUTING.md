@@ -1,9 +1,7 @@
 # Contributing to DataClean AI
 
-Thanks for your interest in contributing! This project is an early-stage scaffold -- large
-parts of it (cleaning execution, the conversational follow-up loop, audit/export) are
-intentionally unimplemented stubs. See `README.md`'s "Project status" section for what's
-real today.
+Thanks for your interest in contributing! The full pipeline works end to end -- see
+`README.md`'s "Project status" for what that covers.
 
 ## Getting set up
 
@@ -12,14 +10,14 @@ are both running locally, you're ready to make changes.
 
 ## Where things live
 
-- `backend/app/graph/nodes/` -- one file per LangGraph node. `goal_intake.py`,
-  `profiling_agent.py`, `explanation_agent.py`, and `human_approval.py` are real;
-  `cleaning_agent.py`, `conversational_loop.py`, and `audit_agent.py` are stubs with a
-  `# TODO: PRD §x.x` pointing at the relevant spec section.
-- `backend/app/api/` -- one file per route group. Stub routes return `501` with a message
-  pointing at what needs implementing.
-- `frontend/src/pages/` -- one file per page. Pages 1 and 2 (Upload, Review) are wired up
-  end-to-end; Pages 3 and 4 (Clean, Export) are placeholder components.
+- `backend/app/services/operations.py` -- the whitelist of cleaning operations. **Start
+  here** if you want to make the tool able to fix more things: add an operation, and both
+  the suggestion-card and conversational paths can use it. See the README on why the app
+  selects from a whitelist rather than generating code.
+- `backend/app/graph/nodes/` -- one file per LangGraph node. `conversational_loop.py` is an
+  unwired stub; everything else is live.
+- `backend/app/api/` -- one file per route group.
+- `frontend/src/pages/` -- one file per page (Upload, Review, Clean, Export).
 
 ## Before opening a PR
 
@@ -28,10 +26,17 @@ are both running locally, you're ready to make changes.
 - Keep stub signatures intact if you're not implementing them yet -- other code and tests
   are written against those signatures.
 
-## Picking up a stub
+## Conventions worth knowing
 
-If you're implementing one of the stub nodes/routes, ask the maintainer for the PRD section
-referenced in its docstring/TODO (the source design doc isn't published in this repo) --
-the surrounding real code (e.g. `explanation_agent.py` for streaming patterns,
-`profiling_agent.py` for the retry pattern) is the best reference for the conventions this
-codebase already follows.
+- **Graph state is JSON-native.** `GraphState` holds `list[dict]`, not nested Pydantic
+  models — nested models get serialized into checkpoint envelopes that don't reliably
+  reconstruct, which breaks resuming a session. Validate into the real models at node
+  boundaries instead. The docstring on `GraphState` explains this.
+- **Degrade, don't crash.** A failed LLM call, an operation that can't run, a PDF that won't
+  render — none of these should end a session that already touched the user's data. Look at
+  `audit_agent.py` and `cleaning_agent.py` for the pattern.
+- **The user's words are never paraphrased.** Rejection reasons are copied verbatim into the
+  audit report and are deliberately never sent to the model; there's a test asserting that.
+
+The source design doc isn't published in this repo — ask the maintainer if you need a
+section referenced in a docstring.

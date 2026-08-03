@@ -84,18 +84,47 @@ Only the API key matching your chosen provider is required (see `.env.example`).
 
 ## Project status
 
-This repo is a scaffold: the full stack is wired up, but only one path is fully
-implemented end-to-end so far.
+The full loop works end to end:
 
-**Working today:** upload a CSV → describe your goal → the Profiling Agent and Explanation
-Agent run for real (real pandas detection + real Claude calls) and stream suggestion cards
-to the Review page → the graph pauses at the approval step and the session is checkpointed
-in Redis.
+1. **Upload** a CSV and describe what you're using it for
+2. **Profiling** runs deterministic pandas/IQR detectors, then an LLM re-ranks findings
+   against your stated goal
+3. **Review** shows your actual data in a table — click any column to see its stats, its
+   role, and what was flagged in it — alongside streamed suggestion cards
+4. **Approve or reject** each fix individually; only approved ones execute
+5. **Clean** applies them, showing before/after numbers per fix, with per-fix **undo**
+6. **Ask for more** in plain English ("drop rows where salary is under 30000")
+7. **Export** the cleaned CSV plus a PDF audit report documenting every change — including
+   the ones you declined, in your own words
 
-**Stubbed (correct signatures, not yet implemented):** actually applying approved fixes,
-the conversational follow-up loop, undo, and the audit report / CSV+PDF export. Each stub
-has a `# TODO: PRD §x.x` comment pointing at the relevant spec section. See
-`CONTRIBUTING.md` for where things live if you want to pick one up.
+Your uploaded file is never modified. Cleaning writes a separate `cleaned.csv`, and there's
+a test asserting the original is byte-identical after a run.
+
+**Not implemented:** the `conversational_loop` graph node is an unwired stub — conversational
+cleaning is served by `POST /api/chat` instead, since the graph has already completed by the
+time you're chatting and re-entering it per message would re-run profiling for nothing.
+
+## How fixes are executed (and why there's no sandbox)
+
+The PRD this was built from specifies generating pandas code and running it in a sandbox.
+This implementation does something different: the LLM **selects** an operation from a fixed
+whitelist (`backend/app/services/operations.py`) and supplies its arguments. It never writes
+code, and nothing ever calls `exec`.
+
+Why:
+
+- **Safety.** A real sandbox (no network, no filesystem, memory and time limits) is hard to
+  get right, and a restricted-globals `exec()` is not one. For a tool people self-host,
+  arbitrary code execution is a bad default.
+- **Cost.** The operation is chosen during the per-issue call the Explanation Agent already
+  makes, so executing approved fixes costs zero extra tokens. There's also no isolated
+  compute to pay for in production.
+- **Coverage.** The profiler detects a closed set of issue types, so code generation buys
+  almost nothing — the whitelist covers filtering, renaming, replacing, rounding, type
+  coercion, formatting, outliers and null handling.
+
+The tradeoff is real: an instruction that can't be expressed as a whitelisted operation is
+declined with an explanation rather than approximated. That's the intended behaviour.
 
 ## Scope notes
 
