@@ -45,6 +45,17 @@ export async function fetchPreview(sessionId: string): Promise<PreviewResponse> 
   return handleResponse<PreviewResponse>(response);
 }
 
+export interface AuditReportResponse {
+  session_id: string;
+  markdown: string;
+  has_pdf: boolean;
+}
+
+export async function fetchAuditReport(sessionId: string): Promise<AuditReportResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/export/${sessionId}/report`);
+  return handleResponse<AuditReportResponse>(response);
+}
+
 export async function submitGoalContext(
   sessionId: string,
   goal: GoalContext

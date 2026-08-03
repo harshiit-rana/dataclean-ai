@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from langgraph.graph import END, StateGraph
 
+from app.graph.nodes.audit_agent import audit_agent
 from app.graph.nodes.cleaning_agent import cleaning_agent
 from app.graph.nodes.explanation_agent import explanation_agent
 from app.graph.nodes.goal_intake import goal_intake
@@ -38,17 +39,19 @@ def build_graph(checkpointer=None):
     builder.add_node("explanation_agent", explanation_agent)
     builder.add_node("human_approval", human_approval)
     builder.add_node("cleaning_agent", cleaning_agent)
+    builder.add_node("audit_agent", audit_agent)
 
     builder.set_entry_point("goal_intake")
     builder.add_edge("goal_intake", "profiling_agent")
     builder.add_edge("profiling_agent", "explanation_agent")
     builder.add_edge("explanation_agent", "human_approval")
     builder.add_edge("human_approval", "cleaning_agent")
-    builder.add_edge("cleaning_agent", END)
+    builder.add_edge("cleaning_agent", "audit_agent")
+    builder.add_edge("audit_agent", END)
 
-    # conversational_loop (§13.1) and audit_agent (§12.4) are still stubs that raise
-    # NotImplementedError -- deliberately left out of the graph rather than wired in, so a
-    # real run ends cleanly after cleaning instead of crashing at an unimplemented node.
-    # Restore `cleaning_agent -> conversational_loop -> audit_agent -> END` when they land.
+    # conversational_loop (§13.1) is still a stub that raises NotImplementedError --
+    # deliberately left out of the graph rather than wired in, so a real run ends cleanly
+    # after the audit report instead of crashing at an unimplemented node. Insert it between
+    # cleaning_agent and audit_agent when it lands.
 
     return builder.compile(checkpointer=checkpointer)

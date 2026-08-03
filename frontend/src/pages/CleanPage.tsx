@@ -67,14 +67,17 @@ export function CleanPage() {
               {run.skippedCount > 0 && `, ${run.skippedCount} skipped`}.
             </p>
             <div className="flex flex-wrap gap-2">
+              <Link to={`/export/${sessionId}`} className={buttonClasses()}>
+                View report &amp; download
+              </Link>
               <a
                 href={`${API_BASE_URL}/api/export/${sessionId}/csv`}
                 download
-                className={buttonClasses()}
+                className={buttonClasses("outline")}
               >
-                Download cleaned CSV
+                Cleaned CSV only
               </a>
-              <Link to="/" className={buttonClasses("outline")}>
+              <Link to="/" className={buttonClasses("ghost")}>
                 Clean another file
               </Link>
             </div>

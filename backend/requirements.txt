@@ -20,6 +20,7 @@ setuptools>=75.0  # ydata-profiling imports pkg_resources, which Python 3.12+ no
 
 redis>=5.2.0
 weasyprint>=63.0
+markdown>=3.7  # markdown -> HTML for the audit report, which WeasyPrint then renders (FR-42)
 sse-starlette>=2.1.0
 python-multipart>=0.0.12
 chardet>=5.2.0

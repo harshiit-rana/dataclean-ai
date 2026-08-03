@@ -1,0 +1,11 @@
+# The host virtualenv is Windows-built and useless in the Linux image; uploads are runtime
+# session data that must not be baked into it.
+.venv
+venv
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.coverage
+htmlcov
+uploads

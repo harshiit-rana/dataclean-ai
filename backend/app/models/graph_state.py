@@ -84,5 +84,8 @@ class GraphState(BaseModel):
     action_log: Annotated[list[dict], operator.add] = Field(default_factory=list)
     conversation_history: Annotated[list[dict], operator.add] = Field(default_factory=list)
 
+    audit_markdown_path: Optional[str] = None
+    audit_pdf_path: Optional[str] = None  # None when WeasyPrint's OS libs are unavailable
+
     current_agent: Optional[str] = None
     error_message: Optional[str] = None

@@ -1,0 +1,7 @@
+# Host node_modules must never be copied in: the image installs its own (for the container's
+# platform), and copying the host tree both bloats the build context by hundreds of MB and
+# overwrites those correctly-installed dependencies.
+node_modules
+dist
+.vite
+tsconfig.tsbuildinfo
