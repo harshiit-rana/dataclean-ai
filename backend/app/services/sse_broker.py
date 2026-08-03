@@ -28,6 +28,21 @@ async def stream_graph_as_sse(
         event_name = payload.get("event", "message")
         yield f"event: {event_name}\ndata: {json.dumps(payload)}\n\n"
 
-    state = await graph.aget_state(config)
-    if state.next:
+    try:
+        state = await graph.aget_state(config)
+        reached_interrupt = bool(state.next)
+    except Exception:
+        # The custom-event loop above already finished, meaning the graph itself completed
+        # its run (there's nothing after explanation_agent but the human_approval interrupt
+        # in the current workflow) -- a failure here is in re-reading that already-persisted
+        # state back from the checkpointer, not in the run itself. Don't let that crash the
+        # response out from under a client that just watched every card render successfully.
+        logger.exception(
+            "Failed to read back graph state for session %s after streaming; "
+            "still signaling interrupt_reached since explanation_agent completed",
+            session_id,
+        )
+        reached_interrupt = True
+
+    if reached_interrupt:
         yield encode_sse(InterruptReachedEvent(session_id=session_id))
