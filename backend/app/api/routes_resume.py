@@ -1,22 +1,35 @@
-"""POST /api/resume/{session_id} -- STUB, correct signature. PRD §13.2.
+"""POST /api/resume/{session_id} -- REAL, SSE stream. PRD §13.2.
 
-Will resume the paused graph with `graph.astream(Command(resume=payload), config, ...)`,
-where `payload` becomes exactly what `interrupt()` returns inside human_approval (see
-graph/nodes/human_approval.py), then stream the cleaning_agent/conversational_loop/
-audit_agent events the same way routes_profile.py streams the pre-interrupt agents.
-
-TODO: implement per PRD §13.2, once cleaning_agent (§12.3) is implemented.
+Resumes the graph paused at the human_approval interrupt. The payload becomes exactly what
+`interrupt()` returns inside that node (see graph/nodes/human_approval.py), which the
+cleaning_agent then acts on. Streams the same custom events as routes_profile.py.
 """
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends
+from langgraph.types import Command
 
+from app.api.sse import sse_response
+from app.core.errors import SessionNotFoundError
+from app.dependencies import get_graph
+from app.graph.checkpointer import thread_config
 from app.models.api_schemas import ResumeRequest
+from app.services.sse_broker import stream_graph_as_sse
 
 router = APIRouter()
 
 
 @router.post("/api/resume/{session_id}")
-async def resume_session(session_id: str, resume: ResumeRequest):
-    raise HTTPException(status_code=501, detail="Resume is not yet implemented -- see PRD §13.2")
+async def resume_session(
+    session_id: str,
+    resume: ResumeRequest,
+    graph=Depends(get_graph),
+):
+    config = thread_config(session_id)
+    state = await graph.aget_state(config)
+    if not state.values:
+        raise SessionNotFoundError(session_id)
+
+    command = Command(resume=resume.model_dump())
+    return sse_response(stream_graph_as_sse(graph, command, config, session_id))

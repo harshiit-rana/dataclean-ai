@@ -1,21 +1,156 @@
-"""cleaning_agent node. PRD §12.3 -- STUB.
+"""cleaning_agent node. PRD §12.3.
 
-Will take `state.approved_action_ids` (from human_approval) and, for each approved
-suggestion card, call Claude to generate pandas cleaning code (via
-`app.services.prompts.cleaning_prompts.build_cleaning_code_messages`), execute it against
-the working DataFrame in a sandboxed manner, and append an ActionLogEntry per action
-(FR-28..36). Rejected cards get an ActionLogEntry with status="rejected" and the supplied
-skip_reason, no code executed. Emits `action_start` / `action_complete` / `code_preview` /
-`all_actions_complete` SSE events via get_stream_writer(), mirroring explanation_agent's
-streaming style.
+Executes the fixes the user approved at the human_approval interrupt, in card order, and
+writes the result to a NEW file (`cleaned.csv`) in the session directory. The user's
+uploaded copy (`original.csv`) is never modified, and their local file is never touched at
+all -- only the browser-uploaded copy ever existed server-side.
 
-TODO: implement per PRD §12.3, FR-28..36, §14.2 (sandboxed exec error handling).
+Each approved card carries a machine-readable `operation` chosen by the Explanation Agent
+from the whitelist in services/operations.py, so no LLM call and no code execution happens
+here: this node is deterministic pandas. See operations.py's docstring for why that's
+preferred over the PRD's generate-and-sandbox approach.
+
+A single failing operation is logged against that action and skipped -- it never aborts the
+remaining approved fixes.
 """
 
 from __future__ import annotations
 
+import logging
+import uuid
+from pathlib import Path
+
+import pandas as pd
+from langgraph.config import get_stream_writer
+
 from app.models.graph_state import GraphState
+from app.models.suggestion_card import ActionLogEntry
+from app.services import operations
+
+logger = logging.getLogger(__name__)
+
+
+def _new_action_id() -> str:
+    return f"action_{uuid.uuid4().hex[:8]}"
 
 
 async def cleaning_agent(state: GraphState) -> dict:
-    raise NotImplementedError("cleaning_agent is not yet implemented -- see PRD §12.3")
+    writer = get_stream_writer()
+    writer({"event": "agent_start", "agent": "cleaning_agent", "message": "Applying your approved fixes..."})
+
+    df = pd.read_csv(state.file_path)
+    approved = set(state.approved_action_ids)
+    skipped = set(state.skipped_action_ids)
+
+    action_log: list[ActionLogEntry] = []
+    applied_count = 0
+
+    for card in state.suggestion_cards:
+        if card.card_id in skipped or card.card_id not in approved:
+            action_log.append(
+                ActionLogEntry(
+                    action_id=_new_action_id(),
+                    card_id=card.card_id,
+                    column_name=card.column_name,
+                    operation=card.operation or "none",
+                    status="rejected",
+                    # verbatim, never paraphrased (FR-30)
+                    rejection_reason=state.skip_reasons.get(card.card_id),
+                )
+            )
+            continue
+
+        if not card.operation:
+            logger.warning("Approved card %s has no executable operation; skipping", card.card_id)
+            action_log.append(
+                ActionLogEntry(
+                    action_id=_new_action_id(),
+                    card_id=card.card_id,
+                    column_name=card.column_name,
+                    operation="none",
+                    status="rejected",
+                    rejection_reason="This suggestion had no executable fix attached.",
+                )
+            )
+            continue
+
+        action_id = _new_action_id()
+        writer(
+            {
+                "event": "action_start",
+                "action_id": action_id,
+                "operation": card.operation,
+                "column_name": card.column_name,
+            }
+        )
+
+        try:
+            df, before_stats, after_stats = operations.apply_operation(
+                df, card.operation, card.operation_params
+            )
+        except (operations.OperationFailedError, operations.UnknownOperationError) as exc:
+            logger.warning("Operation %s failed for card %s: %s", card.operation, card.card_id, exc)
+            action_log.append(
+                ActionLogEntry(
+                    action_id=action_id,
+                    card_id=card.card_id,
+                    column_name=card.column_name,
+                    operation=card.operation,
+                    status="rejected",
+                    rejection_reason=f"Could not be applied: {exc}",
+                )
+            )
+            writer({"event": "error", "error": "Fix could not be applied", "detail": str(exc)})
+            continue
+        except Exception as exc:  # noqa: BLE001 -- one bad fix must not kill the whole run
+            logger.exception("Unexpected failure applying %s for card %s", card.operation, card.card_id)
+            action_log.append(
+                ActionLogEntry(
+                    action_id=action_id,
+                    card_id=card.card_id,
+                    column_name=card.column_name,
+                    operation=card.operation,
+                    status="rejected",
+                    rejection_reason=f"Could not be applied: {exc}",
+                )
+            )
+            writer({"event": "error", "error": "Fix could not be applied", "detail": str(exc)})
+            continue
+
+        applied_count += 1
+        action_log.append(
+            ActionLogEntry(
+                action_id=action_id,
+                card_id=card.card_id,
+                column_name=card.column_name,
+                operation=card.operation,
+                status="applied",
+                before_stats=before_stats,
+                after_stats=after_stats,
+            )
+        )
+        writer(
+            {
+                "event": "action_complete",
+                "action_id": action_id,
+                "before_stats": before_stats,
+                "after_stats": after_stats,
+            }
+        )
+
+    cleaned_path = Path(state.file_path).parent / "cleaned.csv"
+    df.to_csv(cleaned_path, index=False)
+
+    writer(
+        {
+            "event": "all_actions_complete",
+            "actions_applied": applied_count,
+            "actions_skipped": len(action_log) - applied_count,
+        }
+    )
+
+    return {
+        "cleaned_file_path": str(cleaned_path),
+        "action_log": action_log,
+        "current_agent": "cleaning_agent",
+    }

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class SuggestionCard(BaseModel):
@@ -23,6 +23,12 @@ class SuggestionCard(BaseModel):
     proposed_action: str  # e.g. "Drop the 340 rows where revenue is null"
     reasoning: str  # must reference the stated use case
     tradeoff: str  # what is lost or risked, specific to the column/data
+
+    # Machine-readable form of proposed_action, chosen by the LLM from the whitelist in
+    # services/operations.py. None means the model didn't return a usable operation, in
+    # which case the card is informational only and can't be executed (see cleaning_agent).
+    operation: Optional[str] = None
+    operation_params: dict = Field(default_factory=dict)
 
 
 class ActionLogEntry(BaseModel):

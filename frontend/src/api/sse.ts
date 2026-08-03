@@ -13,17 +13,47 @@ export interface ProfileStreamHandlers {
 
 export function streamProfile(
   sessionId: string,
+  handlers: ProfileStreamHandlers
+): AbortController {
+  return streamPost(`${API_BASE_URL}/api/profile/${sessionId}`, undefined, handlers);
+}
+
+/** Submits approve/reject decisions and streams the cleaning run that follows. */
+export function streamResume(
+  sessionId: string,
+  decisions: {
+    approved_action_ids: string[];
+    skipped_action_ids: string[];
+    skip_reasons: Record<string, string>;
+  },
+  handlers: ProfileStreamHandlers
+): AbortController {
+  return streamPost(`${API_BASE_URL}/api/resume/${sessionId}`, decisions, handlers);
+}
+
+function streamPost(
+  url: string,
+  body: unknown,
   { onEvent, onError, onClose }: ProfileStreamHandlers
 ): AbortController {
   const controller = new AbortController();
 
-  fetchEventSource(`${API_BASE_URL}/api/profile/${sessionId}`, {
+  fetchEventSource(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body),
     signal: controller.signal,
     async onopen(response) {
       if (!response.ok) {
-        throw new Error(`Failed to start profiling stream: ${response.status}`);
+        // Surface the server's plain-English {error, detail} rather than a bare status code.
+        let detail = `HTTP ${response.status}`;
+        try {
+          const body = await response.json();
+          if (body?.detail) detail = body.detail;
+        } catch {
+          // non-JSON error body -- keep the status code
+        }
+        throw new Error(detail);
       }
     },
     onmessage(msg) {

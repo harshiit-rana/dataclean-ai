@@ -48,6 +48,10 @@ export interface SuggestionCard {
   proposed_action: string;
   reasoning: string;
   tradeoff: string;
+  /** null when the model didn't return a usable whitelisted operation, meaning this card
+   * is informational and can't be executed. */
+  operation: string | null;
+  operation_params: Record<string, string>;
 }
 
 export interface ErrorResponse {
@@ -116,6 +120,36 @@ export interface ErrorEvent {
   detail: string;
 }
 
+export interface ColumnStats {
+  row_count: number;
+  null_count?: number;
+  unique_value_count?: number;
+  min?: number;
+  max?: number;
+  mean?: number;
+  std?: number;
+}
+
+export interface ActionStartEvent {
+  event: "action_start";
+  action_id: string;
+  operation: string;
+  column_name: string;
+}
+
+export interface ActionCompleteEvent {
+  event: "action_complete";
+  action_id: string;
+  before_stats: ColumnStats;
+  after_stats: ColumnStats;
+}
+
+export interface AllActionsCompleteEvent {
+  event: "all_actions_complete";
+  actions_applied: number;
+  actions_skipped: number;
+}
+
 export type ProfileStreamEvent =
   | AgentStartEvent
   | ProfilingCompleteEvent
@@ -123,4 +157,7 @@ export type ProfileStreamEvent =
   | CardCompleteEvent
   | AllCardsCompleteEvent
   | InterruptReachedEvent
+  | ActionStartEvent
+  | ActionCompleteEvent
+  | AllActionsCompleteEvent
   | ErrorEvent;

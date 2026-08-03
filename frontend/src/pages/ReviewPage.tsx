@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { AgentStatusBar } from "@/components/review/AgentStatusBar";
+import { ApprovalBar } from "@/components/review/ApprovalBar";
 import { ColumnDetailPanel } from "@/components/review/ColumnDetailPanel";
 import { DataTable } from "@/components/review/DataTable";
 import { IssueCountSummary } from "@/components/review/IssueCountSummary";
@@ -15,6 +16,7 @@ import type { ColumnIssue, PreviewResponse } from "@/api/types";
  * endpoint is implemented -- see SuggestionCardView's docstring. */
 export function ReviewPage() {
   const { sessionId } = useParams();
+  const navigate = useNavigate();
   const stream = useProfileStream(sessionId ?? null);
   const [decisions, setDecisions] = useState<Record<string, "approved" | "rejected">>({});
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
@@ -54,6 +56,21 @@ export function ReviewPage() {
 
   const handleDecide = (cardId: string, decision: "approved" | "rejected") => {
     setDecisions((prev) => ({ ...prev, [cardId]: decision }));
+  };
+
+  const decisionCounts = useMemo(() => {
+    const values = stream.cards.map((c) => decisions[c.card_id]);
+    return {
+      approved: values.filter((d) => d === "approved").length,
+      rejected: values.filter((d) => d === "rejected").length,
+      undecided: values.filter((d) => d === undefined).length,
+    };
+  }, [stream.cards, decisions]);
+
+  const handleSubmit = () => {
+    if (!sessionId) return;
+    // The cleaning run streams on the Clean page, which starts it on mount.
+    navigate(`/clean/${sessionId}`, { state: { decisions } });
   };
 
   return (
@@ -125,6 +142,16 @@ export function ReviewPage() {
       {stream.status === "interrupted" && stream.cards.length === 0 && (
         <p className="text-sm text-muted-foreground">No issues found -- your data looks clean.</p>
       )}
+
+      <ApprovalBar
+        total={stream.cards.length}
+        approvedCount={decisionCounts.approved}
+        rejectedCount={decisionCounts.rejected}
+        undecidedCount={decisionCounts.undecided}
+        submitting={false}
+        disabled={stream.status !== "interrupted"}
+        onSubmit={handleSubmit}
+      />
     </div>
   );
 }

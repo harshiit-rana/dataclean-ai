@@ -12,14 +12,15 @@ from __future__ import annotations
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from app.models.graph_state import ColumnIssue, GoalContext
+from app.services.operations import operation_catalog
 
-SECTION_MARKERS = ("FOUND:", "PROPOSED_ACTION:", "REASONING:", "TRADEOFF:")
+SECTION_MARKERS = ("FOUND:", "PROPOSED_ACTION:", "REASONING:", "TRADEOFF:", "OPERATION:")
 
 SYSTEM_PROMPT = """You are the Explanation Agent inside DataClean AI. For the single data \
 issue you are given, write a suggestion card a non-statistician can act on. Use plain \
 English, no jargon, no statistical notation (no "IQR", "p-value", "std dev", etc).
 
-Respond in exactly this format, four sections, each starting on its own line with the \
+Respond in exactly this format, five sections, each starting on its own line with the \
 literal marker shown:
 
 FOUND:
@@ -37,7 +38,26 @@ TRADEOFF:
 What the user gives up or risks if this action is applied. Must be specific to this \
 column and this data, not generic.
 
-No other text before FOUND: or after the TRADEOFF section."""
+OPERATION:
+A single machine-readable call describing the fix, chosen ONLY from the list below. Use \
+the exact operation name, with double-quoted argument values, and nothing else on the \
+line -- no backticks, no explanation.
+
+{operation_catalog}
+
+Argument rules:
+- Every operation except drop_duplicate_rows takes column="<the column name>".
+- standardize_case also takes case="lower" | "upper" | "title".
+- standardize_dates also takes format="%Y-%m-%d" (or another strftime format).
+- fill_constant also takes value="<the fill value>".
+
+Example OPERATION lines:
+fill_median(column="revenue")
+drop_duplicate_rows()
+standardize_case(column="country", case="upper")
+
+The OPERATION must match what PROPOSED_ACTION describes. No other text before FOUND: or \
+after the OPERATION line."""
 
 
 def build_explanation_messages(
@@ -60,7 +80,8 @@ def build_explanation_messages(
         f"- stats: {issue.stats}\n\n"
         "Write the suggestion card now."
     )
-    return [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=human)]
+    system = SYSTEM_PROMPT.format(operation_catalog=operation_catalog())
+    return [SystemMessage(content=system), HumanMessage(content=human)]
 
 
 def parse_card_sections(text: str) -> dict[str, str]:
@@ -70,6 +91,7 @@ def parse_card_sections(text: str) -> dict[str, str]:
         "PROPOSED_ACTION:": "proposed_action",
         "REASONING:": "reasoning",
         "TRADEOFF:": "tradeoff",
+        "OPERATION:": "operation",
     }
     sections: dict[str, str] = {}
     current_key = None

@@ -17,6 +17,16 @@ const sizeClasses: Record<Size, string> = {
   lg: "h-11 px-8",
 };
 
+const baseClasses =
+  "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50";
+
+/** Shared button styling for elements that must render as <a> or <Link> rather than
+ * <button> (downloads, navigation) -- keeps them visually identical without pulling in
+ * Radix's Slot/asChild machinery. */
+export function buttonClasses(variant: Variant = "default", size: Size = "default") {
+  return cn(baseClasses, variantClasses[variant], sizeClasses[size]);
+}
+
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
   size?: Size;
@@ -26,12 +36,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = "default", size = "default", ...props }, ref) => (
     <button
       ref={ref}
-      className={cn(
-        "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50",
-        variantClasses[variant],
-        sizeClasses[size],
-        className
-      )}
+      className={cn(baseClasses, variantClasses[variant], sizeClasses[size], className)}
       {...props}
     />
   )
