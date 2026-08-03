@@ -14,6 +14,7 @@ anthropic>=0.40.0
 
 pandas>=2.2.0
 ydata-profiling>=4.12.0
+setuptools>=75.0  # ydata-profiling imports pkg_resources, which Python 3.12+ no longer ships by default
 
 redis>=5.2.0
 weasyprint>=63.0

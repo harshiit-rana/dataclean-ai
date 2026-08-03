@@ -29,10 +29,14 @@ class _FakeStreamClient:
 
     async def astream(self, messages):
         text = (
-            "FOUND: This column has missing values.\n"
-            "PROPOSED_ACTION: Fill missing values with the column median.\n"
-            "REASONING: Keeps every row usable for training.\n"
-            "TRADEOFF: Slightly reduces variance in the column.\n"
+            "FOUND:\n"
+            "This column has missing values.\n"
+            "PROPOSED_ACTION:\n"
+            "Fill missing values with the column median.\n"
+            "REASONING:\n"
+            "Keeps every row usable for training.\n"
+            "TRADEOFF:\n"
+            "Slightly reduces variance in the column.\n"
         )
         yield SimpleNamespace(content=text)
 

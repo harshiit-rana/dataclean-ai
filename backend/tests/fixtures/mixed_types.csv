@@ -4,7 +4,7 @@ id,price,signup_date,name
 3,150,2023-01-10,Carol
 4,300,2023-02-01,Dave
 5,250,2023-02-15,Eve
-6,N/A,2023-03-01,Frank
+6,invalid,2023-03-01,Frank
 7,400,2023-03-10,Gina
 8,350,2023-03-20,Heidi
 9,275,2023-04-01,Ivan
