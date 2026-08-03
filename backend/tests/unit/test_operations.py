@@ -142,7 +142,93 @@ def test_operation_requiring_column_without_one_raises(df):
         ops.apply_operation(df, "fill_median", {})
 
 
-def test_catalog_lists_every_registered_operation():
-    catalog = ops.operation_catalog()
+def test_full_catalog_lists_every_registered_operation():
+    catalog = ops.operation_catalog(include_conversational=True)
     for name in ops.OPERATIONS:
         assert name in catalog
+
+
+# --- conversational-only operations (FR-37..40) -------------------------------------------
+
+
+def test_filter_rows_drop_by_numeric_comparison(df):
+    """The canonical free-form request: "drop rows where age is negative"."""
+    frame = pd.DataFrame({"age": [30, -5, 42, -1]})
+    out, before, after = ops.apply_operation(
+        frame, "filter_rows", {"column": "age", "comparison": "lt", "value": "0", "mode": "drop"}
+    )
+    assert before["row_count"] == 4
+    assert after["row_count"] == 2
+    assert (out["age"] >= 0).all()
+
+
+def test_filter_rows_keeps_matching_rows(df):
+    frame = pd.DataFrame({"status": ["active", "closed", "active"]})
+    out, _, after = ops.apply_operation(
+        frame, "filter_rows", {"column": "status", "comparison": "eq", "value": "active"}
+    )
+    assert after["row_count"] == 2
+
+
+def test_filter_rows_compares_numerically_not_as_text(df):
+    """String comparison would put "100" < "9"; the column is numeric so it must not."""
+    frame = pd.DataFrame({"n": [9, 100]})
+    out, _, _ = ops.apply_operation(
+        frame, "filter_rows", {"column": "n", "comparison": "gt", "value": "50"}
+    )
+    assert out["n"].tolist() == [100]
+
+
+def test_filter_rows_rejects_a_non_numeric_value_for_a_numeric_column(df):
+    with pytest.raises(ops.OperationFailedError):
+        ops.apply_operation(
+            df, "filter_rows", {"column": "salary", "comparison": "gt", "value": "abc"}
+        )
+
+
+def test_filter_rows_rejects_unknown_comparison(df):
+    with pytest.raises(ops.OperationFailedError):
+        ops.apply_operation(
+            df, "filter_rows", {"column": "salary", "comparison": "approximately", "value": "1"}
+        )
+
+
+def test_filter_rows_null_checks_need_no_value(df):
+    out, _, after = ops.apply_operation(
+        df, "filter_rows", {"column": "salary", "comparison": "not_null"}
+    )
+    assert after["null_count"] == 0
+
+
+def test_rename_column(df):
+    out, _, _ = ops.apply_operation(df, "rename_column", {"column": "qty", "new_name": "quantity"})
+    assert "quantity" in out.columns and "qty" not in out.columns
+
+
+def test_rename_column_refuses_to_clobber_an_existing_column(df):
+    with pytest.raises(ops.OperationFailedError):
+        ops.apply_operation(df, "rename_column", {"column": "qty", "new_name": "salary"})
+
+
+def test_round_numeric(df):
+    frame = pd.DataFrame({"x": [1.2345, 2.6789]})
+    out, _, _ = ops.apply_operation(frame, "round_numeric", {"column": "x", "decimals": "2"})
+    assert out["x"].tolist() == [1.23, 2.68]
+
+
+def test_replace_values(df):
+    out, _, _ = ops.apply_operation(
+        df, "replace_values", {"column": "name", "find": "BOB", "replace": "Bob"}
+    )
+    assert "Bob" in out["name"].tolist() and "BOB" not in out["name"].tolist()
+
+
+def test_conversational_operations_are_hidden_from_the_issue_fixing_catalog():
+    """The Explanation Agent fixes detected issues; none of these map to a detectable issue
+    type, so it must not be able to propose them."""
+    issue_catalog = ops.operation_catalog()
+    for name in ops.CONVERSATIONAL_ONLY:
+        assert name not in issue_catalog
+    full_catalog = ops.operation_catalog(include_conversational=True)
+    for name in ops.OPERATIONS:
+        assert name in full_catalog

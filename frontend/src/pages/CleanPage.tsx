@@ -4,6 +4,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ActionLog } from "@/components/clean/ActionLog";
 import { AppliedActions } from "@/components/clean/AppliedActions";
+import { ChatPanel } from "@/components/clean/ChatPanel";
 import { useCleaningRun } from "@/hooks/useCleaningRun";
 import { API_BASE_URL, fetchActionLog, type ActionLogEntry } from "@/api/client";
 
@@ -73,6 +74,10 @@ export function CleanPage() {
           actions={actionLog}
           onChange={setActionLog}
         />
+      )}
+
+      {run.status === "done" && sessionId && (
+        <ChatPanel sessionId={sessionId} onActionsChanged={setActionLog} />
       )}
 
       {run.status === "done" && (

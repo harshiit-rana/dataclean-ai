@@ -241,6 +241,88 @@ def _drop_column(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     return df.drop(columns=[column]).copy()
 
 
+def _rename_column(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    column = _require_column(df, params)
+    new_name = str(params.get("new_name", "")).strip()
+    if not new_name:
+        raise OperationFailedError("rename_column requires a 'new_name' parameter.")
+    if new_name in df.columns:
+        raise OperationFailedError(f"A column named {new_name!r} already exists.")
+    return df.rename(columns={column: new_name}).copy()
+
+
+def _round_numeric(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    column = _require_column(df, params)
+    numeric = _require_numeric(df, column)
+    try:
+        decimals = int(params.get("decimals", 0))
+    except (TypeError, ValueError) as exc:
+        raise OperationFailedError("'decimals' must be a whole number.") from exc
+    out = df.copy()
+    out[column] = numeric.round(decimals)
+    return out
+
+
+def _replace_values(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    column = _require_column(df, params)
+    if "find" not in params:
+        raise OperationFailedError("replace_values requires a 'find' parameter.")
+    out = df.copy()
+    out[column] = out[column].replace(params["find"], params.get("replace"))
+    return out
+
+
+# --- row filtering (the main thing free-form instructions ask for) -------------------------
+
+_COMPARISONS = {
+    "eq": lambda s, v: s == v,
+    "ne": lambda s, v: s != v,
+    "gt": lambda s, v: s > v,
+    "gte": lambda s, v: s >= v,
+    "lt": lambda s, v: s < v,
+    "lte": lambda s, v: s <= v,
+    "contains": lambda s, v: s.astype("string").str.contains(str(v), case=False, na=False),
+    "not_contains": lambda s, v: ~s.astype("string").str.contains(str(v), case=False, na=False),
+    "is_null": lambda s, _v: s.isna(),
+    "not_null": lambda s, _v: s.notna(),
+}
+
+
+def _coerce_for_comparison(series: pd.Series, value):
+    """Comparison values arrive as text. Compare numerically when the column is numeric so
+    "age < 0" behaves like a number rather than a string comparison."""
+    if pd.api.types.is_numeric_dtype(series):
+        coerced = pd.to_numeric(pd.Series([value]), errors="coerce").iloc[0]
+        if pd.isna(coerced):
+            raise OperationFailedError(
+                f"{value!r} is not a number, but that column holds numbers."
+            )
+        return coerced
+    return value
+
+
+def _filter_rows(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """Keeps or drops rows matching a comparison. `mode` is "keep" (default) or "drop"."""
+    column = _require_column(df, params)
+    comparison = str(params.get("comparison", "")).lower()
+    if comparison not in _COMPARISONS:
+        raise OperationFailedError(
+            f"Unsupported comparison {comparison!r}; expected one of "
+            f"{', '.join(sorted(_COMPARISONS))}."
+        )
+
+    series = df[column]
+    value = params.get("value")
+    if comparison not in {"is_null", "not_null"}:
+        value = _coerce_for_comparison(series, value)
+
+    mask = _COMPARISONS[comparison](series, value)
+    mode = str(params.get("mode", "keep")).lower()
+    if mode not in {"keep", "drop"}:
+        raise OperationFailedError(f"Unsupported mode {mode!r}; expected 'keep' or 'drop'.")
+    return df[mask if mode == "keep" else ~mask].copy()
+
+
 OPERATIONS: dict[str, Operation] = {
     op.name: op
     for op in [
@@ -258,14 +340,28 @@ OPERATIONS: dict[str, Operation] = {
         Operation("cap_outliers", "Clamp extreme values to the normal range", True, _cap_outliers),
         Operation("drop_outlier_rows", "Drop rows with extreme values", True, _drop_outlier_rows),
         Operation("drop_column", "Remove this column entirely", True, _drop_column),
+        Operation("rename_column", "Rename this column", True, _rename_column),
+        Operation("round_numeric", "Round numbers to a set number of decimals", True, _round_numeric),
+        Operation("replace_values", "Replace one value with another", True, _replace_values),
+        Operation("filter_rows", "Keep or drop rows matching a condition", True, _filter_rows),
     ]
 }
 
+# Operations that only make sense for free-form instructions -- the Explanation Agent picks
+# fixes for *detected issues*, and none of these correspond to a detectable issue type.
+# Kept out of that agent's catalog so it can't propose them for a profiling finding.
+CONVERSATIONAL_ONLY = {"rename_column", "round_numeric", "replace_values", "filter_rows"}
 
-def operation_catalog() -> str:
-    """Human-readable operation list, injected into the Explanation Agent's prompt so the
-    model can only ever pick something that actually exists."""
-    return "\n".join(f"- {op.name}: {op.description}" for op in OPERATIONS.values())
+
+def operation_catalog(include_conversational: bool = False) -> str:
+    """Human-readable operation list, injected into a prompt so the model can only ever pick
+    something that actually exists. The Explanation Agent gets the issue-fixing subset; the
+    conversational path gets everything."""
+    return "\n".join(
+        f"- {op.name}: {op.description}"
+        for op in OPERATIONS.values()
+        if include_conversational or op.name not in CONVERSATIONAL_ONLY
+    )
 
 
 _CALL_PATTERN = re.compile(r"^\s*([a-z_]+)\s*(?:\((.*)\))?\s*$", re.DOTALL)

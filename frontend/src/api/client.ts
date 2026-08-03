@@ -84,6 +84,24 @@ export async function undoAction(
   return handleResponse<{ actions: ActionLogEntry[]; report_regenerated: boolean }>(response);
 }
 
+export interface ChatResult {
+  applied: boolean;
+  message: string;
+  actions: ActionLogEntry[];
+}
+
+export async function sendChatMessage(
+  sessionId: string,
+  message: string
+): Promise<ChatResult> {
+  const response = await fetch(`${API_BASE_URL}/api/chat/${sessionId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ message }),
+  });
+  return handleResponse<ChatResult>(response);
+}
+
 export async function submitGoalContext(
   sessionId: string,
   goal: GoalContext
