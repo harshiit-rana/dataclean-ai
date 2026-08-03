@@ -1,29 +1,53 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { AgentStatusBar } from "@/components/review/AgentStatusBar";
+import { ColumnDetailPanel } from "@/components/review/ColumnDetailPanel";
+import { DataTable } from "@/components/review/DataTable";
 import { IssueCountSummary } from "@/components/review/IssueCountSummary";
 import { SuggestionCardView } from "@/components/review/SuggestionCardView";
 import { useProfileStream } from "@/hooks/useProfileStream";
+import { fetchPreview } from "@/api/client";
+import type { ColumnIssue, PreviewResponse } from "@/api/types";
 
-/** Page 2, PRD US-04/US-06: streams the Profiling + Explanation agents' progress, then lets
- * the user approve/reject each suggestion card. Submitting decisions (POST /api/resume)
- * happens once that endpoint is implemented -- see SuggestionCardView's docstring. */
+/** Page 2, PRD US-04/US-06: shows the uploaded data as a table (click a column header to
+ * inspect what it holds and what was flagged in it), with the streamed suggestion cards
+ * below for approve/reject. Submitting decisions (POST /api/resume) happens once that
+ * endpoint is implemented -- see SuggestionCardView's docstring. */
 export function ReviewPage() {
   const { sessionId } = useParams();
   const stream = useProfileStream(sessionId ?? null);
   const [decisions, setDecisions] = useState<Record<string, "approved" | "rejected">>({});
+  const [preview, setPreview] = useState<PreviewResponse | null>(null);
+  const [selectedColumn, setSelectedColumn] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!sessionId) return;
+    fetchPreview(sessionId)
+      .then(setPreview)
+      .catch(() => setPreview(null));
+  }, [sessionId]);
+
+  const issuesByColumn = useMemo(() => {
+    const grouped: Record<string, ColumnIssue[]> = {};
+    for (const issue of stream.issues) {
+      (grouped[issue.column_name] ??= []).push(issue);
+    }
+    return grouped;
+  }, [stream.issues]);
 
   const inProgressCardIds = useMemo(() => {
     const completed = new Set(stream.cards.map((c) => c.card_id));
     return Object.keys(stream.streamingCardText).filter((id) => !completed.has(id));
   }, [stream.cards, stream.streamingCardText]);
 
+  const selectedColumnMeta = preview?.columns.find((c) => c.name === selectedColumn) ?? null;
+
   const handleDecide = (cardId: string, decision: "approved" | "rejected") => {
     setDecisions((prev) => ({ ...prev, [cardId]: decision }));
   };
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-6 p-8">
+    <div className="mx-auto flex max-w-6xl flex-col gap-6 p-8">
       <div>
         <h1 className="text-2xl font-semibold">Review suggestions</h1>
         <p className="text-muted-foreground">
@@ -40,8 +64,24 @@ export function ReviewPage() {
         <IssueCountSummary counts={stream.issueCounts} />
       </div>
 
-      {stream.status === "error" && (
-        <p className="text-sm text-destructive">{stream.error}</p>
+      {stream.status === "error" && <p className="text-sm text-destructive">{stream.error}</p>}
+
+      {preview && (
+        <DataTable
+          preview={preview}
+          issuesByColumn={issuesByColumn}
+          selectedColumn={selectedColumn}
+          onSelectColumn={(name) => setSelectedColumn((cur) => (cur === name ? null : name))}
+        />
+      )}
+
+      {preview && selectedColumnMeta && (
+        <ColumnDetailPanel
+          column={selectedColumnMeta}
+          issues={issuesByColumn[selectedColumnMeta.name] ?? []}
+          preview={preview}
+          onClose={() => setSelectedColumn(null)}
+        />
       )}
 
       <div className="flex flex-col gap-4">

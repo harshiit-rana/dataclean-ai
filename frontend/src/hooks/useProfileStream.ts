@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { streamProfile } from "@/api/sse";
-import type { ProfileStreamEvent, SuggestionCard } from "@/api/types";
+import type { ColumnIssue, ProfileStreamEvent, SuggestionCard } from "@/api/types";
 
 interface ProfileStreamState {
   status: "idle" | "streaming" | "interrupted" | "error";
   currentAgent: string | null;
   statusMessage: string;
   issueCounts: { high: number; medium: number; low: number } | null;
+  issues: ColumnIssue[];
   cards: SuggestionCard[];
   streamingCardText: Record<string, string>;
   error: string | null;
@@ -17,6 +18,7 @@ const initialState: ProfileStreamState = {
   currentAgent: null,
   statusMessage: "",
   issueCounts: null,
+  issues: [],
   cards: [],
   streamingCardText: {},
   error: null,
@@ -44,6 +46,7 @@ export function useProfileStream(sessionId: string | null) {
             return {
               ...s,
               issueCounts: { high: event.high, medium: event.medium, low: event.low },
+              issues: event.issues ?? [],
             };
           case "card_chunk":
             return {

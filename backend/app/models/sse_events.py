@@ -7,6 +7,7 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel
 
+from app.models.graph_state import ColumnIssue
 from app.models.suggestion_card import SuggestionCard
 
 
@@ -22,6 +23,10 @@ class ProfilingCompleteEvent(BaseModel):
     high: int
     medium: int
     low: int
+    # Full issue list so the Review page's data table can annotate each column with what
+    # was actually found in it. Sent over SSE rather than fetched from the checkpointer
+    # afterwards, since the stream is the one path already proven to work end to end.
+    issues: list[ColumnIssue] = []
 
 
 class CardChunkEvent(BaseModel):

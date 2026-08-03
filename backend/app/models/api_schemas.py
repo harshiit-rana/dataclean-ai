@@ -35,6 +35,25 @@ class GoalContextResponse(BaseModel):
     accepted: bool
 
 
+class PreviewColumn(BaseModel):
+    name: str
+    dtype: str
+    null_count: int
+    unique_count: int
+    is_critical: bool
+
+
+class PreviewResponse(BaseModel):
+    """Actual CSV contents for the Review page's data table (see routes_preview.py)."""
+
+    session_id: str
+    columns: list[PreviewColumn]
+    rows: list[dict]
+    total_rows: int
+    total_columns: int
+    preview_row_count: int
+
+
 # --- Stub-endpoint request/response shapes -------------------------------------------
 # These endpoints are not implemented yet (see routes_resume/chat/undo/export). The
 # schemas below exist now so the route signatures and the frontend API client can be

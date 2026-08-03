@@ -89,6 +89,7 @@ async def profiling_agent(state: GraphState) -> dict:
             "high": high,
             "medium": medium,
             "low": low,
+            "issues": [issue.model_dump() for issue in issues],
         }
     )
 

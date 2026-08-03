@@ -12,6 +12,7 @@ from app.api import (
     routes_chat,
     routes_export,
     routes_goal,
+    routes_preview,
     routes_profile,
     routes_resume,
     routes_session,
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(routes_upload.router)
     app.include_router(routes_goal.router)
+    app.include_router(routes_preview.router)
     app.include_router(routes_profile.router)
     app.include_router(routes_session.router)
     app.include_router(routes_resume.router)

@@ -55,6 +55,23 @@ export interface ErrorResponse {
   detail: string;
 }
 
+export interface PreviewColumn {
+  name: string;
+  dtype: string;
+  null_count: number;
+  unique_count: number;
+  is_critical: boolean;
+}
+
+export interface PreviewResponse {
+  session_id: string;
+  columns: PreviewColumn[];
+  rows: Record<string, string | number | boolean | null>[];
+  total_rows: number;
+  total_columns: number;
+  preview_row_count: number;
+}
+
 // --- SSE event payloads, PRD §10.2 -------------------------------------------------------
 
 export interface AgentStartEvent {
@@ -69,6 +86,7 @@ export interface ProfilingCompleteEvent {
   high: number;
   medium: number;
   low: number;
+  issues: ColumnIssue[];
 }
 
 export interface CardChunkEvent {

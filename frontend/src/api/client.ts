@@ -1,7 +1,13 @@
 // Thin fetch wrapper for the plain request/response endpoints. The SSE endpoint
 // (POST /api/profile/{id}) is handled separately in api/sse.ts.
 
-import type { ErrorResponse, GoalContext, GoalContextResponse, UploadResponse } from "./types";
+import type {
+  ErrorResponse,
+  GoalContext,
+  GoalContextResponse,
+  PreviewResponse,
+  UploadResponse,
+} from "./types";
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -32,6 +38,11 @@ export async function uploadCsv(file: File): Promise<UploadResponse> {
     body: formData,
   });
   return handleResponse<UploadResponse>(response);
+}
+
+export async function fetchPreview(sessionId: string): Promise<PreviewResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/preview/${sessionId}`);
+  return handleResponse<PreviewResponse>(response);
 }
 
 export async function submitGoalContext(
