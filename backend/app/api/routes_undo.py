@@ -21,6 +21,7 @@ from app.graph.checkpointer import thread_config
 from app.graph.nodes.audit_agent import generate_audit_artifacts
 from app.models.api_schemas import UndoRequest
 from app.models.graph_state import GraphState
+from app.services import model_store
 from app.services.session_store import session_dir
 from app.services.undo import ActionNotFoundError, undo_action
 
@@ -71,6 +72,10 @@ async def undo(
     )
 
     await graph.aupdate_state(config, {"action_log": updated_log})
+
+    # The data just changed, so any trained model was evaluated against rows that no longer
+    # exist. Showing a stale score next to different data is worse than showing none.
+    model_store.clear(directory)
 
     refreshed = await graph.aget_state(config)
     values = dict(refreshed.values)

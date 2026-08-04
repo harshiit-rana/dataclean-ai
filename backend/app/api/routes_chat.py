@@ -27,7 +27,7 @@ from app.graph.nodes.audit_agent import generate_audit_artifacts
 from app.models.api_schemas import ChatRequest
 from app.models.graph_state import GraphState
 from app.models.suggestion_card import ActionLogEntry
-from app.services import operations
+from app.services import model_store, operations
 from app.services.llm_client import get_llm_client
 from app.services.ml_readiness import enforce_target_safety
 from app.services.prompts.cleaning_prompts import (
@@ -155,6 +155,9 @@ async def send_chat_message(
         }
 
     new_df.to_csv(cleaned_path, index=False)
+    # Same reasoning as undo: a trained model's scores describe the rows it was tested on,
+    # and those rows just changed.
+    model_store.clear(directory)
 
     entry = ActionLogEntry(
         action_id=f"action_{uuid.uuid4().hex[:8]}",

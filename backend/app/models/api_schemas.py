@@ -104,6 +104,34 @@ class ReadinessResponse(BaseModel):
     remaining_issues: dict
 
 
+class ModelPlanResponse(BaseModel):
+    """What the app proposes to build, before anything is trained. The user reviews and
+    adjusts this -- which columns to use, how to split, which models to try -- so the setup
+    is a decision they made rather than a default they never saw."""
+
+    session_id: str
+    target_column: str
+    task_type: str
+    row_count: int
+    features: dict  # numeric / categorical / dropped-with-reasons
+    suggested_exclusions: list[dict]  # column + why the app thinks it should be left out
+    excluded_columns: list[str]  # what was excluded on the last run, if any
+    candidate_models: list[dict]
+    split_options: list[dict]
+    date_columns: list[str]  # candidates for a time-based split
+    blockers: list[str]
+    warnings: list[str]
+    trained: bool
+
+
+class TrainRequest(BaseModel):
+    excluded_columns: list[str] = []
+    model_names: list[str] = []  # empty means "every model that fits the task"
+    split_strategy: str = "random"  # "random" | "time"
+    time_column: Optional[str] = None
+    include_deep_diagnostics: bool = True
+
+
 class SessionStatusResponse(BaseModel):
     session_id: str
     current_agent: Optional[str]
