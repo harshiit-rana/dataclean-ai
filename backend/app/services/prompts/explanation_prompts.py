@@ -57,19 +57,40 @@ drop_duplicate_rows()
 standardize_case(column="country", case="upper")
 
 The OPERATION must match what PROPOSED_ACTION describes. No other text before FOUND: or \
-after the OPERATION line."""
+after the OPERATION line.
+
+When the goal context names a target column (the thing the user wants to predict), these \
+rules override everything above:
+- Never propose filling in missing values in the target column. A guessed answer becomes \
+indistinguishable from a real one. Propose drop_rows_with_nulls on it instead.
+- Never propose drop_column on the target column.
+- For a target_leakage issue, the fix is drop_column on the *flagged* column (not the \
+target). Explain in REASONING that the column gives away the answer and won't be available \
+when a real prediction is needed; in TRADEOFF, say plainly that keeping it would make the \
+model's scores look better than they will be in practice.
+- For a target_imbalance issue there is usually nothing to change in the file itself. Say \
+what it means for measuring the model, and give no OPERATION line at all rather than \
+inventing a fix."""
 
 
 def build_explanation_messages(
     issue: ColumnIssue, goal_context: GoalContext | None
 ) -> list[BaseMessage]:
-    goal_block = (
-        f"use_case={goal_context.use_case}, expected_output={goal_context.expected_output}, "
-        f"critical_columns={goal_context.critical_columns}, "
-        f"cleaning_aggression={goal_context.cleaning_aggression}"
-        if goal_context
-        else "use_case=unspecified (no goal context was provided)"
-    )
+    if goal_context:
+        target = (goal_context.target_column or "").strip()
+        goal_block = (
+            f"use_case={goal_context.use_case}, expected_output={goal_context.expected_output}, "
+            f"critical_columns={goal_context.critical_columns}, "
+            f"cleaning_aggression={goal_context.cleaning_aggression}, "
+            + (
+                f"target_column={target!r} (the column to be predicted), "
+                f"task_type={goal_context.task_type}"
+                if target
+                else "target_column=none (the user is not building a model)"
+            )
+        )
+    else:
+        goal_block = "use_case=unspecified (no goal context was provided)"
     human = (
         f"Goal context: {goal_block}\n\n"
         f"Issue:\n"

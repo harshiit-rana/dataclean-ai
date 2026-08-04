@@ -78,6 +78,14 @@ export const DataTable = memo(function DataTable({
                           &#9733;
                         </span>
                       )}
+                      {col.is_target && (
+                        <span
+                          className="rounded bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary"
+                          title="The column you're predicting"
+                        >
+                          target
+                        </span>
+                      )}
                     </span>
                   </th>
                 );

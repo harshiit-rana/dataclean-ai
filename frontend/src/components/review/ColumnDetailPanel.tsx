@@ -16,6 +16,9 @@ const ISSUE_LABELS: Record<string, string> = {
   outliers: "Outliers",
   inconsistent_format: "Inconsistent formatting",
   high_cardinality: "Mostly unique values",
+  target_missing: "Missing answers",
+  target_imbalance: "Lopsided answers",
+  target_leakage: "Gives away the answer",
 };
 
 export function ColumnDetailPanel({ column, issues, preview, onClose }: ColumnDetailPanelProps) {
@@ -29,6 +32,7 @@ export function ColumnDetailPanel({ column, issues, preview, onClose }: ColumnDe
       <CardHeader className="flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-base">
           {column.name}
+          {column.is_target && <Badge variant="low">target</Badge>}
           {column.is_critical && <Badge variant="low">critical</Badge>}
         </CardTitle>
         <button
@@ -63,7 +67,9 @@ export function ColumnDetailPanel({ column, issues, preview, onClose }: ColumnDe
         <div>
           <p className="mb-1 font-medium">Role in your data</p>
           <p className="text-muted-foreground">
-            {column.is_critical
+            {column.is_target
+              ? "This is the column you're trying to predict. Its values are the answers a model would learn from, so they can never be filled in or guessed — rows without one have to be dropped instead."
+              : column.is_critical
               ? "You marked this column as critical for your goal, so issues here are prioritized above others."
               : looksLikeIdentifier
                 ? "Every value in this column is distinct, so it most likely identifies each row rather than describing it — useful for joining or tracing rows, but rarely meaningful to analyze on its own."

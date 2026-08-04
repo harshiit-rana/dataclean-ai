@@ -42,7 +42,15 @@ from the action log; do not speculate about data you were not shown.
 dispositions: one entry per action_id given below. For applied actions, say what changed and \
 what it means for the user's stated goal. For declined actions, say only that it was \
 declined and what that leaves unresolved -- do NOT restate, justify, or editorialize about \
-why the user declined it."""
+why the user declined it.
+
+Each action carries the issue_type it was addressing. Describe the action in terms of that \
+reason, not just its mechanical effect. In particular:
+- target_leakage: the column was removed because it gave away the value being predicted, \
+not because of how many rows were empty.
+- target_missing: rows were dropped because the value being predicted was absent and \
+cannot be filled in.
+- target_imbalance: a fact about how lopsided the answers are, not a change to the data."""
 
 
 def build_audit_report_messages(
@@ -65,6 +73,7 @@ def build_audit_report_messages(
         {
             "action_id": entry["action_id"],
             "column_name": entry["column_name"],
+            "issue_type": entry.get("issue_type"),
             "operation": entry["operation"],
             "status": entry["status"],
             "before_stats": entry.get("before_stats"),

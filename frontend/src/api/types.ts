@@ -3,19 +3,27 @@
 export type UseCase = "ml_training" | "reporting" | "analysis" | "pipeline_validation";
 export type CleaningAggression = "conservative" | "moderate" | "thorough";
 export type Severity = "high" | "medium" | "low";
+export type TaskType = "auto" | "classification" | "regression";
 export type IssueType =
   | "missing_values"
   | "duplicates"
   | "type_mismatch"
   | "outliers"
   | "inconsistent_format"
-  | "high_cardinality";
+  | "high_cardinality"
+  // Only detectable when a target column is set -- see backend services/ml_readiness.py.
+  | "target_missing"
+  | "target_imbalance"
+  | "target_leakage";
 
 export interface GoalContext {
   use_case: UseCase;
   expected_output: string;
   critical_columns: string[];
   cleaning_aggression: CleaningAggression;
+  /** Empty/null means the user isn't building a model; all target-aware behaviour is off. */
+  target_column: string | null;
+  task_type: TaskType;
 }
 
 export interface UploadResponse {
@@ -23,6 +31,7 @@ export interface UploadResponse {
   file_name: string;
   row_count: number;
   column_count: number;
+  columns: string[];
 }
 
 export interface GoalContextResponse {
@@ -52,6 +61,23 @@ export interface SuggestionCard {
    * is informational and can't be executed. */
   operation: string | null;
   operation_params: Record<string, string>;
+  /** Written in code, never by the model: the fix was corrected or blocked because it would
+   * have damaged the prediction target, or it bakes a whole-file statistic into the data. */
+  warning: string | null;
+}
+
+export interface ReadinessResponse {
+  session_id: string;
+  target_column: string | null;
+  task_type: string | null;
+  row_count: number;
+  column_count: number;
+  verdict: "ready" | "warnings" | "blocked" | "not_applicable";
+  blockers: string[];
+  warnings: string[];
+  notes: string[];
+  target_summary: Record<string, unknown> | null;
+  remaining_issues: { high: number; medium: number; low: number; total: number };
 }
 
 export interface ErrorResponse {
@@ -65,6 +91,7 @@ export interface PreviewColumn {
   null_count: number;
   unique_count: number;
   is_critical: boolean;
+  is_target: boolean;
 }
 
 export interface PreviewResponse {

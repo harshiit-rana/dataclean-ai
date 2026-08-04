@@ -4,6 +4,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { buttonClasses } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ReadinessPanel } from "@/components/readiness/ReadinessPanel";
 import { API_BASE_URL, ApiError, fetchAuditReport } from "@/api/client";
 
 /** Page 4, PRD §8.3 / FR-41..44: preview the audit report and download the artifacts.
@@ -63,6 +64,8 @@ export function ExportPage() {
           Clean another file
         </Link>
       </div>
+
+      {sessionId && <ReadinessPanel sessionId={sessionId} />}
 
       {error && (
         <div className="rounded-md border border-destructive/50 p-3 text-sm text-destructive">

@@ -30,6 +30,12 @@ class SuggestionCard(BaseModel):
     operation: Optional[str] = None
     operation_params: dict = Field(default_factory=dict)
 
+    # Set by services/ml_readiness.enforce_target_safety when the proposed fix would damage
+    # the modelling target or quietly leak whole-file statistics into a train/test split.
+    # Written in code, never by the model, and shown on the card so the user approves the
+    # corrected fix rather than the original one.
+    warning: Optional[str] = None
+
 
 class ActionLogEntry(BaseModel):
     """One applied, rejected, or undone operation, accumulated in GraphState.action_log."""
@@ -38,6 +44,11 @@ class ActionLogEntry(BaseModel):
     card_id: Optional[str] = None  # None for conversational-instruction-originated actions
     column_name: str
     operation: str
+    # What was wrong, carried over from the originating ColumnIssue. Without it the audit
+    # report can only describe an action mechanically ("dropped a column with 268 nulls")
+    # when the reason that matters is quite different ("removed because it gave away the
+    # answer"). None for conversational actions, which answer to an instruction, not an issue.
+    issue_type: Optional[str] = None
     # Recorded so an action can be re-applied during undo's replay (services/undo.py) --
     # without it, parameters like case="upper" would be lost and the replay would diverge.
     operation_params: dict = Field(default_factory=dict)

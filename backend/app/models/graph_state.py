@@ -11,6 +11,7 @@ from app.models.suggestion_card import ActionLogEntry, SuggestionCard  # noqa: F
 
 UseCase = Literal["ml_training", "reporting", "analysis", "pipeline_validation"]
 CleaningAggression = Literal["conservative", "moderate", "thorough"]
+TaskType = Literal["auto", "classification", "regression"]
 IssueType = Literal[
     "missing_values",
     "duplicates",
@@ -18,6 +19,10 @@ IssueType = Literal[
     "outliers",
     "inconsistent_format",
     "high_cardinality",
+    # Only detectable once GoalContext.target_column is set -- see services/ml_readiness.py.
+    "target_missing",
+    "target_imbalance",
+    "target_leakage",
 ]
 Severity = Literal["high", "medium", "low"]
 
@@ -29,6 +34,14 @@ class GoalContext(BaseModel):
     expected_output: str
     critical_columns: list[str] = Field(default_factory=list)
     cleaning_aggression: CleaningAggression = "moderate"
+
+    # The column the user ultimately wants to predict, if they're heading for a model.
+    # Unlike the fields above -- which only tint the wording of prompts -- this one changes
+    # what the tool *does*: it unlocks the leakage/imbalance detectors and hard-blocks fixes
+    # that would corrupt the target. Optional throughout; empty means "not building a model"
+    # and every target-aware code path is skipped.
+    target_column: Optional[str] = None
+    task_type: TaskType = "auto"  # "auto" infers from the target column's own values
 
 
 class ColumnIssue(BaseModel):

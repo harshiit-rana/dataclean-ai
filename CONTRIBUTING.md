@@ -14,6 +14,11 @@ are both running locally, you're ready to make changes.
   here** if you want to make the tool able to fix more things: add an operation, and both
   the suggestion-card and conversational paths can use it. See the README on why the app
   selects from a whitelist rather than generating code.
+- `backend/app/services/ml_readiness.py` -- everything that only becomes possible once the
+  user names a column to predict: leakage detection, target checks, the guard that stops a
+  fix from corrupting the target, and the readiness verdict. Entirely deterministic
+  pandas/numpy, like `profiling.py`. It imports from `profiling.py`, never the other way
+  round -- keep that direction.
 - `backend/app/graph/nodes/` -- one file per LangGraph node. `conversational_loop.py` is an
   unwired stub; everything else is live.
 - `backend/app/api/` -- one file per route group.
@@ -37,6 +42,13 @@ are both running locally, you're ready to make changes.
   `audit_agent.py` and `cleaning_agent.py` for the pattern.
 - **The user's words are never paraphrased.** Rejection reasons are copied verbatim into the
   audit report and are deliberately never sent to the model; there's a test asserting that.
+- **Target safety is enforced in code, not asked for in a prompt.** A fix that would impute
+  the column being predicted has to be impossible, not discouraged. The guard runs when the
+  suggestion card is *built* so the user approves the corrected operation -- substituting it
+  silently at execution time would make the approval meaningless.
+- **Warnings have to stay believable.** The leakage thresholds in `ml_readiness.py` are
+  deliberately high. A warning that fires on ordinary strong correlation teaches users to
+  ignore it, and it's only worth having if it's believed the one time it matters.
 
 The source design doc isn't published in this repo — ask the maintainer if you need a
 section referenced in a docstring.

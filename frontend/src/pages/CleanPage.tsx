@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { buttonClasses } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ActionLog } from "@/components/clean/ActionLog";
 import { AppliedActions } from "@/components/clean/AppliedActions";
 import { ChatPanel } from "@/components/clean/ChatPanel";
+import { ReadinessPanel } from "@/components/readiness/ReadinessPanel";
 import { useCleaningRun } from "@/hooks/useCleaningRun";
 import { API_BASE_URL, fetchActionLog, type ActionLogEntry } from "@/api/client";
 
@@ -18,6 +19,14 @@ export function CleanPage() {
   const run = useCleaningRun(sessionId ?? null);
   const startedRef = useRef(false);
   const [actionLog, setActionLog] = useState<ActionLogEntry[] | null>(null);
+  // Undo and chat both rewrite cleaned.csv, so the readiness verdict has to be recomputed
+  // whenever the action log changes rather than only once when the run finishes.
+  const [readinessKey, setReadinessKey] = useState(0);
+
+  const handleActionsChanged = useCallback((actions: ActionLogEntry[]) => {
+    setActionLog(actions);
+    setReadinessKey((key) => key + 1);
+  }, []);
 
   const decisions =
     (location.state as { decisions?: Record<string, "approved" | "rejected"> } | null)
@@ -72,12 +81,16 @@ export function CleanPage() {
         <AppliedActions
           sessionId={sessionId!}
           actions={actionLog}
-          onChange={setActionLog}
+          onChange={handleActionsChanged}
         />
       )}
 
       {run.status === "done" && sessionId && (
-        <ChatPanel sessionId={sessionId} onActionsChanged={setActionLog} />
+        <ReadinessPanel sessionId={sessionId} refreshKey={readinessKey} />
+      )}
+
+      {run.status === "done" && sessionId && (
+        <ChatPanel sessionId={sessionId} onActionsChanged={handleActionsChanged} />
       )}
 
       {run.status === "done" && (

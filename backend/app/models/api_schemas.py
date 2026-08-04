@@ -6,7 +6,7 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from app.models.graph_state import CleaningAggression, UseCase
+from app.models.graph_state import CleaningAggression, TaskType, UseCase
 
 
 class ErrorResponse(BaseModel):
@@ -21,6 +21,9 @@ class UploadResponse(BaseModel):
     file_name: str
     row_count: int
     column_count: int
+    # Returned so the goal form can offer a real target-column picker instead of asking the
+    # user to type a column name and hope they spell it the same way.
+    columns: list[str] = []
 
 
 class GoalContextRequest(BaseModel):
@@ -28,6 +31,8 @@ class GoalContextRequest(BaseModel):
     expected_output: str
     critical_columns: list[str] = []
     cleaning_aggression: CleaningAggression = "moderate"
+    target_column: Optional[str] = None
+    task_type: TaskType = "auto"
 
 
 class GoalContextResponse(BaseModel):
@@ -41,6 +46,7 @@ class PreviewColumn(BaseModel):
     null_count: int
     unique_count: int
     is_critical: bool
+    is_target: bool = False  # the column the user wants to predict, if any
 
 
 class PreviewResponse(BaseModel):
@@ -78,6 +84,24 @@ class UndoRequest(BaseModel):
     """PRD US-10. If action_id is omitted, undo the most recent action."""
 
     action_id: Optional[str] = None
+
+
+class ReadinessResponse(BaseModel):
+    """GET /api/readiness/{session_id}. Whether the data as it currently stands can support
+    the model the user said they wanted -- computed on demand from the file on disk, so it
+    stays correct after an undo or a conversational edit."""
+
+    session_id: str
+    target_column: Optional[str]
+    task_type: Optional[str]
+    row_count: int
+    column_count: int
+    verdict: str  # ready | warnings | blocked | not_applicable
+    blockers: list[str]
+    warnings: list[str]
+    notes: list[str]
+    target_summary: Optional[dict]
+    remaining_issues: dict
 
 
 class SessionStatusResponse(BaseModel):

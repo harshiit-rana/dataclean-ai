@@ -16,7 +16,7 @@ from langgraph.config import get_stream_writer
 
 from app.config import get_settings
 from app.models.graph_state import GraphState
-from app.services import profiling
+from app.services import ml_readiness, profiling
 from app.services.llm_client import get_llm_client
 from app.services.prompts.profiling_prompts import (
     build_profiling_agent_messages,
@@ -60,6 +60,9 @@ async def profiling_agent(state: GraphState) -> dict:
 
     df = pd.read_csv(state.file_path)
     issues = profiling.detect_issues(df)
+    # Adds the findings that only exist once a prediction target is known (leakage, unusable
+    # target). A no-op when the user didn't name one.
+    issues = ml_readiness.augment_issues(df, issues, state.goal_context)
     raw_profile = profiling.run_ydata_profile(df)
 
     if issues:

@@ -6,6 +6,7 @@ import type {
   GoalContext,
   GoalContextResponse,
   PreviewResponse,
+  ReadinessResponse,
   UploadResponse,
 } from "./types";
 
@@ -43,6 +44,13 @@ export async function uploadCsv(file: File): Promise<UploadResponse> {
 export async function fetchPreview(sessionId: string): Promise<PreviewResponse> {
   const response = await fetch(`${API_BASE_URL}/api/preview/${sessionId}`);
   return handleResponse<PreviewResponse>(response);
+}
+
+/** Recomputed server-side from the file as it currently stands, so it stays correct after an
+ * undo or a conversational edit. Safe to re-fetch after any change. */
+export async function fetchReadiness(sessionId: string): Promise<ReadinessResponse> {
+  const response = await fetch(`${API_BASE_URL}/api/readiness/${sessionId}`);
+  return handleResponse<ReadinessResponse>(response);
 }
 
 export interface AuditReportResponse {

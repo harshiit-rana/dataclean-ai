@@ -44,6 +44,18 @@ export const SuggestionCardView = memo(function SuggestionCardView({
           <p>{card.tradeoff}</p>
         </div>
 
+        {/* Written by the app, not the model: this fix was corrected or blocked because of
+            the prediction target. Styled apart from the model's prose so it reads as a fact
+            about what will run, not as more advice. */}
+        {card.warning && (
+          <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
+            <p className="font-medium text-amber-700 dark:text-amber-500">
+              {card.operation ? "Adjusted for your prediction target" : "Blocked"}
+            </p>
+            <p className="mt-1 text-muted-foreground">{card.warning}</p>
+          </div>
+        )}
+
         <div className="mt-2 flex gap-2">
           <Button
             size="sm"

@@ -57,6 +57,7 @@ async def get_preview(
 
     goal_context = meta.get("goal_context") or {}
     critical_columns = goal_context.get("critical_columns", [])
+    target_column = (goal_context.get("target_column") or "").strip()
 
     columns = [
         {
@@ -65,6 +66,7 @@ async def get_preview(
             "null_count": int(df[col].isna().sum()),
             "unique_count": int(df[col].nunique(dropna=True)),
             "is_critical": str(col) in critical_columns,
+            "is_target": str(col) == target_column,
         }
         for col in df.columns
     ]

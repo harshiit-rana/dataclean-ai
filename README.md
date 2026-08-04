@@ -5,6 +5,9 @@ tell it what you're trying to do, and it profiles your data, ranks issues by rel
 your goal, and proposes fixes as suggestion cards -- Found / Proposed Action / Reasoning /
 Tradeoff. Nothing changes until you approve it, card by card.
 
+If you're cleaning data to train a model, name the column you want to predict and the tool
+changes what it looks for -- see "Cleaning towards a model" below.
+
 ## Before you start: get an LLM API key
 
 This project doesn't ship with a shared/default key for either provider it supports --
@@ -86,16 +89,18 @@ Only the API key matching your chosen provider is required (see `.env.example`).
 
 The full loop works end to end:
 
-1. **Upload** a CSV and describe what you're using it for
-2. **Profiling** runs deterministic pandas/IQR detectors, then an LLM re-ranks findings
-   against your stated goal
+1. **Upload** a CSV, describe what you're using it for, and optionally name the column you
+   want to predict
+2. **Profiling** runs deterministic pandas/IQR detectors — plus leakage and target checks if
+   you named one — then an LLM re-ranks findings against your stated goal
 3. **Review** shows your actual data in a table — click any column to see its stats, its
    role, and what was flagged in it — alongside streamed suggestion cards
 4. **Approve or reject** each fix individually; only approved ones execute
 5. **Clean** applies them, showing before/after numbers per fix, with per-fix **undo**
 6. **Ask for more** in plain English ("drop rows where salary is under 30000")
 7. **Export** the cleaned CSV plus a PDF audit report documenting every change — including
-   the ones you declined, in your own words
+   the ones you declined, in your own words, and a model-readiness verdict if you named a
+   target
 
 Your uploaded file is never modified. Cleaning writes a separate `cleaned.csv`, and there's
 a test asserting the original is byte-identical after a run.
@@ -103,6 +108,36 @@ a test asserting the original is byte-identical after a run.
 **Not implemented:** the `conversational_loop` graph node is an unwired stub — conversational
 cleaning is served by `POST /api/chat` instead, since the graph has already completed by the
 time you're chatting and re-entering it per message would re-run profiling for nothing.
+
+## Cleaning towards a model
+
+On the upload step you can name the column you're ultimately trying to predict. Every other
+field in the goal form only tints how the agents word things; this one changes what the tool
+does:
+
+- **Leakage detection.** A column that predicts the target almost perfectly is usually one
+  recorded *after* the outcome was known -- `termination_date` when predicting attrition,
+  `invoice_paid_at` when predicting default. Left in, it inflates every offline score and the
+  model collapses in production. Emptiness is tested as well as value, because that's how the
+  classic offender shows up: `termination_date` is blank for exactly the people who stayed.
+- **The target is protected.** A fix that would fill in missing values in the target column
+  is rewritten to drop those rows instead, and dropping the target column outright is
+  blocked. That's enforced in code when the card is built, not asked for in a prompt, so what
+  you approve is what runs.
+- **Whole-file statistics are flagged.** Filling a column with its mean bakes a number
+  computed from every row into the file. Split into train and test afterwards and the test
+  rows helped produce the values the model trained on, so your scores come out flattering.
+  The card says so; approving anyway is your call.
+- **Unusable targets are called out.** Missing answers, a single class, four rows in the
+  minority class -- these are reported as blockers rather than quietly cleaned around.
+
+`GET /api/readiness/{session_id}` gives a verdict (`ready` / `warnings` / `blocked` /
+`not_applicable`) against the data as it stands right now, and the same summary appears in
+the audit report. It is deliberately willing to answer "no": a tool that always hands back a
+model is less useful than one that can say the data won't support it, and why.
+
+None of this activates unless you name a target. Cleaning a file for a report behaves exactly
+as it did before.
 
 ## How fixes are executed (and why there's no sandbox)
 

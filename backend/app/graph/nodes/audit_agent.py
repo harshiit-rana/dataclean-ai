@@ -63,6 +63,23 @@ def _no_op(_event: dict) -> None:
     pass
 
 
+def _readiness_for_report(state: GraphState) -> dict | None:
+    """Assessed against the cleaned file so the report describes the data being exported,
+    not the data that was uploaded. Never allowed to sink the report."""
+    if not state.goal_context or not (state.goal_context.target_column or "").strip():
+        return None
+    try:
+        import pandas as pd
+
+        from app.services.ml_readiness import assess_readiness
+
+        path = state.cleaned_file_path or state.file_path
+        return assess_readiness(pd.read_csv(path), state.goal_context)
+    except Exception:  # noqa: BLE001
+        logger.exception("Model-readiness assessment failed; report will omit that section")
+        return None
+
+
 async def generate_audit_artifacts(state: GraphState, emit=_no_op) -> dict:
     """Writes audit_report.md (and audit_report.pdf when WeasyPrint can run) for this
     session, returning the paths.
@@ -85,6 +102,7 @@ async def generate_audit_artifacts(state: GraphState, emit=_no_op) -> dict:
         action_log=state.action_log,
         executive_summary=executive_summary,
         dispositions=dispositions,
+        readiness=_readiness_for_report(state),
     )
 
     session_dir = Path(state.file_path).parent

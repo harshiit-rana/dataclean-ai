@@ -16,6 +16,7 @@ from app.config import get_settings
 from app.models.graph_state import ColumnIssue, GraphState
 from app.models.suggestion_card import SuggestionCard
 from app.services.llm_client import get_llm_client
+from app.services.ml_readiness import enforce_target_safety
 from app.services.operations import OPERATIONS, parse_operation
 from app.services.prompts.explanation_prompts import (
     build_explanation_messages,
@@ -73,6 +74,24 @@ async def explanation_agent(state: GraphState) -> dict:
                 op_params = {**op_params, "column": issue.column_name}
                 parsed_operation = (op_name, op_params)
 
+        # Deterministic guard rather than a prompt instruction: a fix that would impute the
+        # prediction target has to be impossible, not discouraged. Runs here, at card-build
+        # time, so the user approves the corrected operation rather than the original.
+        warning: str | None = None
+        if parsed_operation is not None:
+            op_name, op_params = parsed_operation
+            safe_name, safe_params, warning = enforce_target_safety(
+                op_name, op_params, state.goal_context
+            )
+            if safe_name != op_name:
+                logger.info(
+                    "Card %s: %s on the target column was rewritten to %s",
+                    card_id,
+                    op_name,
+                    safe_name or "no executable fix",
+                )
+            parsed_operation = (safe_name, safe_params) if safe_name else None
+
         if parsed_operation is None:
             logger.warning(
                 "No usable OPERATION for card %s (issue %s, column %s); card will be "
@@ -92,6 +111,7 @@ async def explanation_agent(state: GraphState) -> dict:
             tradeoff=sections.get("tradeoff", ""),
             operation=parsed_operation[0] if parsed_operation else None,
             operation_params=parsed_operation[1] if parsed_operation else {},
+            warning=warning,
         )
         cards.append(card)
         writer({"event": "card_complete", "card": card.model_dump()})

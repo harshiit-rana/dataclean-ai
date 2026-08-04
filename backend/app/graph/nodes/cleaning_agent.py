@@ -1,4 +1,4 @@
-"""cleaning_agent node. PRD §12.3.
+﻿"""cleaning_agent node. PRD §12.3.
 
 Executes the fixes the user approved at the human_approval interrupt, in card order, and
 writes the result to a NEW file (`cleaned.csv`) in the session directory. The user's
@@ -42,18 +42,24 @@ async def cleaning_agent(state: GraphState) -> dict:
     approved = set(state.approved_action_ids)
     skipped = set(state.skipped_action_ids)
 
+    # Carried onto each log entry so the audit report can describe *why* a change was made,
+    # not just what it did to the row counts.
+    issue_types = {issue["issue_id"]: issue.get("issue_type") for issue in state.issues}
+
     action_log: list[ActionLogEntry] = []
     applied_count = 0
 
     for card_data in state.suggestion_cards:
         # state holds plain dicts (see GraphState docstring); validate for typed access.
         card = SuggestionCard.model_validate(card_data)
+        issue_type = issue_types.get(card.issue_id)
         if card.card_id in skipped or card.card_id not in approved:
             action_log.append(
                 ActionLogEntry(
                     action_id=_new_action_id(),
                     card_id=card.card_id,
                     column_name=card.column_name,
+                    issue_type=issue_type,
                     operation=card.operation or "none",
                     status="rejected",
                     # verbatim, never paraphrased (FR-30)
@@ -69,6 +75,7 @@ async def cleaning_agent(state: GraphState) -> dict:
                     action_id=_new_action_id(),
                     card_id=card.card_id,
                     column_name=card.column_name,
+                    issue_type=issue_type,
                     operation="none",
                     status="rejected",
                     rejection_reason="This suggestion had no executable fix attached.",
@@ -97,6 +104,7 @@ async def cleaning_agent(state: GraphState) -> dict:
                     action_id=action_id,
                     card_id=card.card_id,
                     column_name=card.column_name,
+                    issue_type=issue_type,
                     operation=card.operation,
                     status="rejected",
                     rejection_reason=f"Could not be applied: {exc}",
@@ -111,6 +119,7 @@ async def cleaning_agent(state: GraphState) -> dict:
                     action_id=action_id,
                     card_id=card.card_id,
                     column_name=card.column_name,
+                    issue_type=issue_type,
                     operation=card.operation,
                     status="rejected",
                     rejection_reason=f"Could not be applied: {exc}",
@@ -125,6 +134,7 @@ async def cleaning_agent(state: GraphState) -> dict:
                 action_id=action_id,
                 card_id=card.card_id,
                 column_name=card.column_name,
+                issue_type=issue_type,
                 operation=card.operation,
                 operation_params=card.operation_params,
                 status="applied",

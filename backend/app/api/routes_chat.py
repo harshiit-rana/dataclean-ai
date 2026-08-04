@@ -29,6 +29,7 @@ from app.models.graph_state import GraphState
 from app.models.suggestion_card import ActionLogEntry
 from app.services import operations
 from app.services.llm_client import get_llm_client
+from app.services.ml_readiness import enforce_target_safety
 from app.services.prompts.cleaning_prompts import (
     build_conversational_cleaning_messages,
     build_retry_messages,
@@ -132,10 +133,20 @@ async def send_chat_message(
             "actions": values.get("action_log", []),
         }
 
+    # Same guard the suggestion cards go through -- a typed instruction is no more allowed to
+    # impute the prediction target than a generated one. There is no approval step here, so
+    # a correction is reported in the reply rather than applied quietly.
+    operation, params, warning = enforce_target_safety(intent["operation"], params, goal_context)
+    if operation is None:
+        return {
+            "applied": False,
+            "message": warning,
+            "actions": values.get("action_log", []),
+        }
+    explanation = f"{warning}\n\n{intent['explanation']}" if warning else intent["explanation"]
+
     try:
-        new_df, before_stats, after_stats = operations.apply_operation(
-            df, intent["operation"], params
-        )
+        new_df, before_stats, after_stats = operations.apply_operation(df, operation, params)
     except (operations.OperationFailedError, operations.UnknownOperationError) as exc:
         return {
             "applied": False,
@@ -149,7 +160,7 @@ async def send_chat_message(
         action_id=f"action_{uuid.uuid4().hex[:8]}",
         card_id=None,  # conversational actions have no originating suggestion card
         column_name=str(params.get("column", "DATASET")),
-        operation=intent["operation"],
+        operation=operation,
         operation_params=params,
         status="applied",
         before_stats=before_stats,
@@ -164,7 +175,7 @@ async def send_chat_message(
             "action_log": updated_log,
             "conversation_history": [
                 {"role": "user", "content": chat.message},
-                {"role": "assistant", "content": intent["explanation"]},
+                {"role": "assistant", "content": explanation},
             ],
         },
     )
@@ -177,7 +188,7 @@ async def send_chat_message(
 
     return {
         "applied": True,
-        "message": intent["explanation"],
+        "message": explanation,
         "action_id": entry.action_id,
         "before_stats": before_stats,
         "after_stats": after_stats,

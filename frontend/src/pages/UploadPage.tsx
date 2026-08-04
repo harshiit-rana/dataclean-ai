@@ -4,25 +4,43 @@ import { FileDropzone } from "@/components/upload/FileDropzone";
 import { GoalForm } from "@/components/upload/GoalForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ApiError, submitGoalContext, uploadCsv } from "@/api/client";
-import type { GoalContext } from "@/api/types";
+import type { GoalContext, UploadResponse } from "@/api/types";
 
 /** Page 1, PRD US-01/US-02: upload a CSV, describe the goal, then move to Page 2 which
  * starts profiling. */
 export function UploadPage() {
   const navigate = useNavigate();
   const [file, setFile] = useState<File | null>(null);
+  const [upload, setUpload] = useState<UploadResponse | null>(null);
+  const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // The file is sent as soon as it's chosen rather than on submit, so the goal form can
+  // offer a real list of column names to pick a prediction target from.
+  const handleFileSelected = async (selected: File) => {
+    setFile(selected);
+    setUpload(null);
+    setError(null);
+    setUploading(true);
+    try {
+      setUpload(await uploadCsv(selected));
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : "That file couldn't be read.");
+      setFile(null);
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const handleSubmit = async (goal: GoalContext) => {
-    if (!file) {
+    if (!upload) {
       setError("Choose a CSV file first.");
       return;
     }
     setSubmitting(true);
     setError(null);
     try {
-      const upload = await uploadCsv(file);
       await submitGoalContext(upload.session_id, goal);
       navigate(`/review/${upload.session_id}`);
     } catch (err) {
@@ -47,7 +65,15 @@ export function UploadPage() {
           <CardTitle>1. Upload your CSV</CardTitle>
         </CardHeader>
         <CardContent>
-          <FileDropzone onFileSelected={setFile} selectedFile={file} />
+          <FileDropzone onFileSelected={handleFileSelected} selectedFile={file} />
+          {uploading && (
+            <p className="mt-2 text-xs text-muted-foreground">Reading your file...</p>
+          )}
+          {upload && (
+            <p className="mt-2 text-xs text-muted-foreground">
+              {upload.row_count.toLocaleString()} rows, {upload.column_count} columns.
+            </p>
+          )}
         </CardContent>
       </Card>
 
@@ -56,7 +82,11 @@ export function UploadPage() {
           <CardTitle>2. Tell us your goal</CardTitle>
         </CardHeader>
         <CardContent>
-          <GoalForm onSubmit={handleSubmit} submitting={submitting} />
+          <GoalForm
+            onSubmit={handleSubmit}
+            submitting={submitting || uploading}
+            columns={upload?.columns ?? []}
+          />
         </CardContent>
       </Card>
 

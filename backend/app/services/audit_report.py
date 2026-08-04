@@ -65,6 +65,43 @@ def _stats_table(before: dict | None, after: dict | None) -> list[str]:
     return rows if len(rows) > 3 else []
 
 
+_VERDICT_HEADLINES = {
+    "ready": "**Ready.** Nothing found that would stop a model being trained on this data.",
+    "warnings": "**Usable, with caveats.** Nothing blocking, but read the points below "
+    "before you trust a score from this data.",
+    "blocked": "**Not ready.** The points below have to be resolved before this data can "
+    "support the model that was asked for.",
+}
+
+
+def _readiness_section(readiness: dict | None) -> list[str]:
+    """Included only when the session named a column to predict -- for a reporting or
+    analysis session there is no model to be ready for, and an empty section would just be
+    noise in the document."""
+    if not readiness or not readiness.get("target_column"):
+        return []
+
+    lines = [
+        "",
+        "## Model readiness",
+        "",
+        f"Assessed against **{readiness['target_column']}** as the column to predict"
+        f" ({readiness.get('task_type') or 'task type undetermined'}).",
+        "",
+        _VERDICT_HEADLINES.get(readiness.get("verdict", ""), ""),
+        "",
+    ]
+    for label, key in (("Blocking", "blockers"), ("Worth knowing", "warnings"), ("", "notes")):
+        items = readiness.get(key) or []
+        if not items:
+            continue
+        if label:
+            lines += [f"**{label}:**", ""]
+        lines += [f"- {item}" for item in items]
+        lines.append("")
+    return lines
+
+
 def build_markdown_report(
     *,
     session_id: str,
@@ -74,6 +111,7 @@ def build_markdown_report(
     action_log: list[dict],
     executive_summary: str,
     dispositions: dict[str, str],
+    readiness: dict | None = None,
 ) -> str:
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     applied = [a for a in action_log if a["status"] == "applied"]
@@ -110,6 +148,10 @@ def build_markdown_report(
             f"| Critical columns | {', '.join(goal_context.get('critical_columns') or []) or '—'} |",
             f"| Cleaning aggression | {goal_context.get('cleaning_aggression', '—')} |",
         ]
+        if goal_context.get("target_column"):
+            lines.append(f"| Column to be predicted | {goal_context['target_column']} |")
+
+    lines += _readiness_section(readiness)
 
     lines += ["", "## Changes applied", ""]
     if not applied:

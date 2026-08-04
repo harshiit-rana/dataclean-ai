@@ -48,4 +48,5 @@ async def upload_csv(
         file_name=file.filename,
         row_count=row_count,
         column_count=column_count,
+        columns=[str(col) for col in df.columns],
     )
