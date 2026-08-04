@@ -15,6 +15,7 @@ from langgraph.config import get_stream_writer
 from app.config import get_settings
 from app.models.graph_state import ColumnIssue, GraphState
 from app.models.suggestion_card import SuggestionCard
+from app.services import conflicts
 from app.services.llm_client import get_llm_client
 from app.services.ml_readiness import enforce_target_safety
 from app.services.operations import OPERATIONS, parse_operation
@@ -28,6 +29,27 @@ logger = logging.getLogger(__name__)
 
 def _new_card_id() -> str:
     return f"card_{uuid.uuid4().hex[:8]}"
+
+
+def _readable_failure(exc: Exception, written: int, total: int) -> str:
+    """What to tell the user when card generation stops part-way.
+
+    Leads with what they still have. A run that produced four of twelve cards is a partial
+    success, and saying so is more useful than reporting an error code."""
+    got = (
+        f"The {written} suggestion{'' if written == 1 else 's'} already written "
+        f"{'is' if written == 1 else 'are'} ready to review."
+        if written
+        else "No suggestions were written."
+    )
+    text = str(exc)
+    if "RateLimit" in type(exc).__name__ or "429" in text or "rate_limit" in text:
+        return (
+            f"The AI provider's rate limit was reached after {written} of {total} issues. "
+            f"{got} Wait for the limit to reset and run the review again for the rest, or "
+            f"switch provider in .env."
+        )
+    return f"{got} The provider reported: {text[:250]}"
 
 
 async def explanation_agent(state: GraphState) -> dict:
@@ -48,12 +70,26 @@ async def explanation_agent(state: GraphState) -> dict:
         messages = build_explanation_messages(issue, state.goal_context)
 
         full_text = ""
-        async for chunk in client.astream(messages):
-            delta = chunk.content if isinstance(chunk.content, str) else ""
-            if not delta:
-                continue
-            full_text += delta
-            writer({"event": "card_chunk", "card_id": card_id, "chunk": delta})
+        try:
+            async for chunk in client.astream(messages):
+                delta = chunk.content if isinstance(chunk.content, str) else ""
+                if not delta:
+                    continue
+                full_text += delta
+                writer({"event": "card_chunk", "card_id": card_id, "chunk": delta})
+        except Exception as exc:  # noqa: BLE001 -- one failure must not lose the whole run
+            # Almost always a rate limit, and the next call would hit it too. Stop here and
+            # hand back the cards already written: reviewing four fixes beats reviewing none,
+            # and the profiling work is preserved in the checkpoint either way.
+            logger.exception("Card generation failed after %d cards", len(cards))
+            writer(
+                {
+                    "event": "error",
+                    "error": "Couldn't write the rest of the suggestions",
+                    "detail": _readable_failure(exc, len(cards), len(state.issues)),
+                }
+            )
+            break
 
         sections = parse_card_sections(full_text)
         parsed_operation = parse_operation(sections.get("operation", ""))
@@ -116,9 +152,22 @@ async def explanation_agent(state: GraphState) -> dict:
         cards.append(card)
         writer({"event": "card_complete", "card": card.model_dump()})
 
+    # Cards are written one issue at a time, so none of them can see the others. Now that
+    # they all exist, flag the ones another card makes unnecessary -- a leaky column gets
+    # flagged for leakage *and* for its nulls and its type, and only the first is worth doing.
+    payload = [card.model_dump() for card in cards]
+    detected = conflicts.describe_conflicts(payload)
+    for card, data in zip(cards, payload):
+        conflict = detected.get(card.card_id)
+        # A target-safety warning outranks this one: it explains a fix that was rewritten,
+        # which the user needs to read before approving.
+        if conflict and not card.warning:
+            card.warning = conflict
+            data["warning"] = conflict
+
     writer({"event": "all_cards_complete", "total_cards": len(cards)})
 
     return {
-        "suggestion_cards": [card.model_dump() for card in cards],
+        "suggestion_cards": payload,
         "current_agent": "explanation_agent",
     }

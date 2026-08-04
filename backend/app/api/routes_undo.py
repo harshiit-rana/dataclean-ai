@@ -18,9 +18,8 @@ from app.config import Settings, get_settings
 from app.core.errors import SessionNotFoundError
 from app.dependencies import get_graph
 from app.graph.checkpointer import thread_config
-from app.graph.nodes.audit_agent import generate_audit_artifacts
+from app.graph.nodes.audit_agent import mark_report_stale
 from app.models.api_schemas import UndoRequest
-from app.models.graph_state import GraphState
 from app.services import model_store
 from app.services.session_store import session_dir
 from app.services.undo import ActionNotFoundError, undo_action
@@ -81,15 +80,13 @@ async def undo(
     values = dict(refreshed.values)
     values["action_log"] = updated_log
 
-    artifacts = {}
-    try:
-        artifacts = await generate_audit_artifacts(GraphState.model_validate(values))
-    except Exception:  # noqa: BLE001 -- the undo itself already succeeded
-        logger.exception("Audit report could not be regenerated after undoing %s", action_id)
+    # Marked stale rather than rewritten -- see mark_report_stale. Undoing several fixes in a
+    # row would otherwise bill for a report after each one.
+    mark_report_stale(directory)
 
     return {
         "session_id": session_id,
         "undone_action_id": action_id,
         "actions": updated_log,
-        "report_regenerated": bool(artifacts),
+        "report_regenerated": False,
     }

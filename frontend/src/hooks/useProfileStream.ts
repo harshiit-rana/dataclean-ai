@@ -11,6 +11,10 @@ interface ProfileStreamState {
   cards: SuggestionCard[];
   streamingCardText: Record<string, string>;
   error: string | null;
+  /** A run that stopped early but still produced cards. Distinct from `error` because those
+   * cards are reviewable and the approval controls must stay usable — a provider rate limit
+   * after four of twelve suggestions is a partial success, not a dead session. */
+  partialWarning: string | null;
 }
 
 const initialState: ProfileStreamState = {
@@ -22,6 +26,7 @@ const initialState: ProfileStreamState = {
   cards: [],
   streamingCardText: {},
   error: null,
+  partialWarning: null,
 };
 
 /** Drives Page 2 (Review). Starts POST /api/profile/{sessionId} and reduces the SSE event
@@ -94,7 +99,11 @@ export function useProfileStream(sessionId: string | null) {
           case "interrupt_reached":
             return { ...s, status: "interrupted" };
           case "error":
-            return { ...s, status: "error", error: event.detail };
+            // Cards already in hand stay reviewable: losing four usable suggestions because
+            // the twelfth couldn't be written helps nobody.
+            return s.cards.length > 0
+              ? { ...s, partialWarning: event.detail }
+              : { ...s, status: "error", error: event.detail };
           default:
             return s;
         }

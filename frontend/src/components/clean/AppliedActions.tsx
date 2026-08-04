@@ -36,6 +36,9 @@ export function AppliedActions({ sessionId, actions, onChange }: AppliedActionsP
   // then didn't run is something the user should know about, and the issue it addressed is
   // still in their data.
   const failed = actions.filter((a) => a.status === "rejected" && a.failure_reason);
+  // Approved, and neither applied nor failed: an earlier fix had already dealt with it.
+  // Shown plainly rather than as a warning, because nothing went wrong.
+  const superseded = actions.filter((a) => a.status === "superseded");
 
   return (
     <div className="flex flex-col gap-3">
@@ -74,6 +77,21 @@ export function AppliedActions({ sessionId, actions, onChange }: AppliedActionsP
               </span>
             </div>
             <Badge>undone</Badge>
+          </CardContent>
+        </Card>
+      ))}
+
+      {superseded.map((action) => (
+        <Card key={action.action_id} className="opacity-70">
+          <CardContent className="flex flex-col gap-1 p-4 text-sm">
+            <div>
+              <span className="font-medium">{action.column_name}</span>
+              <span className="text-muted-foreground">
+                {" "}
+                — {OPERATION_LABELS[action.operation] ?? action.operation}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground">{action.failure_reason}</p>
           </CardContent>
         </Card>
       ))}

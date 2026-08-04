@@ -100,9 +100,10 @@ The full loop works end to end:
    to the model
 5. **Clean** applies them, showing before/after numbers per fix, with per-fix **undo**
 6. **Ask for more** in plain English ("drop rows where salary is under 30000")
-7. **Export** the cleaned CSV plus a PDF audit report documenting every change — including
-   the ones you declined, in your own words, and a model-readiness verdict if you named a
-   target
+7. **Build a model** from the cleaned data, if you named a target — see below
+8. **Export** the cleaned CSV, a PDF audit report documenting every change (including the
+   ones you declined, in your own words), the model card, a runnable training script and the
+   fitted model
 
 Your uploaded file is never modified. Cleaning writes a separate `cleaned.csv`, and there's
 a test asserting the original is byte-identical after a run.
@@ -152,6 +153,44 @@ model is less useful than one that can say the data won't support it, and why.
 None of this activates unless you name a target. Cleaning a file for a report behaves exactly
 as it did before.
 
+## Building a model
+
+Once the data is clean, `/model/{session}` trains one. The same human-in-the-loop shape as
+the cleaning side: the app proposes with reasons, you decide.
+
+**The plan comes first.** The decisions that matter in a model build happen before any
+fitting — which columns count as inputs, how the data is split, what gets tried. Leaky
+columns and row-unique identifiers arrive pre-unticked with the reason attached; untick the
+suggestion if you know better. If the data has dates, a time-based split is offered, because
+a random split lets the model learn from the future to predict the past.
+
+**Preprocessing lives inside the pipeline.** Imputation, scaling and encoding are steps in
+the sklearn `Pipeline`, so `fit` sees only the training fold and the test rows are transformed
+with statistics they had no part in producing. This is why cleaning deliberately leaves
+`fill_mean` and friends alone rather than baking them into `cleaned.csv` — doing it there
+would leak, and every score afterwards would flatter the model.
+
+**It will tell you when the model is worthless.** A model that learned nothing still reports
+70% accuracy on a 70/30 target, which reads like success. So the result is judged against
+what luck alone could produce on a test set of that size, and against the score you'd get by
+always guessing the same answer. Measured on data with no signal in it, 23 of 25 runs are
+correctly flagged and none are called useful.
+
+**You get the standard diagnostics**, as interactive charts with a table view behind each
+one: ROC and precision-recall curves, confusion matrix, per-class breakdown, calibration, a
+threshold trade-off table, cross-validation spread, learning curve, permutation importance and
+a feature correlation matrix. For regression: predicted-vs-actual, residuals, residual
+distribution and error by range.
+
+**And you leave with something you can run.** The export includes `train_model.py`, which
+rebuilds the model from scratch with the same preprocessing, split and settings, plus the
+fitted `model.joblib` and a model card. There's a test that runs the generated script in a
+subprocess and checks it reproduces the reported metrics — if it ever doesn't, one of them is
+wrong, and that should be discoverable.
+
+Models come from a fixed registry (logistic/ridge, random forest, gradient boosting) for the
+same reason the cleaning operations do: the app never writes or executes generated code.
+
 ## How fixes are executed (and why there's no sandbox)
 
 The PRD this was built from specifies generating pandas code and running it in a sandbox.
@@ -196,7 +235,8 @@ a mocked LLM client, so it doesn't need Redis or a real API key.
 
 ```bash
 cd frontend
-npm run build
+npm test        # vitest
+npm run build   # tsc + vite
 ```
 
 ## License

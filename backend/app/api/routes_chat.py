@@ -23,7 +23,7 @@ from app.config import Settings, get_settings
 from app.core.errors import AppError, SessionNotFoundError
 from app.dependencies import get_graph
 from app.graph.checkpointer import thread_config
-from app.graph.nodes.audit_agent import generate_audit_artifacts
+from app.graph.nodes.audit_agent import mark_report_stale
 from app.models.api_schemas import ChatRequest
 from app.models.graph_state import GraphState
 from app.models.suggestion_card import ActionLogEntry
@@ -184,10 +184,10 @@ async def send_chat_message(
     )
 
     values["action_log"] = updated_log
-    try:
-        await generate_audit_artifacts(GraphState.model_validate(values))
-    except Exception:  # noqa: BLE001 -- the change itself already succeeded
-        logger.exception("Audit report could not be regenerated after a chat instruction")
+    # Marked stale rather than rewritten: the report costs an LLM call, and someone adjusting
+    # their data through chat can easily send a dozen instructions before ever opening it.
+    # The export endpoints rebuild it on demand.
+    mark_report_stale(directory)
 
     return {
         "applied": True,

@@ -7,6 +7,7 @@ import { DataTable } from "@/components/review/DataTable";
 import { IssueCountSummary } from "@/components/review/IssueCountSummary";
 import { SuggestionCardView } from "@/components/review/SuggestionCardView";
 import { useProfileStream } from "@/hooks/useProfileStream";
+import { reasonsForRejectedCards } from "@/lib/decisions";
 import { ApiError, fetchPreview } from "@/api/client";
 import type { ColumnIssue, PreviewResponse } from "@/api/types";
 
@@ -85,11 +86,7 @@ export function ReviewPage() {
     if (!sessionId) return;
     // Only reasons for cards actually rejected -- a reason typed and then reversed would
     // otherwise show up in the report against a fix that was applied.
-    const reasons = Object.fromEntries(
-      Object.entries(skipReasons).filter(
-        ([cardId, reason]) => decisions[cardId] === "rejected" && reason.trim()
-      )
-    );
+    const reasons = reasonsForRejectedCards(decisions, skipReasons);
     // The cleaning run streams on the Clean page, which starts it on mount.
     navigate(`/clean/${sessionId}`, { state: { decisions, skipReasons: reasons } });
   };
@@ -113,6 +110,15 @@ export function ReviewPage() {
       </div>
 
       {stream.status === "error" && <p className="text-sm text-destructive">{stream.error}</p>}
+
+      {stream.partialWarning && (
+        <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+          <p className="font-medium text-amber-700 dark:text-amber-500">
+            Not every suggestion could be written
+          </p>
+          <p className="mt-1 text-muted-foreground">{stream.partialWarning}</p>
+        </div>
+      )}
 
       {previewError && (
         <div className="rounded-md border border-destructive/50 p-3 text-sm text-destructive">

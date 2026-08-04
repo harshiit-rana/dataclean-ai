@@ -15,6 +15,9 @@ interface CleaningRunState {
   actions: AppliedAction[];
   appliedCount: number;
   skippedCount: number;
+  /** Approved fixes an earlier approved fix had already dealt with. Counted apart from
+   * skipped so a run that went exactly right doesn't look like it partly failed. */
+  supersededCount: number;
   error: string | null;
 }
 
@@ -23,6 +26,7 @@ const initialState: CleaningRunState = {
   actions: [],
   appliedCount: 0,
   skippedCount: 0,
+  supersededCount: 0,
   error: null,
 };
 
@@ -75,6 +79,7 @@ export function useCleaningRun(sessionId: string | null) {
                 status: "done",
                 appliedCount: event.actions_applied,
                 skippedCount: event.actions_skipped,
+                supersededCount: event.actions_superseded ?? 0,
               };
             case "error":
               return { ...s, error: event.detail };

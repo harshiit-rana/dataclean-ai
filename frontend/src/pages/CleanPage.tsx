@@ -105,7 +105,10 @@ export function CleanPage() {
           <CardContent className="flex flex-col gap-4 text-sm">
             <p className="text-muted-foreground">
               {run.appliedCount} fix{run.appliedCount === 1 ? "" : "es"} applied
-              {run.skippedCount > 0 && `, ${run.skippedCount} skipped`}.
+              {run.skippedCount > 0 && `, ${run.skippedCount} skipped`}
+              {run.supersededCount > 0 &&
+                `, ${run.supersededCount} no longer needed once the others ran`}
+              .
             </p>
             <div className="flex flex-wrap gap-2">
               <Link to={`/export/${sessionId}`} className={buttonClasses()}>

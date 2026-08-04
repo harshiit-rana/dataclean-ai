@@ -21,13 +21,24 @@ are both running locally, you're ready to make changes.
   round -- keep that direction.
 - `backend/app/graph/nodes/` -- one file per LangGraph node. `conversational_loop.py` is an
   unwired stub; everything else is live.
+- `backend/app/services/modeling.py` -- the model registry and the sklearn pipeline. Models
+  are described as `(module, class, params)` rather than built by a callable, so the model
+  the app fits and the model the exported script fits come from the same three values. Add a
+  model here and both paths pick it up.
+- `backend/app/services/diagnostics.py` -- everything behind the charts, as numbers. Two
+  tiers: cheap ones run for every candidate, expensive ones (cross-validation, learning
+  curve, permutation importance) for the chosen model only.
+- `backend/app/services/model_export.py` / `model_card.py` -- the artifacts the user leaves
+  with.
 - `backend/app/api/` -- one file per route group.
-- `frontend/src/pages/` -- one file per page (Upload, Review, Clean, Export).
+- `frontend/src/pages/` -- one file per page (Upload, Review, Clean, Model, Export).
+- `frontend/src/components/charts/` -- one file per chart family, all built on the shared
+  `ChartCard`.
 
 ## Before opening a PR
 
 - Backend: `cd backend && python -m pytest` should pass.
-- Frontend: `cd frontend && npm run build` should pass.
+- Frontend: `cd frontend && npm test && npm run build` should both pass.
 - Keep stub signatures intact if you're not implementing them yet -- other code and tests
   are written against those signatures.
 
@@ -53,6 +64,16 @@ are both running locally, you're ready to make changes.
 - **Warnings have to stay believable.** The leakage thresholds in `ml_readiness.py` are
   deliberately high. A warning that fires on ordinary strong correlation teaches users to
   ignore it, and it's only worth having if it's believed the one time it matters.
+- **Preprocessing belongs inside the pipeline, never in the dataframe.** Imputing or scaling
+  before the split lets test rows influence the values written into training rows. There's a
+  test asserting the fitted imputer's learned median came from the training fold alone --
+  keep it passing.
+- **Charts ship a table view.** Some palette slots sit below 3:1 on the light surface, and a
+  tooltip is a way to inspect a value rather than read one. Every chart goes through
+  `ChartCard` with its data as a table.
+- **The app is allowed to say no.** Data that can't support a model, and a model that learned
+  nothing, both get said plainly. A tool that always produces a confident answer is less
+  useful than one that can tell you it hasn't got one.
 
 The source design doc isn't published in this repo — ask the maintainer if you need a
 section referenced in a docstring.

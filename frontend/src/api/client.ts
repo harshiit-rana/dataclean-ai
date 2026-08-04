@@ -113,7 +113,9 @@ export interface ActionLogEntry {
   card_id: string | null;
   column_name: string;
   operation: string;
-  status: "applied" | "rejected" | "undone";
+  /** "superseded" means it was approved and an earlier approved fix had already dealt with
+   * what it addressed — not a failure. */
+  status: "applied" | "rejected" | "undone" | "superseded";
   /** The user's own words, verbatim (FR-30). */
   rejection_reason: string | null;
   /** Why the app couldn't run it — kept separate so it's never shown as the user's words. */

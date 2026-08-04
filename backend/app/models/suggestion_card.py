@@ -52,7 +52,10 @@ class ActionLogEntry(BaseModel):
     # Recorded so an action can be re-applied during undo's replay (services/undo.py) --
     # without it, parameters like case="upper" would be lost and the replay would diverge.
     operation_params: dict = Field(default_factory=dict)
-    status: Literal["applied", "rejected", "undone"]
+    # "superseded" is distinct from "rejected" on purpose: the user approved it, and it did
+    # not fail -- an earlier approved fix simply removed the thing it was going to change.
+    # Reporting that as a failure blames the app for doing exactly the right thing.
+    status: Literal["applied", "rejected", "undone", "superseded"]
     rejection_reason: Optional[str] = None  # verbatim, never paraphrased (FR-30)
     # Why the app couldn't run this fix (operation error, nothing executable attached,
     # reverted during an undo replay). Deliberately a separate field from rejection_reason:

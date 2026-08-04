@@ -367,6 +367,8 @@ export interface AllActionsCompleteEvent {
   event: "all_actions_complete";
   actions_applied: number;
   actions_skipped: number;
+  /** Approved fixes an earlier approved fix had already made unnecessary. */
+  actions_superseded?: number;
 }
 
 export type ProfileStreamEvent =

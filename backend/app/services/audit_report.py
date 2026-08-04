@@ -116,6 +116,7 @@ def build_markdown_report(
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     applied = [a for a in action_log if a["status"] == "applied"]
     undone = [a for a in action_log if a["status"] == "undone"]
+    superseded = [a for a in action_log if a["status"] == "superseded"]
     rejected = [a for a in action_log if a["status"] == "rejected"]
     # A fix the app couldn't run is not a fix the user turned down. Reporting them together
     # inflates the declined count and, worse, prints the app's own error message under a
@@ -145,6 +146,8 @@ def build_markdown_report(
     ]
     if failed:
         lines.append(f"| Fixes that could not be applied | {len(failed)} |")
+    if superseded:
+        lines.append(f"| Fixes that were no longer needed | {len(superseded)} |")
     if undone:
         lines.append(f"| Changes applied then undone | {len(undone)} |")
 
@@ -203,6 +206,26 @@ def build_markdown_report(
                 f"### {entry['column_name']} — {label}",
                 "",
                 str(entry["failure_reason"]),
+                "",
+            ]
+
+    # Approved, and neither applied nor failed: an earlier approved fix removed what this one
+    # was going to change. Reported apart from failures so the record doesn't suggest
+    # something went wrong.
+    if superseded:
+        lines += [
+            "## Fixes that were no longer needed",
+            "",
+            "These were approved, but an earlier change had already dealt with what they "
+            "addressed.",
+            "",
+        ]
+        for entry in superseded:
+            label = _OPERATION_LABELS.get(entry["operation"], entry["operation"])
+            lines += [
+                f"### {entry['column_name']} — {label}",
+                "",
+                str(entry.get("failure_reason") or "No longer applicable."),
                 "",
             ]
 

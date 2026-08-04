@@ -63,6 +63,25 @@ def _no_op(_event: dict) -> None:
     pass
 
 
+# Writing the report costs an LLM call. Chat instructions and undos both change the data it
+# describes, and a user adjusting their data can easily do a dozen of those -- regenerating
+# each time bills for a document nobody has asked to see yet. Instead the report is marked
+# stale and rewritten when it is actually requested.
+STALE_MARKER = "audit_report.stale"
+
+
+def mark_report_stale(directory: Path) -> None:
+    (directory / STALE_MARKER).write_text("", encoding="utf-8")
+
+
+def is_report_stale(directory: Path) -> bool:
+    return (directory / STALE_MARKER).exists()
+
+
+def clear_stale_marker(directory: Path) -> None:
+    (directory / STALE_MARKER).unlink(missing_ok=True)
+
+
 def _readiness_for_report(state: GraphState) -> dict | None:
     """Assessed against the cleaned file so the report describes the data being exported,
     not the data that was uploaded. Never allowed to sink the report."""
@@ -108,6 +127,7 @@ async def generate_audit_artifacts(state: GraphState, emit=_no_op) -> dict:
     session_dir = Path(state.file_path).parent
     markdown_path = session_dir / "audit_report.md"
     markdown_path.write_text(markdown_text, encoding="utf-8")
+    clear_stale_marker(session_dir)
 
     pdf_path: Path | None = None
     try:

@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   pull_request:
-    branches: [main]
+    branches: [main, master]
 
 jobs:
   backend-tests:
@@ -27,7 +27,7 @@ jobs:
         env:
           ANTHROPIC_API_KEY: test-key-not-real
 
-  frontend-build:
+  frontend:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -42,5 +42,10 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Run tests
+        run: npm test
+
+      # After the tests: a type error should surface as a failing build, but a broken
+      # behaviour is worth hearing about first.
       - name: Build
         run: npm run build

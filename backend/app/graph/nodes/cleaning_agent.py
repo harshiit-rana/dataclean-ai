@@ -25,7 +25,7 @@ from langgraph.config import get_stream_writer
 
 from app.models.graph_state import GraphState
 from app.models.suggestion_card import ActionLogEntry, SuggestionCard
-from app.services import operations
+from app.services import conflicts, operations
 
 logger = logging.getLogger(__name__)
 
@@ -79,6 +79,28 @@ async def cleaning_agent(state: GraphState) -> dict:
                     operation="none",
                     status="rejected",
                     failure_reason="This suggestion had no executable fix attached.",
+                )
+            )
+            continue
+
+        # An earlier approved fix may have removed the column this one was going to change --
+        # a leaky column gets flagged for leakage *and* for its nulls and its type, and the
+        # first fix drops it. That is the app working correctly, so it is recorded as
+        # superseded rather than reported to the user as a failure.
+        superseded = conflicts.superseded_reason(
+            df, card.operation, card.operation_params, card.column_name
+        )
+        if superseded:
+            action_log.append(
+                ActionLogEntry(
+                    action_id=_new_action_id(),
+                    card_id=card.card_id,
+                    column_name=card.column_name,
+                    issue_type=issue_type,
+                    operation=card.operation,
+                    operation_params=card.operation_params,
+                    status="superseded",
+                    failure_reason=superseded,
                 )
             )
             continue
@@ -154,11 +176,15 @@ async def cleaning_agent(state: GraphState) -> dict:
     cleaned_path = Path(state.file_path).parent / "cleaned.csv"
     df.to_csv(cleaned_path, index=False)
 
+    superseded_count = sum(1 for entry in action_log if entry.status == "superseded")
     writer(
         {
             "event": "all_actions_complete",
             "actions_applied": applied_count,
-            "actions_skipped": len(action_log) - applied_count,
+            # Superseded fixes are reported separately -- lumping them into "skipped" makes a
+            # run that went exactly right look like it partly failed.
+            "actions_skipped": len(action_log) - applied_count - superseded_count,
+            "actions_superseded": superseded_count,
         }
     )
 
