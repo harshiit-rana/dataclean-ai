@@ -23,6 +23,8 @@ from typing import Any, Callable
 import numpy as np
 import pandas as pd
 
+from app.services import diagnostics
+
 logger = logging.getLogger(__name__)
 
 # Below this there isn't enough data to hold out a test set that means anything.
@@ -588,6 +590,7 @@ def train_candidates(
     excluded_columns: list[str] | None = None,
     split_strategy: str = "random",
     time_column: str | None = None,
+    include_deep_diagnostics: bool = True,
 ) -> dict:
     """Trains each requested model on the same split and returns everything needed to compare
     them. A model that fails to fit is reported rather than aborting the others."""
@@ -625,6 +628,11 @@ def train_candidates(
                     "metrics": scores,
                     "feature_importance": importances,
                     "column_importance": source_column_importance(importances, used),
+                    # Curves, confusion matrix, residuals -- one predict() over the test set,
+                    # so it's affordable for every candidate rather than the winner alone.
+                    "diagnostics": diagnostics.compute_diagnostics(
+                        pipeline, X_test, y_test, task, scores
+                    ),
                     "pipeline": pipeline,  # stripped before the response is serialized
                     "failed": None,
                 }
@@ -639,6 +647,7 @@ def train_candidates(
                     "metrics": {},
                     "feature_importance": [],
                     "column_importance": [],
+                    "diagnostics": {},
                     "pipeline": None,
                     "failed": str(exc),
                 }
@@ -655,6 +664,21 @@ def train_candidates(
     best = max(trained, key=lambda r: r["metrics"].get(key, float("-inf")))
     baseline = baseline_score(y_train, y_test, task)
 
+    # The expensive tier, for the chosen model only. `build` hands back an *unfitted*
+    # pipeline each time, because cross-validation and the learning curve must fit from
+    # scratch on each fold -- reusing a fitted one would score it on rows it trained on.
+    deep: dict = {}
+    if include_deep_diagnostics:
+        deep = diagnostics.compute_deep_diagnostics(
+            lambda: build_pipeline(best["model"], features["numeric"], features["categorical"]),
+            best["pipeline"],
+            X_train,
+            X_test,
+            y_train,
+            y_test,
+            task,
+        )
+
     return {
         "task": task,
         "target_column": target_column,
@@ -669,6 +693,12 @@ def train_candidates(
         "primary_metric": key,
         "results": results,
         "best_model": best["model"],
+        "deep_diagnostics": deep,
+        # Correlated features split the credit between them in any importance ranking, so
+        # both look unimportant and neither gets investigated. Worth showing next to it.
+        "feature_correlations": diagnostics.feature_correlations(
+            X_train, features["numeric"]
+        ),
         # Class counts come from the *test* set: the verdict is about how much the held-out
         # evidence can actually support.
         "assessment": assess_result(
