@@ -1,0 +1,203 @@
+import { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+import type { ModelPlan, TrainRequest } from "@/api/types";
+
+interface ModelPlanFormProps {
+  plan: ModelPlan;
+  onTrain: (request: TrainRequest) => void;
+  training: boolean;
+}
+
+/** The decisions that matter in a model build all happen before any fitting: which columns
+ * count as inputs, how the data is split, which models to try. Putting them behind a single
+ * "train" button would make them defaults nobody chose, so they are laid out here with the
+ * app's reasoning attached and everything adjustable. */
+export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
+  const [excluded, setExcluded] = useState<string[]>(plan.excluded_columns);
+  const [models, setModels] = useState<string[]>(plan.candidate_models.map((m) => m.name));
+  const [splitStrategy, setSplitStrategy] = useState<"random" | "time">("random");
+  const [timeColumn, setTimeColumn] = useState<string>(plan.date_columns[0] ?? "");
+
+  const usable = [...plan.features.numeric, ...plan.features.categorical];
+  const candidates = [...usable, ...excluded].filter(
+    (column, index, all) => all.indexOf(column) === index
+  );
+  const suggestionFor = (column: string) =>
+    plan.suggested_exclusions.find((s) => s.column === column);
+
+  const toggle = (list: string[], value: string) =>
+    list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+
+  return (
+    <div className="flex flex-col gap-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Which columns should the model use?</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Everything is included unless you say otherwise. Columns we think should be left
+            out are already unticked, with the reason — untick our suggestion if you disagree.
+          </p>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          {candidates.map((column) => {
+            const suggestion = suggestionFor(column);
+            const isExcluded = excluded.includes(column);
+            return (
+              <label
+                key={column}
+                className={cn(
+                  "flex cursor-pointer items-start gap-3 rounded-md border p-3 transition-colors",
+                  isExcluded ? "border-border bg-muted/40" : "border-border hover:bg-muted/40",
+                  suggestion && !isExcluded && "border-amber-500/50"
+                )}
+              >
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={!isExcluded}
+                  onChange={() => setExcluded((prev) => toggle(prev, column))}
+                />
+                <span className="flex-1 text-sm">
+                  <span className={cn("font-medium", isExcluded && "text-muted-foreground")}>
+                    {column}
+                  </span>
+                  {suggestion && (
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                      <span className="font-medium text-amber-700 dark:text-amber-500">
+                        {suggestion.kind === "leakage" ? "Gives away the answer" : "Looks like an ID"}
+                        {" — "}
+                      </span>
+                      {suggestion.reason}
+                    </span>
+                  )}
+                </span>
+              </label>
+            );
+          })}
+
+          {plan.features.dropped.length > 0 && (
+            <div className="mt-2 rounded-md border border-dashed border-border p-3">
+              <p className="text-xs font-medium text-muted-foreground">
+                Left out automatically — these can&apos;t be used as model inputs
+              </p>
+              <ul className="mt-1 flex flex-col gap-1 text-xs text-muted-foreground">
+                {plan.features.dropped
+                  .filter((d) => !excluded.includes(d.column))
+                  .map((d) => (
+                    <li key={d.column}>
+                      <span className="font-medium">{d.column}</span> — {d.reason}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">How should the data be split?</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Some rows are held back so the model can be scored on data it has never seen.
+          </p>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          {plan.split_options.map((option) => {
+            const disabled = option.value === "time" && plan.date_columns.length === 0;
+            return (
+              <label
+                key={option.value}
+                className={cn(
+                  "flex cursor-pointer items-start gap-3 rounded-md border border-border p-3",
+                  disabled && "cursor-not-allowed opacity-50"
+                )}
+              >
+                <input
+                  type="radio"
+                  name="split"
+                  className="mt-0.5"
+                  checked={splitStrategy === option.value}
+                  disabled={disabled}
+                  onChange={() => setSplitStrategy(option.value)}
+                />
+                <span className="flex-1 text-sm">
+                  <span className="font-medium">{option.label}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">
+                    {disabled
+                      ? "No date column in this data to order the rows by."
+                      : option.description}
+                  </span>
+                </span>
+              </label>
+            );
+          })}
+
+          {splitStrategy === "time" && plan.date_columns.length > 0 && (
+            <Select value={timeColumn} onChange={(e) => setTimeColumn(e.target.value)}>
+              {plan.date_columns.map((column) => (
+                <option key={column} value={column}>
+                  Order by {column}
+                </option>
+              ))}
+            </Select>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Which models should we try?</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            All of them by default. They train on the same split, so the scores are
+            comparable.
+          </p>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-2">
+          {plan.candidate_models.map((model) => (
+            <label
+              key={model.name}
+              className="flex cursor-pointer items-start gap-3 rounded-md border border-border p-3 transition-colors hover:bg-muted/40"
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={models.includes(model.name)}
+                onChange={() => setModels((prev) => toggle(prev, model.name))}
+              />
+              <span className="flex-1 text-sm">
+                <span className="font-medium">{model.label}</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  {model.description}
+                </span>
+              </span>
+            </label>
+          ))}
+        </CardContent>
+      </Card>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <Button
+          onClick={() =>
+            onTrain({
+              excluded_columns: excluded,
+              model_names: models,
+              split_strategy: splitStrategy,
+              time_column: splitStrategy === "time" ? timeColumn : null,
+              include_deep_diagnostics: true,
+            })
+          }
+          disabled={training || models.length === 0}
+        >
+          {training ? "Training..." : `Train ${models.length} model${models.length === 1 ? "" : "s"}`}
+        </Button>
+        <span className="text-sm text-muted-foreground">
+          {usable.length - excluded.filter((c) => usable.includes(c)).length} columns in,{" "}
+          {plan.row_count.toLocaleString()} rows.
+        </span>
+      </div>
+    </div>
+  );
+}

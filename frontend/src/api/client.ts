@@ -2,11 +2,15 @@
 // (POST /api/profile/{id}) is handled separately in api/sse.ts.
 
 import type {
+  CorrelationResult,
   ErrorResponse,
   GoalContext,
   GoalContextResponse,
+  ModelPlan,
+  ModelResult,
   PreviewResponse,
   ReadinessResponse,
+  TrainRequest,
   UploadResponse,
 } from "./types";
 
@@ -51,6 +55,46 @@ export async function fetchPreview(sessionId: string): Promise<PreviewResponse> 
 export async function fetchReadiness(sessionId: string): Promise<ReadinessResponse> {
   const response = await fetch(`${API_BASE_URL}/api/readiness/${sessionId}`);
   return handleResponse<ReadinessResponse>(response);
+}
+
+// --- Model building ------------------------------------------------------------------
+
+export async function fetchModelPlan(sessionId: string): Promise<ModelPlan> {
+  const response = await fetch(`${API_BASE_URL}/api/model/${sessionId}/plan`);
+  return handleResponse<ModelPlan>(response);
+}
+
+export async function trainModel(
+  sessionId: string,
+  request: TrainRequest
+): Promise<ModelResult> {
+  const response = await fetch(`${API_BASE_URL}/api/model/${sessionId}/train`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  return handleResponse<ModelResult>(response);
+}
+
+/** The last evaluation, so returning to the page doesn't mean retraining. 404 when nothing
+ * has been trained yet, which callers treat as "no model", not an error. */
+export async function fetchModelResult(sessionId: string): Promise<ModelResult | null> {
+  const response = await fetch(`${API_BASE_URL}/api/model/${sessionId}/result`);
+  if (response.status === 404) return null;
+  return handleResponse<ModelResult>(response);
+}
+
+export async function fetchModelCard(sessionId: string): Promise<string> {
+  const response = await fetch(`${API_BASE_URL}/api/model/${sessionId}/card`);
+  const body = await handleResponse<{ markdown: string }>(response);
+  return body.markdown;
+}
+
+export async function fetchFeatureCorrelations(
+  sessionId: string
+): Promise<CorrelationResult> {
+  const response = await fetch(`${API_BASE_URL}/api/model/${sessionId}/correlations`);
+  return handleResponse<CorrelationResult>(response);
 }
 
 export interface AuditReportResponse {

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { buttonClasses } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ApiError, fetchReadiness } from "@/api/client";
@@ -8,6 +10,8 @@ interface ReadinessPanelProps {
   sessionId: string;
   /** Bump to re-fetch — an undo or a conversational edit changes the file underneath. */
   refreshKey?: number;
+  /** Offer the link on to model building. Off on the model page itself. */
+  showModelLink?: boolean;
 }
 
 const VERDICTS: Record<string, { title: string; blurb: string; className: string }> = {
@@ -33,7 +37,11 @@ const VERDICTS: Record<string, { title: string; blurb: string; className: string
  *
  * Renders nothing at all when the session has no prediction target — someone cleaning a file
  * for a report shouldn't be shown a modelling verdict they never asked for. */
-export function ReadinessPanel({ sessionId, refreshKey = 0 }: ReadinessPanelProps) {
+export function ReadinessPanel({
+  sessionId,
+  refreshKey = 0,
+  showModelLink = true,
+}: ReadinessPanelProps) {
   const [readiness, setReadiness] = useState<ReadinessResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -110,6 +118,19 @@ export function ReadinessPanel({ sessionId, refreshKey = 0 }: ReadinessPanelProp
             {remaining.high > 0 && ` (${remaining.high} high severity)`}. You can keep cleaning
             with the box above.
           </p>
+        )}
+
+        {/* Offered even when there are blockers: the model page names them and explains what
+            to do, which is more use than a disabled button with no reason attached. */}
+        {showModelLink && (
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Link to={`/model/${sessionId}`} className={buttonClasses("default", "sm")}>
+              {readiness.verdict === "blocked" ? "See what's blocking a model" : "Build a model"}
+            </Link>
+            <span className="text-xs text-muted-foreground">
+              Trains on your cleaned data. Nothing about the data changes.
+            </span>
+          </div>
         )}
       </CardContent>
     </Card>

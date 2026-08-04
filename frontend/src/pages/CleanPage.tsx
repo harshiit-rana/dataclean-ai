@@ -111,6 +111,9 @@ export function CleanPage() {
               <Link to={`/export/${sessionId}`} className={buttonClasses()}>
                 View report &amp; download
               </Link>
+              <Link to={`/model/${sessionId}`} className={buttonClasses("outline")}>
+                Build a model
+              </Link>
               <a
                 href={`${API_BASE_URL}/api/export/${sessionId}/csv`}
                 download

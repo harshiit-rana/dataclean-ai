@@ -103,6 +103,198 @@ export interface PreviewResponse {
   preview_row_count: number;
 }
 
+// --- Model building ----------------------------------------------------------------------
+
+export interface FeatureBreakdown {
+  numeric: string[];
+  categorical: string[];
+  dropped: { column: string; reason: string }[];
+  excluded?: string[];
+}
+
+export interface SuggestedExclusion {
+  column: string;
+  reason: string;
+  kind: "leakage" | "identifier";
+  severity: Severity;
+}
+
+export interface CandidateModel {
+  name: string;
+  label: string;
+  description: string;
+  explains_features: boolean;
+}
+
+export interface SplitOption {
+  value: "random" | "time";
+  label: string;
+  description: string;
+}
+
+export interface ModelPlan {
+  session_id: string;
+  target_column: string;
+  task_type: "classification" | "regression";
+  row_count: number;
+  features: FeatureBreakdown;
+  suggested_exclusions: SuggestedExclusion[];
+  excluded_columns: string[];
+  candidate_models: CandidateModel[];
+  split_options: SplitOption[];
+  date_columns: string[];
+  blockers: string[];
+  warnings: string[];
+  trained: boolean;
+}
+
+export interface TrainRequest {
+  excluded_columns: string[];
+  model_names: string[];
+  split_strategy: "random" | "time";
+  time_column: string | null;
+  include_deep_diagnostics: boolean;
+}
+
+export interface RocPoint {
+  fpr: number;
+  tpr: number;
+  threshold: number;
+}
+export interface PrecisionRecallPoint {
+  recall: number;
+  precision: number;
+  threshold: number;
+}
+export interface CalibrationPoint {
+  predicted: number;
+  actual: number;
+  count: number;
+  bin_start: number;
+  bin_end: number;
+}
+export interface ThresholdRow {
+  threshold: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  flagged: number;
+  caught: number;
+  missed: number;
+}
+export interface PerClassRow {
+  label: string;
+  precision: number;
+  recall: number;
+  f1: number;
+  support: number;
+}
+export interface ConfusionCell {
+  actual: string;
+  predicted: string;
+  count: number;
+  share_of_actual: number;
+  correct: boolean;
+}
+export interface ClassCount {
+  label: string;
+  count: number;
+}
+export interface PredictedVsActualPoint {
+  actual: number;
+  predicted: number;
+}
+export interface ResidualPoint {
+  predicted: number;
+  residual: number;
+}
+export interface ResidualBar {
+  centre: number;
+  count: number;
+}
+export interface ErrorByRangeRow {
+  range: string;
+  mean_absolute_error: number;
+  mean_error: number;
+  count: number;
+}
+
+export interface ModelDiagnostics {
+  roc_curve?: RocPoint[];
+  precision_recall_curve?: PrecisionRecallPoint[];
+  calibration?: CalibrationPoint[];
+  thresholds?: ThresholdRow[];
+  per_class?: PerClassRow[];
+  confusion_cells?: ConfusionCell[];
+  class_distribution?: ClassCount[];
+  predicted_vs_actual?: PredictedVsActualPoint[];
+  residuals?: ResidualPoint[];
+  residual_histogram?: ResidualBar[];
+  error_by_range?: ErrorByRangeRow[];
+}
+
+export interface ColumnImportance {
+  column: string;
+  importance: number;
+}
+export interface PermutationImportance {
+  column: string;
+  importance: number;
+  std: number;
+}
+export interface CrossValidation {
+  metric: string;
+  folds: number[];
+  mean: number;
+  std: number;
+  spread: number;
+}
+export interface LearningCurvePoint {
+  training_rows: number;
+  training_score: number;
+  validation_score: number;
+}
+export interface CorrelationResult {
+  columns: string[];
+  cells: { row: string; column: string; correlation: number }[];
+  strong_pairs: { a: string; b: string; correlation: number }[];
+}
+
+export interface CandidateResult {
+  model: string;
+  label: string;
+  description: string;
+  metrics: Record<string, number | string | number[][] | string[] | null>;
+  feature_importance: { feature: string; importance: number }[];
+  column_importance: ColumnImportance[];
+  diagnostics: ModelDiagnostics;
+  failed: string | null;
+}
+
+export interface ModelResult {
+  task: "classification" | "regression";
+  target_column: string;
+  features: FeatureBreakdown;
+  split: {
+    strategy: "random" | "time";
+    time_column: string | null;
+    train_rows: number;
+    test_rows: number;
+  };
+  baseline: Record<string, number | string>;
+  primary_metric: string;
+  results: CandidateResult[];
+  best_model: string;
+  assessment: { verdict: "useful" | "marginal" | "no_better_than_guessing"; headline: string };
+  deep_diagnostics: {
+    skipped?: string | null;
+    cross_validation?: CrossValidation | null;
+    learning_curve?: LearningCurvePoint[] | null;
+    permutation_importance?: PermutationImportance[] | null;
+  };
+  feature_correlations: CorrelationResult;
+}
+
 // --- SSE event payloads, PRD §10.2 -------------------------------------------------------
 
 export interface AgentStartEvent {
