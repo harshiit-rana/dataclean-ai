@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from app.config import Settings, get_settings
 from app.core.errors import AppError, SessionNotFoundError
+from app.services import model_store
 from app.services.session_store import read_session_meta, session_dir
 
 router = APIRouter()
@@ -96,7 +97,8 @@ async def export_bundle(
     session_id: str,
     settings: Settings = Depends(get_settings),
 ) -> StreamingResponse:
-    """FR-41: cleaned CSV + PDF audit report in one archive.
+    """FR-41: cleaned CSV + PDF audit report in one archive, plus the model artifacts if a
+    model was trained.
 
     Built in memory rather than written to disk -- these are small files and it avoids
     leaving a stale archive behind when a session is cleaned up or re-run.
@@ -105,11 +107,16 @@ async def export_bundle(
     stem = _stem(meta)
 
     # (path on disk, name inside the archive). The markdown report is included as a fallback
-    # so the bundle is still useful when WeasyPrint's OS libs are unavailable.
+    # so the bundle is still useful when WeasyPrint's OS libs are unavailable. Model files
+    # keep their own names: train_model.py is meant to be run as-is, and the card refers to
+    # model.joblib by name.
     candidates = [
         (directory / "cleaned.csv", f"{stem}_cleaned.csv"),
         (directory / "audit_report.pdf", f"{stem}_audit_report.pdf"),
         (directory / "audit_report.md", f"{stem}_audit_report.md"),
+        (directory / model_store.CARD_FILENAME, model_store.CARD_FILENAME),
+        (directory / model_store.SCRIPT_FILENAME, model_store.SCRIPT_FILENAME),
+        (directory / model_store.PIPELINE_FILENAME, model_store.PIPELINE_FILENAME),
     ]
     present = [(path, name) for path, name in candidates if path.exists()]
     if not present:

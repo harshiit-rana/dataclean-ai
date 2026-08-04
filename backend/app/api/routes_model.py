@@ -23,12 +23,13 @@ import logging
 
 import pandas as pd
 from fastapi import APIRouter, Depends
+from fastapi.responses import FileResponse, PlainTextResponse
 
 from app.config import Settings, get_settings
 from app.core.errors import AppError, SessionNotFoundError, UnparseableCSVError
 from app.models.api_schemas import ModelPlanResponse, TrainRequest
 from app.models.graph_state import GoalContext
-from app.services import diagnostics, ml_readiness, model_store, modeling
+from app.services import diagnostics, ml_readiness, model_card, model_export, model_store, modeling
 from app.services.session_store import read_session_meta, session_dir
 
 logger = logging.getLogger(__name__)
@@ -264,6 +265,80 @@ async def get_model_result(
     if stored is None:
         raise NoTrainedModelError()
     return stored
+
+
+@router.get("/api/model/{session_id}/card")
+async def get_model_card(
+    session_id: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """The model card as markdown. Generated on first request rather than at training time:
+    it costs an LLM call, and a user who trains three times while adjusting columns should
+    pay for it once, when they ask to see the write-up."""
+    meta = read_session_meta(settings.upload_dir, session_id)
+    if meta is None:
+        raise SessionNotFoundError(session_id)
+
+    directory = session_dir(settings.upload_dir, session_id)
+    result = model_store.load_result(directory)
+    if result is None:
+        raise NoTrainedModelError()
+
+    existing = directory / model_card.CARD_FILENAME
+    if existing.exists():
+        return {"session_id": session_id, "markdown": existing.read_text(encoding="utf-8")}
+
+    raw_goal = meta.get("goal_context")
+    markdown = await model_card.generate_model_card(
+        session_id=session_id,
+        file_name=meta.get("file_name", "your data"),
+        result=result,
+        goal_context=GoalContext.model_validate(raw_goal) if raw_goal else None,
+        directory=directory,
+    )
+    return {"session_id": session_id, "markdown": markdown}
+
+
+@router.get("/api/model/{session_id}/script", response_class=PlainTextResponse)
+async def get_training_script(
+    session_id: str,
+    settings: Settings = Depends(get_settings),
+) -> PlainTextResponse:
+    """A runnable script that rebuilds the model from scratch. The actual deliverable -- a
+    score in a web page has to be trusted, a script can be read and re-run."""
+    meta = read_session_meta(settings.upload_dir, session_id)
+    if meta is None:
+        raise SessionNotFoundError(session_id)
+
+    result = model_store.load_result(session_dir(settings.upload_dir, session_id))
+    if result is None:
+        raise NoTrainedModelError()
+
+    try:
+        script = model_export.build_training_script(result, file_name="cleaned.csv")
+    except ValueError as exc:
+        raise TrainingFailedError(str(exc)) from exc
+
+    return PlainTextResponse(
+        script,
+        headers={"Content-Disposition": 'attachment; filename="train_model.py"'},
+    )
+
+
+@router.get("/api/model/{session_id}/download")
+async def download_fitted_model(
+    session_id: str,
+    settings: Settings = Depends(get_settings),
+) -> FileResponse:
+    """The fitted pipeline itself, as a joblib file."""
+    meta = read_session_meta(settings.upload_dir, session_id)
+    if meta is None:
+        raise SessionNotFoundError(session_id)
+
+    path = model_store.pipeline_path(session_dir(settings.upload_dir, session_id))
+    if path is None:
+        raise NoTrainedModelError()
+    return FileResponse(path, media_type="application/octet-stream", filename="model.joblib")
 
 
 @router.get("/api/model/{session_id}/correlations")

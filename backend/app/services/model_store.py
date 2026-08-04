@@ -18,8 +18,15 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# This module owns the artifact filenames so there is one place to change them and one list
+# for `clear` to work from -- a name duplicated in the writer and the cleaner is how stale
+# files survive an invalidation.
 RESULT_FILENAME = "model_result.json"
 PIPELINE_FILENAME = "model.joblib"
+CARD_FILENAME = "model_card.md"
+SCRIPT_FILENAME = "train_model.py"
+
+ALL_ARTIFACTS = (RESULT_FILENAME, PIPELINE_FILENAME, CARD_FILENAME, SCRIPT_FILENAME)
 
 
 def _jsonable(value: Any) -> Any:
@@ -57,6 +64,12 @@ def save_result(directory: Path, result: dict) -> dict:
     losing a completed training run to a disk problem.
     """
     directory.mkdir(parents=True, exist_ok=True)
+
+    # A card and script from a previous run describe a model that no longer exists. Drop
+    # them so the next request regenerates rather than serving the old write-up.
+    for stale in (CARD_FILENAME, SCRIPT_FILENAME):
+        (directory / stale).unlink(missing_ok=True)
+
     payload = strip_pipelines(result)
     (directory / RESULT_FILENAME).write_text(json.dumps(payload), encoding="utf-8")
 
@@ -92,9 +105,9 @@ def pipeline_path(directory: Path) -> Optional[Path]:
 
 
 def clear(directory: Path) -> None:
-    """Drops a stored result. Used when the data changes underneath it -- an evaluation that
-    describes a file that no longer exists is worse than no evaluation."""
-    for name in (RESULT_FILENAME, PIPELINE_FILENAME):
+    """Drops every model artifact. Used when the data changes underneath them -- an
+    evaluation, card or script describing rows that no longer exist is worse than none."""
+    for name in ALL_ARTIFACTS:
         try:
             (directory / name).unlink(missing_ok=True)
         except OSError:

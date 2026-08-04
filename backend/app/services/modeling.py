@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -44,54 +44,39 @@ class ModelingError(Exception):
 
 @dataclass(frozen=True)
 class ModelSpec:
+    """How to construct one model, described rather than coded.
+
+    Held as (module, class, params) instead of a callable so that the model the app fits and
+    the model the exported Python script fits are generated from the same three values. A
+    hand-written code template beside a hand-written constructor is a drift waiting to
+    happen: the export would keep claiming `n_estimators=200` long after the real one
+    changed, and nobody would notice until someone tried to reproduce a result.
+    """
+
     name: str
     label: str
     description: str
     task: str  # "classification" | "regression"
-    build: Callable[[], Any]
+    module: str
+    class_name: str
+    params: dict
     # True when the model's coefficients/importances are directly readable. Used to decide
     # whether a feature-importance review is offered for this model.
     explains_features: bool = True
 
+    def build(self) -> Any:
+        import importlib
 
-def _logistic_regression():
-    from sklearn.linear_model import LogisticRegression
+        cls = getattr(importlib.import_module(self.module), self.class_name)
+        return cls(**self.params)
 
-    # balanced weights: on a lopsided target an unweighted fit learns to always guess the
-    # common answer, which scores well and is useless.
-    return LogisticRegression(max_iter=1000, class_weight="balanced", random_state=RANDOM_STATE)
+    @property
+    def import_line(self) -> str:
+        return f"from {self.module} import {self.class_name}"
 
-
-def _linear_regression():
-    from sklearn.linear_model import Ridge
-
-    return Ridge(random_state=RANDOM_STATE)
-
-
-def _random_forest_classifier():
-    from sklearn.ensemble import RandomForestClassifier
-
-    return RandomForestClassifier(
-        n_estimators=200, class_weight="balanced", random_state=RANDOM_STATE, n_jobs=-1
-    )
-
-
-def _random_forest_regressor():
-    from sklearn.ensemble import RandomForestRegressor
-
-    return RandomForestRegressor(n_estimators=200, random_state=RANDOM_STATE, n_jobs=-1)
-
-
-def _gradient_boosting_classifier():
-    from sklearn.ensemble import HistGradientBoostingClassifier
-
-    return HistGradientBoostingClassifier(random_state=RANDOM_STATE)
-
-
-def _gradient_boosting_regressor():
-    from sklearn.ensemble import HistGradientBoostingRegressor
-
-    return HistGradientBoostingRegressor(random_state=RANDOM_STATE)
+    def constructor_source(self) -> str:
+        arguments = ", ".join(f"{k}={v!r}" for k, v in self.params.items())
+        return f"{self.class_name}({arguments})"
 
 
 MODELS: dict[str, ModelSpec] = {
@@ -103,7 +88,11 @@ MODELS: dict[str, ModelSpec] = {
             "Simple and fully explainable. A good baseline: if something more complex can't "
             "beat it, the extra complexity isn't earning its keep.",
             "classification",
-            _logistic_regression,
+            "sklearn.linear_model",
+            "LogisticRegression",
+            # balanced weights: on a lopsided target an unweighted fit learns to always
+            # answer with the common class, which scores well and is useless.
+            {"max_iter": 1000, "class_weight": "balanced", "random_state": RANDOM_STATE},
         ),
         ModelSpec(
             "random_forest_classifier",
@@ -111,7 +100,14 @@ MODELS: dict[str, ModelSpec] = {
             "Handles messy, non-linear relationships without much tuning. Usually strong "
             "out of the box.",
             "classification",
-            _random_forest_classifier,
+            "sklearn.ensemble",
+            "RandomForestClassifier",
+            {
+                "n_estimators": 200,
+                "class_weight": "balanced",
+                "random_state": RANDOM_STATE,
+                "n_jobs": -1,
+            },
         ),
         ModelSpec(
             "gradient_boosting_classifier",
@@ -119,7 +115,9 @@ MODELS: dict[str, ModelSpec] = {
             "Typically the most accurate of the three on tabular data, and the slowest to "
             "train.",
             "classification",
-            _gradient_boosting_classifier,
+            "sklearn.ensemble",
+            "HistGradientBoostingClassifier",
+            {"random_state": RANDOM_STATE},
             explains_features=False,
         ),
         ModelSpec(
@@ -127,21 +125,27 @@ MODELS: dict[str, ModelSpec] = {
             "Ridge regression",
             "Simple and fully explainable. A good baseline to judge the others against.",
             "regression",
-            _linear_regression,
+            "sklearn.linear_model",
+            "Ridge",
+            {"random_state": RANDOM_STATE},
         ),
         ModelSpec(
             "random_forest_regressor",
             "Random forest",
             "Handles non-linear relationships without much tuning.",
             "regression",
-            _random_forest_regressor,
+            "sklearn.ensemble",
+            "RandomForestRegressor",
+            {"n_estimators": 200, "random_state": RANDOM_STATE, "n_jobs": -1},
         ),
         ModelSpec(
             "gradient_boosting_regressor",
             "Gradient boosting",
             "Typically the most accurate on tabular data, and the slowest to train.",
             "regression",
-            _gradient_boosting_regressor,
+            "sklearn.ensemble",
+            "HistGradientBoostingRegressor",
+            {"random_state": RANDOM_STATE},
             explains_features=False,
         ),
     ]
@@ -317,9 +321,7 @@ def build_pipeline(model_name: str, numeric: list[str], categorical: list[str]):
     if not transformers:
         raise ModelingError("There are no usable columns left to predict from.")
 
-    return Pipeline(
-        [("prepare", ColumnTransformer(transformers)), ("model", spec.build())]
-    )
+    return Pipeline([("prepare", ColumnTransformer(transformers)), ("model", spec.build())])
 
 
 # --- evaluation ---------------------------------------------------------------------------
