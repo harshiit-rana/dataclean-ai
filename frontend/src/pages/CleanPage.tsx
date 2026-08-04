@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { buttonClasses } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -28,16 +28,20 @@ export function CleanPage() {
     setReadinessKey((key) => key + 1);
   }, []);
 
-  const decisions =
-    (location.state as { decisions?: Record<string, "approved" | "rejected"> } | null)
-      ?.decisions ?? null;
+  const navState = location.state as {
+    decisions?: Record<string, "approved" | "rejected">;
+    skipReasons?: Record<string, string>;
+  } | null;
+  const decisions = navState?.decisions ?? null;
+  // Memoized so the `?? {}` fallback doesn't hand the effect a new object every render.
+  const skipReasons = useMemo(() => navState?.skipReasons ?? {}, [navState]);
 
   useEffect(() => {
     // Guard against React StrictMode's double-effect firing the run twice.
     if (startedRef.current || !sessionId || !decisions) return;
     startedRef.current = true;
-    run.start(decisions, {});
-  }, [sessionId, decisions, run]);
+    run.start(decisions, skipReasons);
+  }, [sessionId, decisions, skipReasons, run]);
 
   // Once the run finishes, swap the live view for the persisted log so fixes can be undone.
   useEffect(() => {

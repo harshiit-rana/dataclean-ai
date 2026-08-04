@@ -95,7 +95,9 @@ The full loop works end to end:
    you named one — then an LLM re-ranks findings against your stated goal
 3. **Review** shows your actual data in a table — click any column to see its stats, its
    role, and what was flagged in it — alongside streamed suggestion cards
-4. **Approve or reject** each fix individually; only approved ones execute
+4. **Approve or reject** each fix individually; only approved ones execute. Reject one and
+   you can say why — what you type is copied into the report word for word and is never sent
+   to the model
 5. **Clean** applies them, showing before/after numbers per fix, with per-fix **undo**
 6. **Ask for more** in plain English ("drop rows where salary is under 30000")
 7. **Export** the cleaned CSV plus a PDF audit report documenting every change — including
@@ -104,6 +106,17 @@ The full loop works end to end:
 
 Your uploaded file is never modified. Cleaning writes a separate `cleaned.csv`, and there's
 a test asserting the original is byte-identical after a run.
+
+## Data retention
+
+Uploaded CSVs, cleaned copies and audit reports are deleted 24 hours after a session was last
+touched (`UPLOAD_RETENTION_SECONDS`), so the files and the Redis checkpoint that refers to
+them expire together. A background sweep runs hourly inside the backend process — no cron job
+or sidecar to set up. Set the retention to `0` to keep files indefinitely, which is handy
+while debugging one session and a bad idea anywhere real.
+
+Redis persists to a named volume with `appendonly` enabled, so sessions survive a container
+restart or a `docker compose down`.
 
 **Not implemented:** the `conversational_loop` graph node is an unwired stub — conversational
 cleaning is served by `POST /api/chat` instead, since the graph has already completed by the

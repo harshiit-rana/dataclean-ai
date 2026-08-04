@@ -42,6 +42,10 @@ are both running locally, you're ready to make changes.
   `audit_agent.py` and `cleaning_agent.py` for the pattern.
 - **The user's words are never paraphrased.** Rejection reasons are copied verbatim into the
   audit report and are deliberately never sent to the model; there's a test asserting that.
+  `ActionLogEntry` keeps `rejection_reason` (the user's words) and `failure_reason` (why the
+  app couldn't run a fix) in separate fields for the same reason — they both land on a
+  `rejected` entry, and putting machine text in the first one makes the report attribute the
+  app's own error message to the user.
 - **Target safety is enforced in code, not asked for in a prompt.** A fix that would impute
   the column being predicted has to be impossible, not discouraged. The guard runs when the
   suggestion card is *built* so the user approves the corrected operation -- substituting it

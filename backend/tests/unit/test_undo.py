@@ -129,4 +129,6 @@ def test_dependent_action_that_no_longer_replays_is_marked_undone(session):
 
     a3 = next(e for e in updated if e["action_id"] == "a3")
     assert a3["status"] == "undone"
-    assert "no longer applies" in a3["rejection_reason"]
+    # failure_reason, not rejection_reason: the user didn't decide this, the replay did.
+    assert "no longer applies" in a3["failure_reason"]
+    assert a3.get("rejection_reason") is None

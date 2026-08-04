@@ -24,6 +24,14 @@ DECLINED = {
     "status": "rejected",
     "rejection_reason": "I need this to join with payroll.",
 }
+# Also status="rejected", but nobody decided it -- the operation raised.
+FAILED = {
+    "action_id": "a3",
+    "column_name": "hire_date",
+    "operation": "cast_to_datetime",
+    "status": "rejected",
+    "failure_reason": "Could not be applied: Column 'hire_date' is not in the data.",
+}
 
 
 def _report(**overrides) -> str:
@@ -66,6 +74,29 @@ def test_rejection_reason_appears_verbatim():
     report = _report()
     assert "> I need this to join with payroll." in report
     assert "verbatim" in report.lower()
+
+
+class TestFailedFixesAreNotAttributedToTheUser:
+    """A fix the app couldn't run is not a fix the user turned down. Reporting them together
+    printed the app's own error message under "Reason given by the user, verbatim"."""
+
+    def test_failure_text_never_appears_as_the_users_words(self):
+        report = _report(action_log=[APPLIED, DECLINED, FAILED])
+        quoted = [line for line in report.splitlines() if line.startswith("> ")]
+        assert quoted == ["> I need this to join with payroll."]
+
+    def test_failed_fixes_get_their_own_section(self):
+        report = _report(action_log=[APPLIED, DECLINED, FAILED])
+        assert "## Fixes that could not be applied" in report
+        assert "Column 'hire_date' is not in the data." in report
+
+    def test_failures_are_excluded_from_the_declined_count(self):
+        report = _report(action_log=[APPLIED, DECLINED, FAILED])
+        assert "| Changes declined | 1 |" in report
+        assert "| Fixes that could not be applied | 1 |" in report
+
+    def test_the_section_is_absent_when_nothing_failed(self):
+        assert "## Fixes that could not be applied" not in _report()
 
 
 def test_rejection_reason_is_never_sent_to_the_model():

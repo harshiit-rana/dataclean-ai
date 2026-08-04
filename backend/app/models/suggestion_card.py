@@ -54,6 +54,12 @@ class ActionLogEntry(BaseModel):
     operation_params: dict = Field(default_factory=dict)
     status: Literal["applied", "rejected", "undone"]
     rejection_reason: Optional[str] = None  # verbatim, never paraphrased (FR-30)
+    # Why the app couldn't run this fix (operation error, nothing executable attached,
+    # reverted during an undo replay). Deliberately a separate field from rejection_reason:
+    # both end up on a "rejected" entry, and putting machine text in the field the audit
+    # report prints under "Reason given by the user, verbatim" attributes the app's own
+    # error message to the user.
+    failure_reason: Optional[str] = None
     before_stats: Optional[dict] = None
     after_stats: Optional[dict] = None
     source: Literal["suggestion_card", "conversational"] = "suggestion_card"

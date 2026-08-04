@@ -78,7 +78,7 @@ async def cleaning_agent(state: GraphState) -> dict:
                     issue_type=issue_type,
                     operation="none",
                     status="rejected",
-                    rejection_reason="This suggestion had no executable fix attached.",
+                    failure_reason="This suggestion had no executable fix attached.",
                 )
             )
             continue
@@ -107,7 +107,7 @@ async def cleaning_agent(state: GraphState) -> dict:
                     issue_type=issue_type,
                     operation=card.operation,
                     status="rejected",
-                    rejection_reason=f"Could not be applied: {exc}",
+                    failure_reason=f"Could not be applied: {exc}",
                 )
             )
             writer({"event": "error", "error": "Fix could not be applied", "detail": str(exc)})
@@ -122,7 +122,7 @@ async def cleaning_agent(state: GraphState) -> dict:
                     issue_type=issue_type,
                     operation=card.operation,
                     status="rejected",
-                    rejection_reason=f"Could not be applied: {exc}",
+                    failure_reason=f"Could not be applied: {exc}",
                 )
             )
             writer({"event": "error", "error": "Fix could not be applied", "detail": str(exc)})

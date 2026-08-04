@@ -89,7 +89,7 @@ def undo_action(
                 exc,
             )
             entry["status"] = "undone"
-            entry["rejection_reason"] = (
+            entry["failure_reason"] = (
                 f"Automatically reverted: this fix no longer applies once the undone change "
                 f"was removed ({exc})"
             )

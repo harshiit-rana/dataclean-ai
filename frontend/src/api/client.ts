@@ -70,7 +70,10 @@ export interface ActionLogEntry {
   column_name: string;
   operation: string;
   status: "applied" | "rejected" | "undone";
+  /** The user's own words, verbatim (FR-30). */
   rejection_reason: string | null;
+  /** Why the app couldn't run it — kept separate so it's never shown as the user's words. */
+  failure_reason: string | null;
   before_stats: Record<string, number> | null;
   after_stats: Record<string, number> | null;
 }

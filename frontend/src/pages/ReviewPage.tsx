@@ -19,6 +19,10 @@ export function ReviewPage() {
   const navigate = useNavigate();
   const stream = useProfileStream(sessionId ?? null);
   const [decisions, setDecisions] = useState<Record<string, "approved" | "rejected">>({});
+  // FR-30: the user's own words for why a fix was declined, carried through to the audit
+  // report verbatim. Kept beside `decisions` rather than inside it so a reason typed, then
+  // un-rejected, then re-rejected isn't lost.
+  const [skipReasons, setSkipReasons] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<PreviewResponse | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [selectedColumn, setSelectedColumn] = useState<string | null>(null);
@@ -60,6 +64,10 @@ export function ReviewPage() {
     setDecisions((prev) => ({ ...prev, [cardId]: decision }));
   }, []);
 
+  const handleReasonChange = useCallback((cardId: string, reason: string) => {
+    setSkipReasons((prev) => ({ ...prev, [cardId]: reason }));
+  }, []);
+
   const handleSelectColumn = useCallback((name: string) => {
     setSelectedColumn((cur) => (cur === name ? null : name));
   }, []);
@@ -75,8 +83,15 @@ export function ReviewPage() {
 
   const handleSubmit = () => {
     if (!sessionId) return;
+    // Only reasons for cards actually rejected -- a reason typed and then reversed would
+    // otherwise show up in the report against a fix that was applied.
+    const reasons = Object.fromEntries(
+      Object.entries(skipReasons).filter(
+        ([cardId, reason]) => decisions[cardId] === "rejected" && reason.trim()
+      )
+    );
     // The cleaning run streams on the Clean page, which starts it on mount.
-    navigate(`/clean/${sessionId}`, { state: { decisions } });
+    navigate(`/clean/${sessionId}`, { state: { decisions, skipReasons: reasons } });
   };
 
   return (
@@ -131,6 +146,8 @@ export function ReviewPage() {
             card={card}
             decision={decisions[card.card_id] ?? null}
             onDecide={handleDecide}
+            reason={skipReasons[card.card_id] ?? ""}
+            onReasonChange={handleReasonChange}
           />
         ))}
 

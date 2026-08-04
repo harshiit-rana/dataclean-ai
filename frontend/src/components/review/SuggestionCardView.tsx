@@ -2,6 +2,7 @@ import { memo } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { SuggestionCard } from "@/api/types";
 
@@ -9,16 +10,21 @@ interface SuggestionCardViewProps {
   card: SuggestionCard;
   decision: "approved" | "rejected" | null;
   onDecide: (cardId: string, decision: "approved" | "rejected") => void;
+  /** Why this fix was rejected, in the user's own words (PRD FR-30). */
+  reason: string;
+  onReasonChange: (cardId: string, reason: string) => void;
 }
 
 /** PRD §12.2/US-04: renders one suggestion card (Found / Proposed Action / Reasoning /
- * Tradeoff) with per-card approve/reject controls. Decisions are held in ReviewPage state;
- * submitting them to POST /api/resume is wired up once that endpoint is implemented
- * (currently a 501 stub -- see backend/app/api/routes_resume.py). */
+ * Tradeoff) with per-card approve/reject controls, and — once rejected — a box for the
+ * reason. Decisions and reasons are held in ReviewPage state and submitted together to
+ * POST /api/resume. */
 export const SuggestionCardView = memo(function SuggestionCardView({
   card,
   decision,
   onDecide,
+  reason,
+  onReasonChange,
 }: SuggestionCardViewProps) {
   return (
     <Card className={cn(decision === "rejected" && "opacity-60")}>
@@ -72,6 +78,30 @@ export const SuggestionCardView = memo(function SuggestionCardView({
             Reject
           </Button>
         </div>
+
+        {/* FR-30: whatever is typed here is copied into the audit report word for word and
+            is never sent to the model. Optional -- a declined fix is still recorded without
+            one, just without the explanation. */}
+        {decision === "rejected" && (
+          <div className="flex flex-col gap-1.5">
+            <label
+              htmlFor={`reason-${card.card_id}`}
+              className="text-sm font-medium text-muted-foreground"
+            >
+              Why are you declining this? (optional)
+            </label>
+            <Textarea
+              id={`reason-${card.card_id}`}
+              rows={2}
+              placeholder="e.g. those outliers are real -- they're our enterprise accounts"
+              value={reason}
+              onChange={(e) => onReasonChange(card.card_id, e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Copied into your audit report exactly as written.
+            </p>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

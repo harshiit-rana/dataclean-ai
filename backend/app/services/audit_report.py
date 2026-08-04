@@ -116,7 +116,12 @@ def build_markdown_report(
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     applied = [a for a in action_log if a["status"] == "applied"]
     undone = [a for a in action_log if a["status"] == "undone"]
-    declined = [a for a in action_log if a["status"] == "rejected"]
+    rejected = [a for a in action_log if a["status"] == "rejected"]
+    # A fix the app couldn't run is not a fix the user turned down. Reporting them together
+    # inflates the declined count and, worse, prints the app's own error message under a
+    # heading that says the user said it.
+    failed = [a for a in rejected if a.get("failure_reason")]
+    declined = [a for a in rejected if not a.get("failure_reason")]
 
     lines: list[str] = [
         "# Data Cleaning Audit Report",
@@ -138,6 +143,8 @@ def build_markdown_report(
         f"| Changes applied | {len(applied)} |",
         f"| Changes declined | {len(declined)} |",
     ]
+    if failed:
+        lines.append(f"| Fixes that could not be applied | {len(failed)} |")
     if undone:
         lines.append(f"| Changes applied then undone | {len(undone)} |")
 
@@ -181,6 +188,24 @@ def build_markdown_report(
         else:
             lines += ["_No reason was recorded._", ""]
 
+    # Attributed to the app, not the user. These were never anyone's decision.
+    if failed:
+        lines += [
+            "## Fixes that could not be applied",
+            "",
+            "These were proposed but did not run. The issue they addressed is still present "
+            "in the data.",
+            "",
+        ]
+        for entry in failed:
+            label = _OPERATION_LABELS.get(entry["operation"], entry["operation"])
+            lines += [
+                f"### {entry['column_name']} — {label}",
+                "",
+                str(entry["failure_reason"]),
+                "",
+            ]
+
     # Kept distinct from declined changes: these were applied to the data and then reverted,
     # which is a materially different history than never having been applied at all.
     if undone:
@@ -194,9 +219,9 @@ def build_markdown_report(
                 "It is **not** reflected in the exported data.",
                 "",
             ]
-            reason = entry.get("rejection_reason")
-            if reason:
-                lines += [f"_{reason}_", ""]
+            note = entry.get("rejection_reason") or entry.get("failure_reason")
+            if note:
+                lines += [f"_{note}_", ""]
 
     lines += [
         "## Issues detected during profiling",

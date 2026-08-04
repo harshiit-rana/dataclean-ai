@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -25,6 +27,31 @@ from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.graph.checkpointer import build_checkpointer
 from app.graph.workflow import build_graph
+from app.services.session_store import purge_expired_sessions
+
+logger = logging.getLogger(__name__)
+
+
+async def _sweep_expired_sessions(settings) -> None:
+    """Deletes uploaded files whose session has aged out (NFR-12/13).
+
+    Runs in-process rather than as a cron job or sidecar so a plain `docker compose up`
+    doesn't quietly accumulate every CSV anyone ever uploaded. The sweep is blocking file
+    I/O, so it goes to a thread; failures are logged and the loop continues, because losing
+    cleanup is survivable and taking the API down over it is not.
+    """
+    while True:
+        try:
+            removed = await asyncio.to_thread(
+                purge_expired_sessions, settings.upload_dir, settings.upload_retention_seconds
+            )
+            if removed:
+                logger.info("Session cleanup removed %d expired session(s)", removed)
+        except asyncio.CancelledError:
+            raise
+        except Exception:  # noqa: BLE001 -- a broken sweep must not end the process
+            logger.exception("Session cleanup pass failed; will retry next interval")
+        await asyncio.sleep(settings.cleanup_interval_seconds)
 
 
 @asynccontextmanager
@@ -34,7 +61,24 @@ async def lifespan(app: FastAPI):
 
     async with build_checkpointer(settings) as checkpointer:
         app.state.graph = build_graph(checkpointer)
-        yield
+
+        cleanup_task: asyncio.Task | None = None
+        if settings.upload_retention_seconds > 0:
+            cleanup_task = asyncio.create_task(_sweep_expired_sessions(settings))
+        else:
+            logger.warning(
+                "UPLOAD_RETENTION_SECONDS is 0 -- uploaded files will be kept indefinitely"
+            )
+
+        try:
+            yield
+        finally:
+            if cleanup_task:
+                cleanup_task.cancel()
+                try:
+                    await cleanup_task
+                except asyncio.CancelledError:
+                    pass
 
 
 def create_app() -> FastAPI:

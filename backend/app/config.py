@@ -25,6 +25,15 @@ class Settings(BaseSettings):
     upload_dir: str = "./uploads"
     max_file_size_mb: int = 50
 
+    # Uploaded CSVs, cleaned copies and audit reports are deleted this long after a session
+    # was last touched. Matches redis_ttl_seconds by default so the files and the checkpoint
+    # that refers to them expire together -- a session whose state has already gone can't be
+    # resumed, and keeping the user's data on disk past that point is storage cost and
+    # privacy exposure for nothing. Set to 0 to keep files indefinitely.
+    upload_retention_seconds: int = 86400
+    # How often the sweep runs. Not a precision job; the point is that it happens at all.
+    cleanup_interval_seconds: int = 3600
+
     chroma_persist_dir: str = "./chroma_db"  # reserved, currently unused — see README
 
     app_env: str = "development"
