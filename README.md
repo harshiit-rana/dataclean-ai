@@ -209,6 +209,23 @@ threshold trade-off table, cross-validation spread, learning curve, permutation 
 a feature correlation matrix. For regression: predicted-vs-actual, residuals, residual
 distribution and error by range.
 
+**And it will keep trying, without cheating.** "Improve it" searches model settings and the
+other model types, optionally until a target you name. The obvious way to build that is also
+a machine for fooling yourself: try enough configurations against the held-out rows and one
+of them clears any bar, not because it is better but because it happens to suit those rows.
+So the search never sees the test set. Every round competes on cross-validated folds of the
+training data, a round is only accepted if it beats the incumbent by more than the folds
+disagree with each other, and the test set is opened once at the end for a number nothing was
+selected against.
+
+It stops on its own and says why — target reached, target out of reach, or the rounds stopped
+paying for themselves. It shows the rounds it rejected too, because *"we tried tuning it and
+tuning did not help"* is a finding about your data: it means the ceiling is the columns you
+have, and better inputs would help where more searching would not. Whatever it settles on
+goes back through the normal training path, so the charts, the model card and the exported
+script all work on it, and the script carries the tuned settings rather than reverting to the
+defaults.
+
 **And you leave with something you can run.** The export includes `train_model.py`, which
 rebuilds the model from scratch with the same preprocessing, split and settings, plus the
 fitted `model.joblib` and a model card. There's a test that runs the generated script in a

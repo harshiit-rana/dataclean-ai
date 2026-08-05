@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.models.graph_state import CleaningAggression, TaskType, UseCase
 
@@ -133,6 +133,20 @@ class TrainRequest(BaseModel):
     split_strategy: str = "random"  # "random" | "time"
     time_column: Optional[str] = None
     include_deep_diagnostics: bool = True
+
+
+class ImproveRequest(TrainRequest):
+    """Everything a train needs, plus where to stop.
+
+    `goal` is on the same metric the loop reports -- AUC for a two-class target, accuracy for
+    more than two, R² for regression. None means "as good as it can get", which stops when
+    the rounds stop earning their place rather than when a number is hit.
+    """
+
+    goal: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    # Fits per search. Higher explores more settings and takes proportionally longer; the
+    # default is sized so a few thousand rows finish in well under a minute.
+    budget: int = Field(default=24, ge=4, le=120)
 
 
 class SessionStatusResponse(BaseModel):

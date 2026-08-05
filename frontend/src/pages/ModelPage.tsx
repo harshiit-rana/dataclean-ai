@@ -5,6 +5,7 @@ import remarkGfm from "remark-gfm";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { DownloadButton } from "@/components/ui/download-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ImprovementTrail } from "@/components/model/ImprovementTrail";
 import { ModelPlanForm } from "@/components/model/ModelPlanForm";
 import { ModelResults } from "@/components/model/ModelResults";
 import {
@@ -12,6 +13,7 @@ import {
   fetchModelCard,
   fetchModelPlan,
   fetchModelResult,
+  improveModel,
   trainModel,
 } from "@/api/client";
 import type { ModelPlan, ModelResult, TrainRequest } from "@/api/types";
@@ -27,6 +29,11 @@ export function ModelPage() {
   const [result, setResult] = useState<ModelResult | null>(null);
   const [card, setCard] = useState<string | null>(null);
   const [training, setTraining] = useState(false);
+  const [improving, setImproving] = useState(false);
+  // Kept as text, not a number: an empty box means "as good as you can get", and coercing
+  // that to 0 would read as a target of zero.
+  const [goal, setGoal] = useState("");
+  const [lastRequest, setLastRequest] = useState<TrainRequest | null>(null);
   const [loadingCard, setLoadingCard] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
@@ -57,6 +64,7 @@ export function ModelPage() {
     setTraining(true);
     setError(null);
     setCard(null);
+    setLastRequest(request);
     try {
       const trained = await trainModel(sessionId, request);
       setResult(trained);
@@ -66,6 +74,35 @@ export function ModelPage() {
       setError(err instanceof ApiError ? err.detail : String((err as Error)?.message ?? err));
     } finally {
       setTraining(false);
+    }
+  };
+
+  /** Reuses whatever columns and split the last train used, so "improve it" means "improve
+   * this", not "start again with different inputs and see if the number moves". */
+  const handleImprove = async () => {
+    if (!sessionId) return;
+    const parsed = Number.parseFloat(goal);
+    const target = goal.trim() !== "" && Number.isFinite(parsed) ? parsed : null;
+
+    setImproving(true);
+    setError(null);
+    setCard(null);
+    try {
+      const improved = await improveModel(sessionId, {
+        excluded_columns: lastRequest?.excluded_columns ?? plan?.excluded_columns ?? [],
+        model_names: lastRequest?.model_names ?? [],
+        split_strategy: lastRequest?.split_strategy ?? "random",
+        time_column: lastRequest?.time_column ?? null,
+        include_deep_diagnostics: true,
+        goal: target,
+      });
+      setResult(improved);
+      setShowPlan(false);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      setError(err instanceof ApiError ? err.detail : String((err as Error)?.message ?? err));
+    } finally {
+      setImproving(false);
     }
   };
 
@@ -187,9 +224,59 @@ export function ModelPage() {
         </Card>
       )}
 
-      {result && !training && <ModelResults result={result} />}
+      {result && !training && !improving && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Try to do better</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 text-sm">
+            <p className="text-muted-foreground">
+              Searches model settings and the other model types, judging each one on
+              cross-validated folds of the training rows. The test set stays sealed until the
+              end — which is what stops a long search from finding a configuration that suits
+              those particular held-out rows and calling it an improvement.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor="goal" className="text-muted-foreground">
+                Stop at
+              </label>
+              <input
+                id="goal"
+                type="text"
+                inputMode="decimal"
+                value={goal}
+                onChange={(event) => setGoal(event.target.value)}
+                placeholder="e.g. 0.85"
+                className="h-9 w-28 rounded-md border border-border bg-transparent px-3 text-sm tabular-nums"
+              />
+              <Button onClick={handleImprove} disabled={improving}>
+                Improve it
+              </Button>
+              <span className="text-xs text-muted-foreground">
+                Leave it blank to get as far as it can.
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-      {result && !training && (
+      {improving && (
+        <Card>
+          <CardContent className="p-6 text-sm text-muted-foreground">
+            Searching. It fits the model many times over — once per setting per fold — so this
+            takes appreciably longer than a single train. It will stop on its own, either when
+            it reaches your target or when another round stops being worth it.
+          </CardContent>
+        </Card>
+      )}
+
+      {result?.improvement && !training && !improving && (
+        <ImprovementTrail trail={result.improvement} />
+      )}
+
+      {result && !training && !improving && <ModelResults result={result} />}
+
+      {result && !training && !improving && (
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">Model card</CardTitle>

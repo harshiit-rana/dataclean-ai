@@ -77,18 +77,26 @@ class ModelSpec:
     # whether a feature-importance review is offered for this model.
     explains_features: bool = True
 
-    def build(self) -> Any:
+    def settings(self, overrides: dict | None = None) -> dict:
+        """Defaults, with anything the tuner found layered on top.
+
+        One place decides this, because the app and the exported script must build the same
+        estimator -- a tuned model whose script quietly reverts to the defaults would report
+        a score the script cannot reproduce."""
+        return {**self.params, **(overrides or {})}
+
+    def build(self, overrides: dict | None = None) -> Any:
         import importlib
 
         cls = getattr(importlib.import_module(self.module), self.class_name)
-        return cls(**self.params)
+        return cls(**self.settings(overrides))
 
     @property
     def import_line(self) -> str:
         return f"from {self.module} import {self.class_name}"
 
-    def constructor_source(self) -> str:
-        arguments = ", ".join(f"{k}={v!r}" for k, v in self.params.items())
+    def constructor_source(self, overrides: dict | None = None) -> str:
+        arguments = ", ".join(f"{k}={v!r}" for k, v in self.settings(overrides).items())
         return f"{self.class_name}({arguments})"
 
 
@@ -286,7 +294,12 @@ def split_data(
 # --- pipeline -----------------------------------------------------------------------------
 
 
-def build_pipeline(model_name: str, numeric: list[str], categorical: list[str]):
+def build_pipeline(
+    model_name: str,
+    numeric: list[str],
+    categorical: list[str],
+    model_params: dict | None = None,
+):
     """Assembles preprocessing + model into one Pipeline.
 
     Everything that learns from data -- the imputer's medians, the scaler's means, the
@@ -347,7 +360,9 @@ def build_pipeline(model_name: str, numeric: list[str], categorical: list[str]):
     if not transformers:
         raise ModelingError("There are no usable columns left to predict from.")
 
-    return Pipeline([("prepare", ColumnTransformer(transformers)), ("model", spec.build())])
+    return Pipeline(
+        [("prepare", ColumnTransformer(transformers)), ("model", spec.build(model_params))]
+    )
 
 
 # --- evaluation ---------------------------------------------------------------------------
@@ -619,9 +634,15 @@ def train_candidates(
     split_strategy: str = "random",
     time_column: str | None = None,
     include_deep_diagnostics: bool = True,
+    model_params: dict[str, dict] | None = None,
 ) -> dict:
     """Trains each requested model on the same split and returns everything needed to compare
-    them. A model that fails to fit is reported rather than aborting the others."""
+    them. A model that fails to fit is reported rather than aborting the others.
+
+    `model_params` carries settings the improvement loop found, keyed by model name. Running
+    the tuned model back through this function rather than reporting the loop's own numbers
+    is deliberate: the result then has the same shape as any other, so the charts, the model
+    card, the joblib and the exported script all work on it without knowing it was tuned."""
     if target_column not in df.columns:
         raise ModelingError(f"'{target_column}' is not in the data.")
 
@@ -643,8 +664,9 @@ def train_candidates(
         spec = MODELS.get(name)
         if spec is None or spec.task != task:
             continue
+        tuned = (model_params or {}).get(name)
         try:
-            pipeline = build_pipeline(name, features["numeric"], features["categorical"])
+            pipeline = build_pipeline(name, features["numeric"], features["categorical"], tuned)
             pipeline.fit(X_train, y_train)
             scores = evaluate(pipeline, X_test, y_test, task)
             importances = feature_importance(pipeline)
@@ -654,6 +676,7 @@ def train_candidates(
                     "label": spec.label,
                     "description": spec.description,
                     "metrics": scores,
+                    "tuned_params": tuned or {},
                     "feature_importance": importances,
                     "column_importance": source_column_importance(importances, used),
                     # Curves, confusion matrix, residuals -- one predict() over the test set,
@@ -698,7 +721,12 @@ def train_candidates(
     deep: dict = {}
     if include_deep_diagnostics:
         deep = diagnostics.compute_deep_diagnostics(
-            lambda: build_pipeline(best["model"], features["numeric"], features["categorical"]),
+            lambda: build_pipeline(
+                best["model"],
+                features["numeric"],
+                features["categorical"],
+                (model_params or {}).get(best["model"]),
+            ),
             best["pipeline"],
             X_train,
             X_test,

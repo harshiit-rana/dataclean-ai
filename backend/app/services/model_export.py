@@ -201,7 +201,7 @@ pipeline = Pipeline([
     ("prepare", ColumnTransformer([
 {chr(10).join(entries)}
     ])),
-    ("model", {spec.constructor_source()}),
+    ("model", {spec.constructor_source(best.get("tuned_params"))}),
 ])
 
 pipeline.fit(X_train, y_train)

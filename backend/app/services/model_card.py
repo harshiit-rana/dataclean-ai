@@ -304,6 +304,29 @@ def _deterministic_cautions(result: dict, best: dict) -> list[str]:
             f"understate what is achievable."
         )
 
+    # Anyone reading a model card is entitled to know how many configurations were tried
+    # before this one was chosen -- it is the difference between "this is what a model does
+    # on your data" and "this is the best of forty attempts".
+    trail = result.get("improvement")
+    if trail:
+        rounds = trail.get("rounds") or []
+        accepted = [r for r in rounds if r.get("accepted")]
+        cautions.append(
+            f"This model was arrived at by searching, not by a single fit: {len(rounds)} "
+            f"rounds were tried and {len(accepted)} were kept. Every round was judged on "
+            f"cross-validated folds of the training rows and the held-out set was scored "
+            f"once at the end, so the figures above are not the best of many draws on those "
+            f"rows -- but they were chosen with more attempts than a single train, and a "
+            f"gap between the cross-validated score "
+            f"({trail.get('cv_score')}) and the headline score is normal and expected."
+        )
+        if trail.get("stopped_because") == "goal_out_of_reach":
+            cautions.append(
+                f"A target of {trail.get('goal')} was asked for and not reached. The search "
+                f"ran out of things worth trying first, which points at the columns rather "
+                f"than the model: better inputs would help, more searching would not."
+            )
+
     return cautions
 
 

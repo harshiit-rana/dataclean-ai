@@ -68,6 +68,11 @@ are both running locally, you're ready to make changes.
   before the split lets test rows influence the values written into training rows. There's a
   test asserting the fitted imputer's learned median came from the training fold alone --
   keep it passing.
+- **Nothing selects on the test set.** The improvement loop searches against cross-validated
+  folds of the training data and opens the held-out set exactly once, at the end. If you add
+  a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and
+  checking `X_test`. A round also has to clear `_is_real_gain`, which refuses anything smaller
+  than the fold-to-fold spread; without that the loop "improves" forever on noise.
 - **Charts read the app's surface, never the OS.** `useChartTheme` looks only at the `dark`
   class on `<html>` — the same signal Tailwind's `darkMode: ["class"]` uses. Falling back to
   `prefers-color-scheme` is how the correlation heatmap ended up painting near-zero cells

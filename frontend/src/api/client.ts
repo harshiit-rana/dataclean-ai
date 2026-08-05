@@ -6,6 +6,7 @@ import type {
   ErrorResponse,
   GoalContext,
   GoalContextResponse,
+  ImproveRequest,
   ModelPlan,
   ModelResult,
   PreviewResponse,
@@ -120,6 +121,22 @@ export async function trainModel(
   request: TrainRequest
 ): Promise<ModelResult> {
   const response = await sessionFetch(sessionId, `/api/model/${sessionId}/train`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  return handleResponse<ModelResult>(response);
+}
+
+/** Searches for a better model and returns an ordinary result with the trail attached.
+ *
+ * Slow by nature -- it fits a model many times over -- so callers should say so rather than
+ * leaving a spinner with no explanation. */
+export async function improveModel(
+  sessionId: string,
+  request: ImproveRequest
+): Promise<ModelResult> {
+  const response = await sessionFetch(sessionId, `/api/model/${sessionId}/improve`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),

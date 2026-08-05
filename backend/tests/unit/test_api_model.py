@@ -128,6 +128,46 @@ class TestPlan:
         assert "salary" not in excluded
         assert "staff_number" in excluded
 
+    def test_improving_produces_an_ordinary_result(self):
+        """The integration that matters: whatever the loop settles on goes back through the
+        normal training path, so the charts, the model card, the joblib and the exported
+        script all work on it without knowing it was tuned."""
+        session_id = _session()
+        result = client.post(
+            f"/api/model/{session_id}/improve",
+            json={"budget": 4, "include_deep_diagnostics": False},
+        ).json()
+
+        assert result["best_model"]
+        assert result["results"][0]["metrics"]
+        assert result["assessment"]["verdict"]
+        assert result["improvement"]["rounds"][0]["name"] == "baseline"
+
+    def test_the_tuned_settings_reach_the_exported_script(self):
+        """A tuned model whose script quietly reverts to the defaults would report a score
+        the script cannot reproduce -- which is the one promise the script makes."""
+        session_id = _session()
+        client.post(
+            f"/api/model/{session_id}/improve",
+            json={"budget": 8, "include_deep_diagnostics": False},
+        )
+        script = client.get(f"/api/model/{session_id}/script").text
+
+        stored = client.get(f"/api/model/{session_id}/result").json()
+        settings = stored["improvement"]["settings"]
+        for key, value in settings.items():
+            assert f"{key}=" in script, f"{key} is missing from the script"
+            assert repr(value) in script
+
+    def test_it_reports_when_a_goal_is_out_of_reach(self):
+        """Rather than searching until something clears the bar by luck."""
+        session_id = _session()
+        result = client.post(
+            f"/api/model/{session_id}/improve",
+            json={"goal": 0.999, "budget": 4, "include_deep_diagnostics": False},
+        ).json()
+        assert result["improvement"]["stopped_because"] == "goal_out_of_reach"
+
     def test_suggestions_are_proposals_the_user_can_reject(self):
         """A leaky column is sometimes legitimately available at prediction time, and only
         the person who owns the data knows that. So training must accept fewer exclusions

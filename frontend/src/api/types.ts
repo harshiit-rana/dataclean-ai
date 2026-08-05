@@ -295,6 +295,42 @@ export interface ModelResult {
     permutation_importance?: PermutationImportance[] | null;
   };
   feature_correlations: CorrelationResult;
+  /** Present only when the result came from the improvement loop rather than a single train. */
+  improvement?: ImprovementTrail | null;
+}
+
+/** One attempt at making the model better, kept whether or not it worked.
+ *
+ * The rejected rounds are the point: "we tried tuning it and tuning did not help" says
+ * something about the data that a silent success would not. */
+export interface ImprovementRound {
+  name: string;
+  label: string;
+  what_it_tried: string;
+  score: number | null;
+  std: number | null;
+  gain: number | null;
+  accepted: boolean;
+  outcome: string;
+  detail: Record<string, unknown>;
+}
+
+export interface ImprovementTrail {
+  rounds: ImprovementRound[];
+  /** What the rounds were judged on: roc_auc, accuracy or r2. */
+  metric: string;
+  goal: number | null;
+  stopped_because: "goal_reached" | "goal_out_of_reach" | "no_further_gains";
+  /** Cross-validated, from the training rows only -- not the headline number, which is
+   * measured once on rows nothing was selected against. */
+  cv_score: number;
+  cv_std: number;
+  settings: Record<string, unknown>;
+}
+
+export interface ImproveRequest extends TrainRequest {
+  goal?: number | null;
+  budget?: number;
 }
 
 // --- SSE event payloads, PRD §10.2 -------------------------------------------------------

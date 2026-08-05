@@ -2,9 +2,10 @@
 
 Three endpoints, in the order a person actually works:
 
-- `GET  /api/model/{id}/plan`   what would be built, and what the app proposes leaving out
-- `POST /api/model/{id}/train`  build it, with the user's adjustments
-- `GET  /api/model/{id}/result` the last evaluation, so a refresh doesn't lose it
+- `GET  /api/model/{id}/plan`     what would be built, and what the app proposes leaving out
+- `POST /api/model/{id}/train`    build it, with the user's adjustments
+- `POST /api/model/{id}/improve`  keep searching for a better one, and say when to stop
+- `GET  /api/model/{id}/result`   the last evaluation, so a refresh doesn't lose it
 
 The plan step exists because the interesting decisions in a model build are made before any
 fitting happens -- which columns count as inputs, how the data is split, what is being
@@ -27,9 +28,17 @@ from fastapi.responses import FileResponse, PlainTextResponse
 
 from app.config import Settings, get_settings
 from app.core.errors import AppError, SessionNotFoundError, UnparseableCSVError
-from app.models.api_schemas import ModelPlanResponse, TrainRequest
+from app.models.api_schemas import ImproveRequest, ModelPlanResponse, TrainRequest
 from app.models.graph_state import GoalContext
-from app.services import diagnostics, ml_readiness, model_card, model_export, model_store, modeling
+from app.services import (
+    diagnostics,
+    improvement,
+    ml_readiness,
+    model_card,
+    model_export,
+    model_store,
+    modeling,
+)
 from app.services.session_store import read_session_meta, session_dir
 
 logger = logging.getLogger(__name__)
@@ -283,6 +292,84 @@ async def train_model(
 
     # Recorded so the plan can show what was excluded last time and the model card can say
     # which columns were deliberately withheld.
+    result["features"]["excluded"] = list(request.excluded_columns)
+    return model_store.save_result(directory, result)
+
+
+@router.post("/api/model/{session_id}/improve")
+async def improve_model(
+    session_id: str,
+    request: ImproveRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Search for a better model, then rebuild the result the normal way.
+
+    Two passes on purpose. The loop searches on cross-validated training folds and never
+    looks at the test set, which is what makes its answer trustworthy but also means it has
+    only a score, not a full evaluation. So whatever it settles on is handed back to
+    `train_candidates`, which produces exactly the shape every other result has -- the charts,
+    the model card, the joblib and the exported script all work on it unchanged, and the
+    headline number is measured the same way it always was.
+
+    The trail of rounds rides along on the result, including the rounds that were rejected.
+    "We tried tuning it and tuning did not help" is a finding about the data.
+    """
+    df, goal_context, directory = _load_session(settings, session_id)
+    target = (goal_context.target_column or "").strip()
+
+    if target not in df.columns:
+        raise TrainingFailedError(
+            f"'{target}' is no longer in the data -- it was renamed or removed during cleaning."
+        )
+
+    task = ml_readiness.infer_task_type(df[target], goal_context.task_type)
+    if task is None:
+        raise TrainingFailedError(f"'{target}' has no usable values to learn from.")
+
+    def run() -> dict:
+        found = improvement.improve(
+            df,
+            target_column=target,
+            task=task,
+            model_names=request.model_names or None,
+            excluded_columns=request.excluded_columns,
+            split_strategy=request.split_strategy,
+            time_column=request.time_column,
+            goal=request.goal,
+            budget=request.budget,
+        )
+        best = found["best"]
+        params = {f"model__{k}": v for k, v in best["params"].items()}
+        rebuilt = modeling.train_candidates(
+            df,
+            target_column=target,
+            task=task,
+            model_names=[best["model"]],
+            excluded_columns=request.excluded_columns,
+            split_strategy=request.split_strategy,
+            time_column=request.time_column,
+            include_deep_diagnostics=request.include_deep_diagnostics,
+            model_params={best["model"]: params},
+        )
+        rebuilt["improvement"] = {
+            "rounds": found["rounds"],
+            "metric": found["metric"],
+            "goal": found["goal"],
+            "stopped_because": found["stopped_because"],
+            "cv_score": best["cv_score"],
+            "cv_std": best["cv_std"],
+            "settings": best["params"],
+        }
+        return rebuilt
+
+    try:
+        result = await asyncio.to_thread(run)
+    except modeling.ModelingError as exc:
+        raise TrainingFailedError(str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 -- surface the reason rather than a bare 500
+        logger.exception("Improvement failed for session %s", session_id)
+        raise TrainingFailedError(f"Improving stopped unexpectedly: {exc}") from exc
+
     result["features"]["excluded"] = list(request.excluded_columns)
     return model_store.save_result(directory, result)
 
