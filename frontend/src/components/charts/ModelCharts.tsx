@@ -254,7 +254,14 @@ export function CrossValidationChart({ cv }: { cv: CrossValidation }) {
             y={cv.mean}
             stroke={theme.mutedText}
             strokeDasharray="4 4"
-            label={{ value: "average", position: "right", fill: theme.mutedText, fontSize: 10 }}
+            // Inside the plot area: "right" puts the label past the axis where the chart
+            // margin clips it, and a reference line labelled "av" explains nothing.
+            label={{
+              value: "average",
+              position: "insideTopRight",
+              fill: theme.mutedText,
+              fontSize: 10,
+            }}
           />
           <Tooltip
             cursor={{ fill: theme.grid, fillOpacity: 0.4 }}
@@ -293,7 +300,9 @@ export function CorrelationHeatmap({ data }: { data: CorrelationResult }) {
   return (
     <ChartCard
       title="Which columns move together"
-      description="Blue is a negative relationship, red a positive one, pale is none."
+      // "pale is none" was only true on the light surface -- in dark the neutral cell is the
+      // dark one. Saying "faint" describes the same thing in both.
+      description="Blue is a negative relationship, red a positive one; the fainter the cell, the weaker the relationship."
       tableColumns={[
         { key: "row", label: "Column" },
         { key: "column", label: "Compared with" },
