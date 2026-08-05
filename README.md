@@ -8,6 +8,9 @@ Tradeoff. Nothing changes until you approve it, card by card.
 If you're cleaning data to train a model, name the column you want to predict and the tool
 changes what it looks for -- see "Cleaning towards a model" below.
 
+For the whole picture in one place -- what's built, what was deliberately left out, what's
+planned next and what the known limitations are -- see **[STATUS.md](STATUS.md)**.
+
 ## Before you start: get an LLM API key
 
 This project doesn't ship with a shared/default key for either provider it supports --
