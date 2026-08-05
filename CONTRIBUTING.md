@@ -68,6 +68,12 @@ are both running locally, you're ready to make changes.
   before the split lets test rows influence the values written into training rows. There's a
   test asserting the fitted imputer's learned median came from the training fold alone --
   keep it passing.
+- **A check that can't run has to say so.** `readiness_checks.Check` has three outcomes that
+  matter, not two: passed, failed, and `not_run` with a `blocked_by`. `assess_readiness` used
+  to return early when the target was missing, so six later checks silently never happened and
+  the report was indistinguishable from one where they had all passed. Never add an early
+  return there — record a skip instead. `blockers` and `warnings` are derived views over the
+  checks, so a new check gets into the summary, the panel and the audit report for free.
 - **Nothing selects on the test set.** The improvement loop searches against cross-validated
   folds of the training data and opens the held-out set exactly once, at the end. If you add
   a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and

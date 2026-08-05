@@ -212,6 +212,13 @@ threshold trade-off table, cross-validation spread, learning curve, permutation 
 a feature correlation matrix. For regression: predicted-vs-actual, residuals, residual
 distribution and error by range.
 
+**Every verdict shows its working.** "Ready" is a claim about what *isn't* wrong, and a reader
+can't confirm that by looking at the data. So the readiness panel opens onto the checks behind
+it — what each one concluded, the numbers, and what would change the answer — including the
+ones that **couldn't run and why**. "We didn't look" and "we looked and it was fine" are
+different statements, and without this they'd both appear as silence. The same table goes into
+the audit report, because the conclusion is what someone has to defend months later.
+
 **And it will keep trying, without cheating.** "Improve it" searches model settings and the
 other model types, optionally until a target you name. The obvious way to build that is also
 a machine for fooling yourself: try enough configurations against the held-out rows and one

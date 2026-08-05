@@ -99,6 +99,39 @@ def _readiness_section(readiness: dict | None) -> list[str]:
             lines += [f"**{label}:**", ""]
         lines += [f"- {item}" for item in items]
         lines.append("")
+
+    lines += _checks_table(readiness.get("checks") or [])
+    return lines
+
+
+_STATUS_MARKS = {
+    "passed": "Passed",
+    "warning": "Worth knowing",
+    "failed": "Failed",
+    "not_run": "Not checked",
+}
+
+
+def _checks_table(checks: list[dict]) -> list[str]:
+    """Every check and what it concluded, including the ones that did not run.
+
+    The rest of this report records what *changed*. This records what was *concluded*, which
+    is the part someone has to defend months later -- and a verdict of "ready" is a claim of
+    absence, which a reader cannot confirm by looking at the data. Checks that could not run
+    are listed for the same reason: "we did not look" and "we looked and it was fine" are
+    different statements, and without this they appear identically as silence.
+    """
+    if not checks:
+        return []
+
+    lines = ["**What was checked:**", "", "| Check | Result | Finding |", "| --- | --- | --- |"]
+    for check in checks:
+        mark = _STATUS_MARKS.get(check.get("status", ""), check.get("status", ""))
+        finding = str(check.get("finding", "")).replace("|", "\\|")
+        if check.get("blocked_by"):
+            finding = f"{finding} (blocked by: {check['blocked_by']})"
+        lines.append(f"| {check.get('label', check.get('name', ''))} | {mark} | {finding} |")
+    lines.append("")
     return lines
 
 

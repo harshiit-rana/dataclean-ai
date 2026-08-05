@@ -105,6 +105,11 @@ class ReadinessResponse(BaseModel):
     notes: list[str]
     target_summary: Optional[dict]
     remaining_issues: dict
+    # The working behind the verdict: every check with its status, evidence and what would
+    # change it -- including the ones that could not run and why. `blockers` and `warnings`
+    # above are derived views over this, not a separate record.
+    checks: list[dict] = []
+    check_counts: dict = {}
 
 
 class ModelPlanResponse(BaseModel):

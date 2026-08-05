@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { buttonClasses } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CheckTrail } from "@/components/readiness/CheckTrail";
 import { cn } from "@/lib/utils";
 import { ApiError, fetchReadiness } from "@/api/client";
 import type { ReadinessResponse } from "@/api/types";
@@ -115,6 +116,11 @@ export function ReadinessPanel({
             {note}
           </p>
         ))}
+
+        {/* The verdict above is a claim about what *isn't* wrong, which nobody can confirm
+            by looking at the data. This is the working behind it. */}
+        <CheckTrail checks={readiness.checks ?? []} counts={readiness.check_counts} />
+
 
         {remaining.total > 0 && (
           <p className="text-xs text-muted-foreground">

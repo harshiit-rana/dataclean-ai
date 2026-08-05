@@ -28,6 +28,7 @@ import numpy as np
 import pandas as pd
 
 from app.models.graph_state import ColumnIssue, GoalContext
+from app.services import readiness_checks
 from app.services.profiling import generate_issue_id
 
 logger = logging.getLogger(__name__)
@@ -476,13 +477,21 @@ def enforce_target_safety(
 
 
 def assess_readiness(df: pd.DataFrame, goal_context: GoalContext | None) -> dict:
-    """A verdict on whether this data can support the model the user asked for.
+    """A verdict on whether this data can support the model the user asked for, with the
+    working shown.
 
     Deliberately willing to answer "no". A tool that always produces a model is less useful
     than one that can say the data won't support it and explain what is missing.
+
+    Every check runs, or records why it could not. This used to return early -- no target
+    meant six later checks silently never happened, and the result was indistinguishable from
+    one where they had all passed. `blockers`, `warnings` and `notes` are now derived views
+    over `checks` rather than the primary record, so the summary and the evidence cannot
+    drift apart.
     """
     target = (goal_context.target_column or "").strip() if goal_context else ""
     row_count, column_count = int(len(df)), int(df.shape[1])
+    log = readiness_checks.CheckLog()
 
     report: dict = {
         "target_column": target or None,
@@ -495,81 +504,169 @@ def assess_readiness(df: pd.DataFrame, goal_context: GoalContext | None) -> dict
         "notes": [],
         "target_summary": None,
         "remaining_issues": {"high": 0, "medium": 0, "low": 0, "total": 0},
+        "checks": [],
+        "check_counts": {},
     }
 
+    # --- is there a question to answer at all? -------------------------------------------
     if not target:
-        report["notes"].append(
-            "No prediction target was set for this session, so there is nothing to check "
-            "model readiness against. You can still export the cleaned file."
+        log.add(
+            readiness_checks.Check(
+                name="target_named",
+                label="A column to predict",
+                status="not_run",
+                finding="No prediction target was set for this session, so there is nothing "
+                "to check model readiness against. You can still export the cleaned file.",
+            )
         )
+        for name, label in _TARGET_DEPENDENT_CHECKS:
+            log.skip(name, label, "target_named", "No target column was named.")
+        report["checks"] = log.as_dicts()
+        report["check_counts"] = log.counts
+        report["notes"].append(log.checks[0].finding)
         return report
 
-    if target not in df.columns:
-        report["verdict"] = "blocked"
-        report["blockers"].append(
-            f"'{target}' is no longer in the data -- it was renamed or removed during "
-            f"cleaning. Undo that change, or start again with the column you want to predict."
+    log.add(
+        readiness_checks.Check(
+            name="target_named",
+            label="A column to predict",
+            status="passed",
+            finding=f"Predicting '{target}'.",
         )
-        return report
+    )
+
+    if target not in df.columns:
+        log.add(
+            readiness_checks.Check(
+                name="target_present",
+                label="The target is still in the data",
+                status="failed",
+                finding=f"'{target}' is no longer in the data -- it was renamed or removed "
+                f"during cleaning.",
+                evidence=f"The file now has {column_count} columns and '{target}' is not "
+                f"among them.",
+                remedy="Undo that change, or start again with the column you want to predict.",
+                severity="blocker",
+            )
+        )
+        for name, label in _TARGET_DEPENDENT_CHECKS:
+            if name == "target_present":
+                continue
+            log.skip(name, label, "target_present", f"'{target}' is not in the data.")
+        return _finish(report, log, row_count, column_count, target)
+
+    log.add(
+        readiness_checks.Check(
+            name="target_present",
+            label="The target is still in the data",
+            status="passed",
+            finding=f"'{target}' survived cleaning.",
+        )
+    )
 
     task_type = infer_task_type(df[target], goal_context.task_type if goal_context else "auto")
     report["task_type"] = task_type
 
+    # --- enough to learn from ------------------------------------------------------------
     if row_count < MIN_ROWS_FOR_MODELLING:
-        report["blockers"].append(
-            f"Only {row_count} rows are left. That is too few to train a model that will "
-            f"hold up on data it hasn't seen -- around {MIN_ROWS_FOR_MODELLING} is a bare "
-            f"minimum, and more is much better."
+        log.add(
+            readiness_checks.Check(
+                name="enough_rows",
+                label="Enough rows",
+                status="failed",
+                finding=f"Only {row_count} rows are left.",
+                evidence=f"That is too few to train a model that will hold up on data it "
+                f"hasn't seen -- around {MIN_ROWS_FOR_MODELLING} is a bare minimum, and more "
+                f"is much better.",
+                remedy="Undo a fix that dropped rows, or start from a larger extract.",
+                severity="blocker",
+            )
         )
-    if column_count < 2:
-        report["blockers"].append(
-            "There are no columns left to predict from -- only the target itself remains."
+    else:
+        log.add(
+            readiness_checks.Check(
+                name="enough_rows",
+                label="Enough rows",
+                status="passed",
+                finding=f"{row_count:,} rows, comfortably above the {MIN_ROWS_FOR_MODELLING} "
+                f"needed to hold back a test set that means anything.",
+            )
         )
 
+    feature_columns = [c for c in df.columns if c != target]
+    if column_count < 2:
+        log.add(
+            readiness_checks.Check(
+                name="has_features",
+                label="Something to predict from",
+                status="failed",
+                finding="There are no columns left to predict from -- only the target itself "
+                "remains.",
+                remedy="Undo the fixes that dropped columns.",
+                severity="blocker",
+            )
+        )
+    else:
+        log.add(
+            readiness_checks.Check(
+                name="has_features",
+                label="Something to predict from",
+                status="passed",
+                finding=f"{len(feature_columns)} columns available as model inputs.",
+            )
+        )
+
+    # --- the target itself ---------------------------------------------------------------
     series = df[target]
     null_count = int(series.isna().sum())
     if null_count:
-        report["blockers"].append(
-            f"{null_count} rows still have no value for '{target}'. Drop those rows before "
-            f"building a model -- they cannot be used, and they must not be filled in."
+        log.add(
+            readiness_checks.Check(
+                name="target_complete",
+                label="Every row has an answer",
+                status="failed",
+                finding=f"{null_count:,} rows still have no value for '{target}'.",
+                evidence="They cannot be trained on, and the gap must never be filled in -- a "
+                "guessed label is indistinguishable from a real one once it is in the file.",
+                remedy=f"Drop the rows where '{target}' is empty.",
+                severity="blocker",
+            )
+        )
+    else:
+        log.add(
+            readiness_checks.Check(
+                name="target_complete",
+                label="Every row has an answer",
+                status="passed",
+                finding=f"No missing values in '{target}'.",
+            )
         )
 
     non_null = series.dropna()
-    if task_type == "classification":
-        counts = non_null.astype(str).value_counts()
-        report["target_summary"] = {
-            "class_counts": {str(k): int(v) for k, v in counts.head(20).items()},
-            "distinct_values": int(counts.size),
-            "null_count": null_count,
-        }
-        if counts.size < 2:
-            report["blockers"].append(
-                f"Every remaining row has the same value for '{target}'. There is nothing "
-                f"for a model to tell apart."
-            )
-        elif int(counts.iloc[-1]) < MIN_ROWS_PER_CLASS:
-            report["warnings"].append(
-                f"The rarest answer, {str(counts.index[-1])!r}, appears only "
-                f"{int(counts.iloc[-1])} times. A model will struggle to learn it, and any "
-                f"score you get for it will be unreliable."
-            )
-        elif int(counts.iloc[-1]) / int(counts.sum()) < NOTABLE_IMBALANCE_SHARE:
-            report["warnings"].append(
-                f"The answers are unbalanced ({int(counts.iloc[-1])} of {int(counts.sum())} "
-                f"are {str(counts.index[-1])!r}). Measure with something other than plain "
-                f"accuracy."
-            )
-    elif task_type == "regression" and pd.api.types.is_numeric_dtype(non_null) and len(non_null):
-        report["target_summary"] = {
-            "min": float(non_null.min()),
-            "max": float(non_null.max()),
-            "mean": float(non_null.mean()),
-            "std": float(non_null.std()) if len(non_null) > 1 else 0.0,
-            "null_count": null_count,
-        }
+    _check_target_shape(log, report, task_type, target, non_null, null_count)
 
-    # Re-run the detectors against the data as it stands now, so the verdict reflects the
-    # cleaning that has actually happened rather than what was found at the start.
+    # --- rows that undermine each other ---------------------------------------------------
+    if log.passed("has_features"):
+        log.add(readiness_checks.check_contradictory_labels(df, target, feature_columns))
+        log.add(readiness_checks.check_repeated_entities(df, target))
+    else:
+        log.skip(
+            "contradictory_labels",
+            "Rows that contradict each other",
+            "has_features",
+            "There are no input columns to compare rows on.",
+        )
+        log.skip(
+            "repeated_entities",
+            "Rows that belong together",
+            "has_features",
+            "There are no columns left to look for repeated entities in.",
+        )
+
+    # --- everything the detectors still find ----------------------------------------------
+    #
+    # Re-run against the data as it stands now, so the verdict reflects the cleaning that has
+    # actually happened rather than what was found at the start.
     from app.services import profiling  # local import: profiling must not depend on this module
 
     remaining = augment_issues(df, profiling.detect_issues(df), goal_context)
@@ -580,12 +677,209 @@ def assess_readiness(df: pd.DataFrame, goal_context: GoalContext | None) -> dict
         "total": len(remaining),
     }
 
-    for issue in remaining:
-        if issue.issue_type == "target_leakage" and issue.severity == "high":
-            report["warnings"].append(
-                f"'{issue.column_name}' still predicts '{target}' almost perfectly. If it "
-                f"won't be available at the moment you need a prediction, drop it."
+    leaks = [
+        i for i in remaining if i.issue_type == "target_leakage" and i.severity == "high"
+    ]
+    if leaks:
+        named = ", ".join(f"'{i.column_name}'" for i in leaks)
+        log.add(
+            readiness_checks.Check(
+                name="leakage",
+                label="Columns that give away the answer",
+                status="failed",
+                finding=f"{named} still predicts '{target}' almost perfectly.",
+                evidence=leaks[0].description,
+                remedy="If it won't be available at the moment you need a prediction, drop it.",
+                severity="warning",
             )
+        )
+    else:
+        log.add(
+            readiness_checks.Check(
+                name="leakage",
+                label="Columns that give away the answer",
+                status="passed",
+                finding=f"No column predicts '{target}' closely enough to look like it was "
+                f"recorded after the outcome was known.",
+                evidence=f"Every remaining column was tested against '{target}' on both its "
+                f"values and its missingness.",
+            )
+        )
+
+    other = report["remaining_issues"]["total"]
+    if other:
+        log.add(
+            readiness_checks.Check(
+                name="remaining_issues",
+                label="Data quality issues still present",
+                status="warning" if report["remaining_issues"]["high"] else "passed",
+                finding=f"{other} issue{'' if other == 1 else 's'} still detected in the data.",
+                evidence=f"{report['remaining_issues']['high']} high, "
+                f"{report['remaining_issues']['medium']} medium, "
+                f"{report['remaining_issues']['low']} low severity.",
+                remedy="None of them block a model, but the cleaning box can still address them."
+                if report["remaining_issues"]["high"]
+                else "",
+                severity="warning" if report["remaining_issues"]["high"] else None,
+            )
+        )
+    else:
+        log.add(
+            readiness_checks.Check(
+                name="remaining_issues",
+                label="Data quality issues still present",
+                status="passed",
+                finding="The profiler finds nothing else wrong with the data as it stands.",
+            )
+        )
+
+    return _finish(report, log, row_count, column_count, target)
+
+
+# Checks that cannot even be attempted without a usable target column. Listed here so a
+# session with no target still produces a full transcript, saying of each one that it did not
+# run and why, rather than an empty report that reads like a clean bill of health.
+_TARGET_DEPENDENT_CHECKS: tuple[tuple[str, str], ...] = (
+    ("target_present", "The target is still in the data"),
+    ("enough_rows", "Enough rows"),
+    ("has_features", "Something to predict from"),
+    ("target_complete", "Every row has an answer"),
+    ("target_shape", "The answers can be told apart"),
+    ("contradictory_labels", "Rows that contradict each other"),
+    ("repeated_entities", "Rows that belong together"),
+    ("leakage", "Columns that give away the answer"),
+    ("remaining_issues", "Data quality issues still present"),
+)
+
+
+def _check_target_shape(
+    log: readiness_checks.CheckLog,
+    report: dict,
+    task_type: str | None,
+    target: str,
+    non_null: pd.Series,
+    null_count: int,
+) -> None:
+    """Whether the answers themselves can support a model: enough classes, enough of each."""
+    label = "The answers can be told apart"
+
+    if task_type == "classification":
+        counts = non_null.astype(str).value_counts()
+        report["target_summary"] = {
+            "class_counts": {str(k): int(v) for k, v in counts.head(20).items()},
+            "distinct_values": int(counts.size),
+            "null_count": null_count,
+        }
+        if counts.size < 2:
+            log.add(
+                readiness_checks.Check(
+                    name="target_shape",
+                    label=label,
+                    status="failed",
+                    finding=f"Every remaining row has the same value for '{target}'.",
+                    evidence="There is nothing for a model to tell apart.",
+                    remedy="Undo whichever fix removed the other answers.",
+                    severity="blocker",
+                )
+            )
+            return
+
+        rarest_count = int(counts.iloc[-1])
+        rarest_name = str(counts.index[-1])
+        total = int(counts.sum())
+        if rarest_count < MIN_ROWS_PER_CLASS:
+            log.add(
+                readiness_checks.Check(
+                    name="target_shape",
+                    label=label,
+                    status="failed",
+                    finding=f"The rarest answer, {rarest_name!r}, appears only "
+                    f"{rarest_count} times.",
+                    evidence=f"{counts.size} distinct answers across {total:,} rows. A model "
+                    f"will struggle to learn a class this rare, and any score you get for it "
+                    f"will be unreliable.",
+                    remedy="Collect more examples of it, or merge it with a related answer.",
+                    severity="warning",
+                )
+            )
+            return
+        if rarest_count / total < NOTABLE_IMBALANCE_SHARE:
+            log.add(
+                readiness_checks.Check(
+                    name="target_shape",
+                    label=label,
+                    status="failed",
+                    finding=f"The answers are unbalanced: {rarest_count:,} of {total:,} are "
+                    f"{rarest_name!r}.",
+                    evidence=f"A model that always answered with the most common class would "
+                    f"score {1 - rarest_count / total:.0%} accuracy while learning nothing.",
+                    remedy="Measure with something other than plain accuracy -- the model "
+                    "page uses AUC for exactly this reason.",
+                    severity="warning",
+                )
+            )
+            return
+
+        log.add(
+            readiness_checks.Check(
+                name="target_shape",
+                label=label,
+                status="passed",
+                finding=f"{counts.size} distinct answers, the rarest appearing "
+                f"{rarest_count:,} times ({rarest_count / total:.0%} of rows).",
+            )
+        )
+        return
+
+    if task_type == "regression":
+        if pd.api.types.is_numeric_dtype(non_null) and len(non_null):
+            report["target_summary"] = {
+                "min": float(non_null.min()),
+                "max": float(non_null.max()),
+                "mean": float(non_null.mean()),
+                "std": float(non_null.std()) if len(non_null) > 1 else 0.0,
+                "null_count": null_count,
+            }
+            spread = float(non_null.std()) if len(non_null) > 1 else 0.0
+            if spread == 0.0:
+                log.add(
+                    readiness_checks.Check(
+                        name="target_shape",
+                        label=label,
+                        status="failed",
+                        finding=f"Every row has the same value for '{target}'.",
+                        evidence="There is no variation to explain.",
+                        severity="blocker",
+                    )
+                )
+                return
+            log.add(
+                readiness_checks.Check(
+                    name="target_shape",
+                    label=label,
+                    status="passed",
+                    finding=f"'{target}' ranges from {float(non_null.min()):,.3g} to "
+                    f"{float(non_null.max()):,.3g}.",
+                )
+            )
+            return
+
+    log.skip(
+        "target_shape",
+        label,
+        "target_present",
+        f"'{target}' has no usable values, so its shape could not be assessed.",
+    )
+
+
+def _finish(
+    report: dict, log: readiness_checks.CheckLog, rows: int, columns: int, target: str
+) -> dict:
+    """Derives the verdict and the flat summary lists from the checks that ran."""
+    report["checks"] = log.as_dicts()
+    report["check_counts"] = log.counts
+    report["blockers"] = log.blockers
+    report["warnings"] = log.warnings
 
     if report["blockers"]:
         report["verdict"] = "blocked"
@@ -594,7 +888,7 @@ def assess_readiness(df: pd.DataFrame, goal_context: GoalContext | None) -> dict
     else:
         report["verdict"] = "ready"
         report["notes"].append(
-            f"{row_count} rows, {column_count - 1} columns to predict from, and no missing "
+            f"{rows} rows, {columns - 1} columns to predict from, and no missing "
             f"values in '{target}'."
         )
     return report

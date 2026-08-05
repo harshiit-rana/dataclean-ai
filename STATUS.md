@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 6 August 2026 · 30 commits · 334 backend tests, 47 frontend tests
+Last updated: 6 August 2026 · 32 commits · 350 backend tests, 47 frontend tests
 
 ---
 
@@ -98,6 +98,32 @@ Naming a target column changes what the tool does, not just how it words things:
   meaningless.
 - **Readiness verdict.** Ready / usable-with-caveats / blocked, recomputed from the file as it
   currently stands, so it stays correct after an undo or a chat edit.
+- **Contradictory labels.** Rows with identical inputs and different answers. No statistical
+  check finds these and no model survives them — they're a hard ceiling on accuracy.
+- **Repeated entities.** A column whose values recur across rows means a random split can put
+  the same customer in both training and test, which inflates every score.
+
+### Decision provenance
+
+Every verdict shows its working. "Ready" is a claim about what *isn't* wrong, and a reader
+can't confirm that by looking at the data — so each check records what it concluded, the
+numbers behind it, and what would change the answer.
+
+Three outcomes matter, not two. **Passed** and **failed** are obvious; the one that earns this
+its place is **not_run**, with the reason. `assess_readiness` used to return early when the
+target was missing, so six later checks silently never happened and the report was
+indistinguishable from one where they had all passed. Now nothing returns early: a check that
+can't run records what stopped it.
+
+Deliberately a flat list with a few "blocked by" edges rather than a graph — the checks aren't
+causally chained, they're independent conditions that all have to hold, and arrows between them
+would encode a dependency that mostly isn't there.
+
+Nothing is stored. It's derived on every read, the same as the verdict it explains, because the
+moment evidence is persisted an undo turns it into a lie. `blockers` and `warnings` are now
+derived views over the checks, so a new check reaches the summary, the panel and the audit
+report for free. The panel leads with what failed or couldn't run and collapses the passes
+behind a count — twelve green ticks on open is compliance theatre.
 
 ### The model path
 
@@ -157,7 +183,17 @@ reported metrics.
 
 ## What's next
 
-### 1. Feature engineering — the big one
+### 1. Business rules — the validation stage's first real tenant
+
+The check framework now exists (see *Decision provenance* above), and business rules are what
+it was built to hold. The tool detects statistical problems but not semantic ones: `age = -5`
+isn't an outlier, it's impossible, and IQR bounds will miss it entirely while flagging
+legitimate premium salaries. Planned: a small rule language (`age >= 0`, `discount <= 100`,
+`order_date <= delivery_date`, `price * qty == total`), rules proposed by the AI but approved
+like every other suggestion, and cross-column arithmetic with a tolerance so floating point
+doesn't fire constantly.
+
+### 2. Feature engineering — the big one
 
 Tuning is the small lever, and the live run proved it: on the churn sample the settings search
 found nothing worth keeping, which means **the ceiling is the columns, not the settings.**
@@ -178,14 +214,14 @@ improvement loop, scored the same honest way:
 Same constraint as the tuned settings: each derived feature must be a declared recipe so
 `train_model.py` can reproduce it. A model the export can't rebuild is a model trapped in the app.
 
-### 2. Threshold selection
+### 3. Threshold selection
 
 The threshold sweep is already *shown* — "the default cut-off is 0.50, but nothing makes it the
 right one" — but you can't act on it. Letting you state the trade-off ("a missed churn costs
 more than a false alarm") and having the model adopt that operating point is a large, cheap win:
 recall can often be doubled without retraining anything.
 
-### 3. Two text-quality defects found live
+### 4. Two text-quality defects found live
 
 - **The LLM hallucinated an example from a different dataset.** A card about a `plan` column
   (values: basic/standard/premium) read *"For example, 'USA' and 'usa' are considered different
@@ -197,7 +233,7 @@ recall can often be doubled without retraining anything.
 
 Neither breaks anything, but both undermine trust in cards you're being asked to judge.
 
-### 4. Streaming the improvement loop
+### 5. Streaming the improvement loop
 
 It already reports progress round by round internally (`on_progress`), but the endpoint is a
 single blocking POST. A search takes tens of seconds to minutes; watching it work would be

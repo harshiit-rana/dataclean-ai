@@ -80,6 +80,34 @@ export interface ReadinessResponse {
   notes: string[];
   target_summary: Record<string, unknown> | null;
   remaining_issues: { high: number; medium: number; low: number; total: number };
+  checks: ReadinessCheck[];
+  check_counts: ReadinessCheckCounts;
+}
+
+/** One question asked of the data, and the answer with its working.
+ *
+ * `not_run` is the status that earns this its place: "we did not look" and "we looked and it
+ * was fine" are different statements, and without this distinction they appear identically
+ * as silence. */
+export interface ReadinessCheck {
+  name: string;
+  label: string;
+  status: "passed" | "warning" | "failed" | "not_run";
+  finding: string;
+  evidence: string;
+  /** What would change the answer. Empty on a pass. */
+  remedy: string;
+  /** The check whose failure made this one impossible. Set only when status is not_run. */
+  blocked_by: string | null;
+  severity: "blocker" | "warning" | null;
+}
+
+export interface ReadinessCheckCounts {
+  passed: number;
+  warning: number;
+  failed: number;
+  not_run: number;
+  total: number;
 }
 
 export interface ErrorResponse {
