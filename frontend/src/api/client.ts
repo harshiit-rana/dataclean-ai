@@ -1,4 +1,4 @@
-// Thin fetch wrapper for the plain request/response endpoints. The SSE endpoint
+﻿// Thin fetch wrapper for the plain request/response endpoints. The SSE endpoint
 // (POST /api/profile/{id}) is handled separately in api/sse.ts.
 
 import type {
@@ -13,6 +13,7 @@ import type {
   TrainRequest,
   UploadResponse,
 } from "./types";
+import { sessionHeaders, storeSessionToken } from "@/lib/sessionToken";
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8000";
 
@@ -34,6 +35,51 @@ async function handleResponse<T>(response: Response): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+/** Every request scoped to a session goes through here, so none can be written without its
+ * access token. The mirror of attaching the check at the router on the server. */
+async function sessionFetch(
+  sessionId: string,
+  path: string,
+  init: RequestInit = {}
+): Promise<Response> {
+  return fetch(`${API_BASE_URL}${path}`, {
+    ...init,
+    headers: { ...(init.headers ?? {}), ...sessionHeaders(sessionId) },
+  });
+}
+
+/** Downloads a session file through fetch rather than a plain `<a download>` link.
+ *
+ * A link can't carry the access-token header, and putting the token in the query string
+ * would write it into server logs, browser history and any referrer — exactly the places it
+ * must not be. Fetching to a blob keeps it in the header, and has the side benefit that a
+ * failure surfaces as a readable message instead of the browser rendering raw JSON. */
+export async function downloadSessionFile(
+  sessionId: string,
+  path: string,
+  filename: string
+): Promise<void> {
+  const response = await sessionFetch(sessionId, path);
+  if (!response.ok) {
+    const body = (await response.json().catch(() => null)) as ErrorResponse | null;
+    throw new ApiError(
+      body?.error ?? "Download failed",
+      body?.detail ?? `HTTP ${response.status}`,
+      response.status
+    );
+  }
+
+  const blob = await response.blob();
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
 export async function uploadCsv(file: File): Promise<UploadResponse> {
   const formData = new FormData();
   formData.append("file", file);
@@ -42,25 +88,30 @@ export async function uploadCsv(file: File): Promise<UploadResponse> {
     method: "POST",
     body: formData,
   });
-  return handleResponse<UploadResponse>(response);
+  const body = await handleResponse<UploadResponse>(response);
+  // Kept for the rest of this session's requests; everything after upload needs it.
+  storeSessionToken(body.session_id, body.session_token);
+  return body;
 }
 
 export async function fetchPreview(sessionId: string): Promise<PreviewResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/preview/${sessionId}`);
-  return handleResponse<PreviewResponse>(response);
+  return handleResponse<PreviewResponse>(
+    await sessionFetch(sessionId, `/api/preview/${sessionId}`)
+  );
 }
 
 /** Recomputed server-side from the file as it currently stands, so it stays correct after an
  * undo or a conversational edit. Safe to re-fetch after any change. */
 export async function fetchReadiness(sessionId: string): Promise<ReadinessResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/readiness/${sessionId}`);
-  return handleResponse<ReadinessResponse>(response);
+  return handleResponse<ReadinessResponse>(
+    await sessionFetch(sessionId, `/api/readiness/${sessionId}`)
+  );
 }
 
 // --- Model building ------------------------------------------------------------------
 
 export async function fetchModelPlan(sessionId: string): Promise<ModelPlan> {
-  const response = await fetch(`${API_BASE_URL}/api/model/${sessionId}/plan`);
+  const response = await sessionFetch(sessionId, `/api/model/${sessionId}/plan`);
   return handleResponse<ModelPlan>(response);
 }
 
@@ -68,7 +119,7 @@ export async function trainModel(
   sessionId: string,
   request: TrainRequest
 ): Promise<ModelResult> {
-  const response = await fetch(`${API_BASE_URL}/api/model/${sessionId}/train`, {
+  const response = await sessionFetch(sessionId, `/api/model/${sessionId}/train`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(request),
@@ -79,13 +130,13 @@ export async function trainModel(
 /** The last evaluation, so returning to the page doesn't mean retraining. 404 when nothing
  * has been trained yet, which callers treat as "no model", not an error. */
 export async function fetchModelResult(sessionId: string): Promise<ModelResult | null> {
-  const response = await fetch(`${API_BASE_URL}/api/model/${sessionId}/result`);
+  const response = await sessionFetch(sessionId, `/api/model/${sessionId}/result`);
   if (response.status === 404) return null;
   return handleResponse<ModelResult>(response);
 }
 
 export async function fetchModelCard(sessionId: string): Promise<string> {
-  const response = await fetch(`${API_BASE_URL}/api/model/${sessionId}/card`);
+  const response = await sessionFetch(sessionId, `/api/model/${sessionId}/card`);
   const body = await handleResponse<{ markdown: string }>(response);
   return body.markdown;
 }
@@ -93,7 +144,7 @@ export async function fetchModelCard(sessionId: string): Promise<string> {
 export async function fetchFeatureCorrelations(
   sessionId: string
 ): Promise<CorrelationResult> {
-  const response = await fetch(`${API_BASE_URL}/api/model/${sessionId}/correlations`);
+  const response = await sessionFetch(sessionId, `/api/model/${sessionId}/correlations`);
   return handleResponse<CorrelationResult>(response);
 }
 
@@ -104,7 +155,7 @@ export interface AuditReportResponse {
 }
 
 export async function fetchAuditReport(sessionId: string): Promise<AuditReportResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/export/${sessionId}/report`);
+  const response = await sessionFetch(sessionId, `/api/export/${sessionId}/report`);
   return handleResponse<AuditReportResponse>(response);
 }
 
@@ -125,7 +176,7 @@ export interface ActionLogEntry {
 }
 
 export async function fetchActionLog(sessionId: string): Promise<{ actions: ActionLogEntry[] }> {
-  const response = await fetch(`${API_BASE_URL}/api/actions/${sessionId}`);
+  const response = await sessionFetch(sessionId, `/api/actions/${sessionId}`);
   return handleResponse<{ actions: ActionLogEntry[] }>(response);
 }
 
@@ -133,7 +184,7 @@ export async function undoAction(
   sessionId: string,
   actionId: string
 ): Promise<{ actions: ActionLogEntry[]; report_regenerated: boolean }> {
-  const response = await fetch(`${API_BASE_URL}/api/undo/${sessionId}`, {
+  const response = await sessionFetch(sessionId, `/api/undo/${sessionId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action_id: actionId }),
@@ -151,7 +202,7 @@ export async function sendChatMessage(
   sessionId: string,
   message: string
 ): Promise<ChatResult> {
-  const response = await fetch(`${API_BASE_URL}/api/chat/${sessionId}`, {
+  const response = await sessionFetch(sessionId, `/api/chat/${sessionId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ message }),
@@ -163,7 +214,7 @@ export async function submitGoalContext(
   sessionId: string,
   goal: GoalContext
 ): Promise<GoalContextResponse> {
-  const response = await fetch(`${API_BASE_URL}/api/goal/${sessionId}`, {
+  const response = await sessionFetch(sessionId, `/api/goal/${sessionId}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(goal),

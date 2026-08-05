@@ -28,6 +28,8 @@ export interface GoalContext {
 
 export interface UploadResponse {
   session_id: string;
+  /** Proof this browser uploaded the file; sent back on every session-scoped request. */
+  session_token: string;
   file_name: string;
   row_count: number;
   column_count: number;

@@ -6,7 +6,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
@@ -26,6 +26,7 @@ from app.api import (
 from app.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
+from app.dependencies import verify_session_access
 from app.graph.checkpointer import build_checkpointer
 from app.graph.workflow import build_graph
 from app.services.session_store import purge_expired_sessions
@@ -96,18 +97,28 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
 
+    # No session yet, so nothing to check against.
     app.include_router(health.router)
     app.include_router(routes_upload.router)
-    app.include_router(routes_goal.router)
-    app.include_router(routes_preview.router)
-    app.include_router(routes_profile.router)
-    app.include_router(routes_session.router)
-    app.include_router(routes_resume.router)
-    app.include_router(routes_chat.router)
-    app.include_router(routes_undo.router)
-    app.include_router(routes_export.router)
-    app.include_router(routes_readiness.router)
-    app.include_router(routes_model.router)
+
+    # Everything below is scoped to one session. The access check is applied here, at the
+    # router, rather than on each route: every route in these modules takes a {session_id},
+    # so attaching it once means a route added later cannot quietly ship without it.
+    # A no-op unless session tokens are required -- see Settings.session_tokens_required.
+    guarded = [Depends(verify_session_access)]
+    for router in (
+        routes_goal.router,
+        routes_preview.router,
+        routes_profile.router,
+        routes_session.router,
+        routes_resume.router,
+        routes_chat.router,
+        routes_undo.router,
+        routes_export.router,
+        routes_readiness.router,
+        routes_model.router,
+    ):
+        app.include_router(router, dependencies=guarded)
 
     return app
 

@@ -63,6 +63,20 @@ class SessionNotFoundError(AppError):
         super().__init__("Session expired", f"Session {session_id} was not found. It may have expired.")
 
 
+class SessionAccessDeniedError(AppError):
+    status_code = 403
+
+    def __init__(self):
+        # Deliberately does not distinguish "wrong token" from "no token" -- both mean the
+        # caller isn't the one who created the session, and saying which would help someone
+        # probing for the difference.
+        super().__init__(
+            "Not your session",
+            "This session belongs to a different browser. Sessions are private to whoever "
+            "uploaded the file.",
+        )
+
+
 class CheckpointCorruptedError(AppError):
     status_code = 500
 

@@ -3,11 +3,11 @@ import { Link, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button, buttonClasses } from "@/components/ui/button";
+import { DownloadButton } from "@/components/ui/download-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ModelPlanForm } from "@/components/model/ModelPlanForm";
 import { ModelResults } from "@/components/model/ModelResults";
 import {
-  API_BASE_URL,
   ApiError,
   fetchModelCard,
   fetchModelPlan,
@@ -148,20 +148,26 @@ export function ModelPage() {
           <Button variant="outline" size="sm" onClick={() => setShowPlan((open) => !open)}>
             {showPlan ? "Hide setup" : "Change columns or retrain"}
           </Button>
-          <a
-            href={`${API_BASE_URL}/api/model/${sessionId}/script`}
-            download
-            className={buttonClasses("outline", "sm")}
+          <DownloadButton
+            sessionId={sessionId!}
+            path={`/api/model/${sessionId}/script`}
+            filename="train_model.py"
+            variant="outline"
+            size="sm"
+            onError={setError}
           >
             Download train_model.py
-          </a>
-          <a
-            href={`${API_BASE_URL}/api/model/${sessionId}/download`}
-            download
-            className={buttonClasses("outline", "sm")}
+          </DownloadButton>
+          <DownloadButton
+            sessionId={sessionId!}
+            path={`/api/model/${sessionId}/download`}
+            filename="model.joblib"
+            variant="outline"
+            size="sm"
+            onError={setError}
           >
             Download the fitted model
-          </a>
+          </DownloadButton>
           <Link to={`/export/${sessionId}`} className={buttonClasses("ghost", "sm")}>
             Export everything
           </Link>

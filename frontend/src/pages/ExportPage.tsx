@@ -3,9 +3,10 @@ import { Link, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { buttonClasses } from "@/components/ui/button";
+import { DownloadButton } from "@/components/ui/download-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReadinessPanel } from "@/components/readiness/ReadinessPanel";
-import { API_BASE_URL, ApiError, fetchAuditReport } from "@/api/client";
+import { ApiError, fetchAuditReport } from "@/api/client";
 
 /** Page 4, PRD §8.3 / FR-41..44: preview the audit report and download the artifacts.
  *
@@ -41,24 +42,33 @@ export function ExportPage() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <a href={`${API_BASE_URL}/api/export/${sessionId}/zip`} download className={buttonClasses()}>
+        <DownloadButton
+          sessionId={sessionId!}
+          path={`/api/export/${sessionId}/zip`}
+          filename="dataclean_export.zip"
+          onError={setError}
+        >
           Download everything (.zip)
-        </a>
-        <a
-          href={`${API_BASE_URL}/api/export/${sessionId}/csv`}
-          download
-          className={buttonClasses("outline")}
+        </DownloadButton>
+        <DownloadButton
+          sessionId={sessionId!}
+          path={`/api/export/${sessionId}/csv`}
+          filename="cleaned.csv"
+          variant="outline"
+          onError={setError}
         >
           Cleaned CSV only
-        </a>
+        </DownloadButton>
         {hasPdf && (
-          <a
-            href={`${API_BASE_URL}/api/export/${sessionId}/pdf`}
-            download
-            className={buttonClasses("outline")}
+          <DownloadButton
+            sessionId={sessionId!}
+            path={`/api/export/${sessionId}/pdf`}
+            filename="audit_report.pdf"
+            variant="outline"
+            onError={setError}
           >
             Report PDF only
-          </a>
+          </DownloadButton>
         )}
         <Link to="/" className={buttonClasses("ghost")}>
           Clean another file

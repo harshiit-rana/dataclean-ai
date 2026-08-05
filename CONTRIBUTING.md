@@ -71,6 +71,12 @@ are both running locally, you're ready to make changes.
 - **Charts ship a table view.** Some palette slots sit below 3:1 on the light surface, and a
   tooltip is a way to inspect a value rather than read one. Every chart goes through
   `ChartCard` with its data as a table.
+- **Session routes are guarded at the router, not per-route.** `verify_session_access` is
+  applied in `main.py` where the routers are included, so a new session-scoped route cannot
+  ship without the check by forgetting a decorator. If you add a router, add it to that list.
+  On the client side the mirror of this is `sessionFetch` in `api/client.ts` — nothing scoped
+  to a session should call `fetch` directly, and downloads go through `DownloadButton` because
+  an `<a download>` can't set a header and the token must never go in the URL.
 - **The app is allowed to say no.** Data that can't support a model, and a model that learned
   nothing, both get said plainly. A tool that always produces a confident answer is less
   useful than one that can tell you it hasn't got one.

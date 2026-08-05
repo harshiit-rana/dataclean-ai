@@ -1,13 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { buttonClasses } from "@/components/ui/button";
+import { DownloadButton } from "@/components/ui/download-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ActionLog } from "@/components/clean/ActionLog";
 import { AppliedActions } from "@/components/clean/AppliedActions";
 import { ChatPanel } from "@/components/clean/ChatPanel";
 import { ReadinessPanel } from "@/components/readiness/ReadinessPanel";
 import { useCleaningRun } from "@/hooks/useCleaningRun";
-import { API_BASE_URL, fetchActionLog, type ActionLogEntry } from "@/api/client";
+import { fetchActionLog, type ActionLogEntry } from "@/api/client";
 
 /** Page 3, PRD §12.3: runs the approved fixes and hands back the cleaned CSV.
  *
@@ -117,13 +118,14 @@ export function CleanPage() {
               <Link to={`/model/${sessionId}`} className={buttonClasses("outline")}>
                 Build a model
               </Link>
-              <a
-                href={`${API_BASE_URL}/api/export/${sessionId}/csv`}
-                download
-                className={buttonClasses("outline")}
+              <DownloadButton
+                sessionId={sessionId!}
+                path={`/api/export/${sessionId}/csv`}
+                filename="cleaned.csv"
+                variant="outline"
               >
                 Cleaned CSV only
-              </a>
+              </DownloadButton>
               <Link to="/" className={buttonClasses("ghost")}>
                 Clean another file
               </Link>

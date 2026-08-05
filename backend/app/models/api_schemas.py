@@ -18,6 +18,9 @@ class ErrorResponse(BaseModel):
 
 class UploadResponse(BaseModel):
     session_id: str
+    # Proof that this browser is the one that uploaded the file. Sent back on every request
+    # scoped to the session -- see services/session_access.py.
+    session_token: str = ""
     file_name: str
     row_count: int
     column_count: int

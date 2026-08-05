@@ -3,6 +3,7 @@
 
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { API_BASE_URL } from "./client";
+import { sessionHeaders } from "@/lib/sessionToken";
 import type { ProfileStreamEvent } from "./types";
 
 export interface ProfileStreamHandlers {
@@ -15,7 +16,7 @@ export function streamProfile(
   sessionId: string,
   handlers: ProfileStreamHandlers
 ): AbortController {
-  return streamPost(`${API_BASE_URL}/api/profile/${sessionId}`, undefined, handlers);
+  return streamPost(`${API_BASE_URL}/api/profile/${sessionId}`, undefined, handlers, sessionId);
 }
 
 /** Submits approve/reject decisions and streams the cleaning run that follows. */
@@ -28,19 +29,20 @@ export function streamResume(
   },
   handlers: ProfileStreamHandlers
 ): AbortController {
-  return streamPost(`${API_BASE_URL}/api/resume/${sessionId}`, decisions, handlers);
+  return streamPost(`${API_BASE_URL}/api/resume/${sessionId}`, decisions, handlers, sessionId);
 }
 
 function streamPost(
   url: string,
   body: unknown,
-  { onEvent, onError, onClose }: ProfileStreamHandlers
+  { onEvent, onError, onClose }: ProfileStreamHandlers,
+  sessionId: string
 ): AbortController {
   const controller = new AbortController();
 
   fetchEventSource(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...sessionHeaders(sessionId) },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: controller.signal,
     async onopen(response) {

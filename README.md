@@ -119,6 +119,23 @@ while debugging one session and a bad idea anywhere real.
 Redis persists to a named volume with `appendonly` enabled, so sessions survive a container
 restart or a `docker compose down`.
 
+## Session access
+
+Session ids are server-generated UUIDs, which makes them unguessable but not private —
+anything that learns one (a log line, a shared screenshot, a proxy, browser history sync)
+could then read that session's data. So `POST /api/upload` also issues a one-time access
+token, the server stores only its SHA-256 hash, and every request scoped to that session must
+carry the token in an `X-Session-Token` header. The web UI keeps it in `sessionStorage` and
+attaches it for you, downloads included.
+
+It is deliberately **not** an account system: there are no users here and sessions are
+ephemeral. What it buys is that holding the id is no longer sufficient.
+
+Enforcement follows `APP_ENV` unless you set `REQUIRE_SESSION_TOKENS` explicitly — off in
+development, so `docker compose up` and a browser is still all it takes to try the app; on
+everywhere else. Sessions created before it was switched on have no stored hash and keep
+working, so enabling it doesn't strand work in progress.
+
 **Not implemented:** the `conversational_loop` graph node is an unwired stub — conversational
 cleaning is served by `POST /api/chat` instead, since the graph has already completed by the
 time you're chatting and re-entering it per message would re-run profiling for nothing.

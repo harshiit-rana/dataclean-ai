@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -39,7 +40,20 @@ class Settings(BaseSettings):
     app_env: str = "development"
     log_level: str = "INFO"
 
+    # Require the token issued at upload on every request scoped to that session. Left off in
+    # development so `docker compose up` and a browser is still all it takes to try the app;
+    # on by default anywhere else, because a session id alone should not be enough to read
+    # someone's uploaded data. See services/session_access.py.
+    require_session_tokens: Optional[bool] = None
+
     frontend_origin: str = "http://localhost:5173"
+
+    @property
+    def session_tokens_required(self) -> bool:
+        """Explicit setting wins; otherwise on everywhere but development."""
+        if self.require_session_tokens is not None:
+            return self.require_session_tokens
+        return self.app_env.lower() != "development"
 
     @property
     def redis_url(self) -> str:
