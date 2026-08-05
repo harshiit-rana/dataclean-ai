@@ -48,7 +48,10 @@ export const DataTable = memo(function DataTable({
         <span>Click a column header for details</span>
       </div>
 
-      <div className="overflow-x-auto">
+      {/* Height-capped rather than rendering all 100 rows inline: the suggestion cards are the
+          point of this page, and a full-length table pushed them a long way below the fold --
+          far enough that a wheel gesture over the table never reached them. */}
+      <div className="max-h-[26rem] overflow-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
@@ -61,7 +64,9 @@ export const DataTable = memo(function DataTable({
                     key={col.name}
                     onClick={() => onSelectColumn(col.name)}
                     className={cn(
-                      "cursor-pointer whitespace-nowrap border-b border-border px-3 py-2 text-left font-medium transition-colors hover:bg-muted",
+                      // Sticky so the column names stay readable while the rows scroll under
+                      // them. The background has to be opaque or the rows show through.
+                      "sticky top-0 z-10 cursor-pointer whitespace-nowrap border-b border-border bg-background px-3 py-2 text-left font-medium transition-colors hover:bg-muted",
                       isSelected && "bg-muted"
                     )}
                   >

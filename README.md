@@ -119,6 +119,16 @@ while debugging one session and a bad idea anywhere real.
 Redis persists to a named volume with `appendonly` enabled, so sessions survive a container
 restart or a `docker compose down`.
 
+## Light and dark
+
+The app starts in whichever mode your operating system is set to, and there's a toggle in the
+top-right corner of every page. Once you use it, your choice is remembered and the OS stops
+overruling it — so you can keep this one app light on a machine that's otherwise dark.
+
+The charts follow the same signal the rest of the page does (the `dark` class on `<html>`),
+never `prefers-color-scheme` directly. Both palettes were validated against the app's own
+surfaces rather than assumed.
+
 ## Session access
 
 Session ids are server-generated UUIDs, which makes them unguessable but not private —
