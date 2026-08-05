@@ -178,7 +178,16 @@ export function ReviewPage() {
         rejectedCount={decisionCounts.rejected}
         undecidedCount={decisionCounts.undecided}
         submitting={false}
-        disabled={stream.status !== "interrupted"}
+        // Enabled once the run has stopped producing cards and there is at least one to act
+        // on -- not only on a clean finish. Keying it to "interrupted" alone meant that a
+        // stream which failed on its last card left ten good suggestions on screen with the
+        // only button on the page permanently dead. The backend applies explicitly approved
+        // ids and nothing else, so submitting a partial set was always safe.
+        disabled={
+          stream.cards.length === 0 ||
+          stream.status === "idle" ||
+          stream.status === "streaming"
+        }
         onSubmit={handleSubmit}
       />
     </div>

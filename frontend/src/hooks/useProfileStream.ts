@@ -112,7 +112,21 @@ export function useProfileStream(sessionId: string | null) {
 
     controllerRef.current = streamProfile(sessionId, {
       onEvent: handleEvent,
-      onError: (error) => setState((s) => ({ ...s, status: "error", error: error.message })),
+      // Same rule as the server-sent `error` event above, for the case where the connection
+      // itself drops rather than the run reporting a failure. The cards already delivered are
+      // just as usable either way, and the transport is the one thing the user can do least
+      // about -- discarding their review because a socket closed is the worst of both.
+      onError: (error) =>
+        setState((s) =>
+          s.cards.length > 0
+            ? {
+                ...s,
+                partialWarning:
+                  "The connection dropped before the last suggestions arrived. Everything " +
+                  "below is complete and can be applied as it stands.",
+              }
+            : { ...s, status: "error", error: error.message }
+        ),
       onClose: flushChunks,
     });
 

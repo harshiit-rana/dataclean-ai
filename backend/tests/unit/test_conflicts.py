@@ -89,9 +89,19 @@ class TestSupersededReason:
 
     def test_falls_back_to_the_cards_own_column(self):
         df = pd.DataFrame({"salary": [1, 2, 3]})
-        assert conflicts.superseded_reason(df, "drop_duplicate_rows", {}, "gone") is not None
+        assert conflicts.superseded_reason(df, "fill_median", {}, "gone") is not None
 
     def test_a_dataset_level_operation_is_never_superseded(self):
         """drop_duplicate_rows has no column, so nothing can remove what it acts on."""
         df = pd.DataFrame({"salary": [1, 2, 3]})
         assert conflicts.superseded_reason(df, "drop_duplicate_rows", {}, "") is None
+
+    def test_the_dataset_sentinel_is_not_mistaken_for_a_missing_column(self):
+        """Found live, and it silently disabled deduplication entirely.
+
+        Dataset-level issues carry column_name "DATASET" (see GraphState), which is never a
+        real column -- so "is this column still in the dataframe?" answered no every single
+        time, and every approved de-duplication was recorded as "no longer needed" and never
+        ran. The duplicates stayed in the file and the user was told the fix wasn't needed."""
+        df = pd.DataFrame({"salary": [1, 2, 3]})
+        assert conflicts.superseded_reason(df, "drop_duplicate_rows", {}, "DATASET") is None

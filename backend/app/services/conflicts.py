@@ -22,6 +22,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from app.services.operations import OPERATIONS
+
 # Operations that remove the column entirely. Anything else targeting that column afterwards
 # has nothing left to work on.
 COLUMN_REMOVING_OPERATIONS = frozenset({"drop_column"})
@@ -68,6 +70,14 @@ def superseded_reason(df: pd.DataFrame, operation: str, params: dict, column: st
     Called just before execution, when the earlier approved fixes have already been applied,
     so this reflects what the data actually looks like now rather than what was predicted.
     """
+    # A dataset-level fix has no column to lose. Deduplication carries the sentinel
+    # column_name "DATASET", which is never a real column, so the check below declared it
+    # superseded every single time and the duplicates were never removed -- an approved fix
+    # silently not running, reported as "no longer needed" when it was very much needed.
+    spec = OPERATIONS.get(operation)
+    if spec is not None and not spec.needs_column:
+        return None
+
     target = str(params.get("column") or column or "")
     if not target or target in df.columns:
         return None

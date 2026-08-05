@@ -1,0 +1,1219 @@
+customer_id,first_name,last_name,email,region,plan,signup_date,tenure_months,monthly_spend,support_tickets,last_login_days_ago,payment_failures,churned
+CUST-100108,Radia,Hopper,radia.hopper@example.com,Wales,BASIC,27 Mar 2023,25,12.65,0,3,0,no
+CUST-100277,Margaret,Johnson,margaret.johnson@example.com,N. Ireland,standard,2023-07-10,,26.9,2,27,0,no
+CUST-100935,Dennis,Torvalds,dennis.torvalds@example.com,Scotland, basic ,26/10/2025,29,9.59,0,42,0,yes
+CUST-101085,Linus,Ritchie,linus.ritchie@example.com,,premium,2023-01-11,26,66.69,1,10,0,no
+CUST-100870,Barbara,Perlman,barbara.perlman@example.com,East, basic ,3/8/2023,34,10.4,0,21,0,no
+CUST-101138,Linus,Turing,linus.turing@example.com,East, standard ,21 Apr 2022,12,27.71,1,1,0,no
+CUST-100023,Margaret,Lovelace,margaret.lovelace@example.com,West,standard,14 Apr 2025,22,23.65,2,4,0,no
+CUST-100973,Anita,Johnson,anita.johnson@example.com,N. Ireland,Premium,17/02/2025,50,64.03,2,23,1,no
+CUST-100049,Linus,Lovelace,linus.lovelace@example.com,North,standard,2025-11-02,59,24.43,2,0,0,no
+CUST-100002,Linus,Dijkstra,linus.dijkstra@example.com,East,basic,14/01/2021,32,,3,40,0,yes
+CUST-100743,Katherine,Perlman,katherine.perlman@example.com,Scotland, basic ,2025-06-20,1,9.95,2,62,0,yes
+CUST-100048,Dennis,Hopper,dennis.hopper@example.com,North, basic ,2024-01-28,20,9.05,2,28,0,yes
+CUST-100327,Alan,Turing,alan.turing@example.com,East, standard ,3/3/2021,8,25.94,0,3,1,yes
+CUST-100043,Dennis,Liskov,dennis.liskov@example.com,East,standard,28 Nov 2023,20,28.67,1,3,0,no
+CUST-101085,Linus,Ritchie,linus.ritchie@example.com,,premium,2023-01-11,26,66.69,1,10,0,no
+CUST-100393,Ada,Torvalds,ada.torvalds@example.com,Wales,Standard,02/09/2023,24,,1,7,0,no
+CUST-100459,Alan,Johnson,alan.johnson@example.com,Wales,Premium,17 Jan 2022,22,63.31,2,0,0,no
+CUST-100232,Dennis,Berners-Lee,dennis.berners-lee@example.com,Wales,premium,28 May 2025,8,71.56,0,5,0,no
+CUST-100725,Anita,Hamilton,anita.hamilton@example.com,East,PREMIUM,11/15/2024,20,60.36,7,38,0,no
+CUST-100254,Tim,Ritchie,tim.ritchie@example.com,East,basic,2021-11-12,23,11.78,1,47,0,yes
+CUST-101115,Dennis,Hamilton,dennis.hamilton@example.com,N. Ireland, standard ,27 Sep 2023,,,3,7,0,no
+CUST-100931,Margaret,Perlman,margaret.perlman@example.com,Midlands,Premium,1 Dec 2022,15,74.13,1,6,0,no
+CUST-100083,Linus,Turing,linus.turing@example.com,East,standard,21/11/2024,3,22.54,0,17,0,yes
+CUST-100520,Katherine,Ritchie,katherine.ritchie@example.com,North, premium ,08/12/2021,54,78.26,3,10,0,no
+CUST-100165,Linus,Hopper,linus.hopper@example.com,West,Basic,10 Dec 2021,28,11.8,0,9,1,no
+CUST-100252,Anita,Turing,anita.turing@example.com,Scotland, standard ,8/13/2021,20,,0,5,0,no
+CUST-100578,Barbara,Hamilton,barbara.hamilton@example.com,Scotland,Standard,11/16/2025,16,24.54,2,38,0,yes
+CUST-100864,Grace,Ritchie,grace.ritchie@example.com,East,Premium,2022-05-21,29,80.64,4,3,0,no
+CUST-100531,Ada,Liskov,ada.liskov@example.com,West,PREMIUM,2024-05-09,22,80.06,0,2,1,no
+CUST-101080,Edsger,Borg,edsger.borg@example.com,North, standard ,10/27/2024,,23.13,0,5,0,no
+CUST-100212,Ada,Dijkstra,ada.dijkstra@example.com,Wales,Premium,22 Sep 2023,1,70.01,0,27,0,yes
+CUST-100736,Alan,Dijkstra,alan.dijkstra@example.com,Midlands, basic ,6/23/2023,30,13.3,0,15,0,yes
+CUST-100190,Edsger,Borg,edsger.borg@example.com,Scotland,Premium,21 Jul 2023,3,55.7,1,32,0,no
+CUST-100045,Alan,Turing,alan.turing@example.com,East, basic ,04/05/2023,15,11.89,4,7,0,no
+CUST-100977,Radia,Berners-Lee,radia.berners-lee@example.com,West, basic ,2025-06-19,1,12.13,0,5,0,yes
+CUST-100924,Katherine,Johnson,katherine.johnson@example.com,West,PREMIUM,9/12/2024,31,78.47,0,7,0,no
+CUST-101018,Radia,Lovelace,radia.lovelace@example.com,South,Basic,24/02/2022,9,12.44,3,40,1,yes
+CUST-100799,Linus,Ritchie,linus.ritchie@example.com,Midlands,basic,22/12/2022,23,12.87,1,37,0,yes
+CUST-101102,Anita,Torvalds,anita.torvalds@example.com,South,Basic,17/08/2021,5,11.71,1,26,0,no
+CUST-100515,Margaret,Perlman,margaret.perlman@example.com,Scotland,Premium,2021-01-11,18,59.58,1,4,0,no
+CUST-101056,Grace,Lovelace,grace.lovelace@example.com,Midlands,BASIC,7/21/2024,8,,1,0,0,yes
+CUST-101025,Grace,Lovelace,grace.lovelace@example.com,Scotland, premium ,27/05/2023,20,77.43,0,29,2,yes
+CUST-100194,Margaret,Torvalds,margaret.torvalds@example.com,Midlands, premium ,9/8/2023,34,70.96,3,6,0,no
+CUST-100090,Katherine,Johnson,katherine.johnson@example.com,N. Ireland,BASIC,2023-02-25,19,,1,16,0,no
+CUST-100368,Margaret,Lovelace,margaret.lovelace@example.com,Midlands, standard ,21/09/2022,23,33.18,1,18,1,no
+CUST-100206,Ada,Turing,ada.turing@example.com,North,PREMIUM,18 Jul 2022,13,73.37,0,22,1,no
+CUST-100776,Alan,Borg,alan.borg@example.com,East,Standard,27/08/2023,27,22.79,3,8,0,no
+CUST-100156,Barbara,Liskov,barbara.liskov@example.com,Wales, standard ,2 May 2025,35,25.25,2,8,0,no
+CUST-100143,Dennis,Hopper,dennis.hopper@example.com,South,standard,10/5/2021,18,27.02,0,13,0,yes
+CUST-100876,Radia,Liskov,radia.liskov@example.com,Wales,Basic,2025-07-22,,10.6,0,32,0,yes
+CUST-100168,Katherine,Borg,katherine.borg@example.com,East,Basic,23/11/2023,,,3,45,0,yes
+CUST-101009,Alan,Berners-Lee,alan.berners-lee@example.com,North,Basic,2021-04-07,33,12.17,0,0,0,yes
+CUST-101178,Dennis,Dijkstra,dennis.dijkstra@example.com,North,BASIC,1/14/2022,24,12.2,4,10,0,no
+CUST-100850,Barbara,Berners-Lee,barbara.berners-lee@example.com,South,Basic,2025-01-16,23,12.52,2,7,0,no
+CUST-100042,Katherine,Hopper,katherine.hopper@example.com,Midlands, basic ,10 Jun 2023,10,9.32,0,1,0,no
+CUST-100897,Grace,Johnson,grace.johnson@example.com,Scotland, standard ,2023-05-18,11,26.84,0,0,1,no
+CUST-100024,Grace,Hamilton,grace.hamilton@example.com,East,Standard,2025-05-21,26,32.23,4,21,0,no
+CUST-100949,Katherine,Ritchie,katherine.ritchie@example.com,Midlands, basic ,2024-03-03,11,11.73,4,12,0,yes
+CUST-100263,Alan,Perlman,alan.perlman@example.com,Midlands,basic,28 Feb 2025,16,9.18,0,57,0,yes
+CUST-100050,Ada,Lovelace,ada.lovelace@example.com,N. Ireland,basic,12/15/2021,32,12.32,0,0,0,no
+CUST-100468,Anita,Borg,anita.borg@example.com,West,Basic,2024-08-16,33,,0,43,3,yes
+CUST-100796,Grace,Turing,grace.turing@example.com,North,STANDARD,11/11/2021,25,33.24,0,6,1,yes
+CUST-100676,Radia,Perlman,radia.perlman@example.com,Scotland,Basic,22 May 2021,1,9.1,12,8,0,yes
+CUST-100471,Barbara,Liskov,barbara.liskov@example.com,N. Ireland,premium,2025-05-25,19,63.8,4,19,0,no
+CUST-101159,Ada,Turing,ada.turing@example.com,West, basic ,02/07/2021,27,9.4,1,8,0,no
+CUST-100034,Margaret,Turing,margaret.turing@example.com,North,Basic,2025-01-14,21,9.82,4,4,1,yes
+CUST-100022,Linus,Lovelace,linus.lovelace@example.com,N. Ireland, basic ,2025-08-04,27,11.28,1,1,0,no
+CUST-100848,Radia,Borg,radia.borg@example.com,Midlands, basic ,2023-07-22,10,,1,2,0,no
+CUST-100192,Grace,Hamilton,grace.hamilton@example.com,East,BASIC,2023-12-03,9,,3,25,0,yes
+CUST-101148,Margaret,Johnson,margaret.johnson@example.com,Midlands, premium ,1/2/2022,21,73.12,1,19,0,no
+CUST-100150,Alan,Turing,alan.turing@example.com,Scotland,BASIC,2022-05-05,6,9.2,0,10,0,yes
+CUST-100434,Grace,Ritchie,grace.ritchie@example.com,South,Basic,2 Apr 2023,23,9.68,1,13,0,yes
+CUST-101088,Dennis,Berners-Lee,dennis.berners-lee@example.com,South,basic,12/4/2022,18,12.17,0,10,0,yes
+CUST-100258,Dennis,Berners-Lee,dennis.berners-lee@example.com,Scotland,Basic,2021-08-18,1,12.46,0,12,0,no
+CUST-100424,Radia,Liskov,radia.liskov@example.com,Midlands, premium ,2023-05-14,30,72.28,4,21,2,no
+CUST-100726,Grace,Berners-Lee,grace.berners-lee@example.com,East, standard ,24/11/2024,27,22.73,1,18,0,no
+CUST-101125,Dennis,Lovelace,dennis.lovelace@example.com,Wales, premium ,23/11/2023,7,61.7,0,1,0,no
+CUST-100867,Katherine,Perlman,katherine.perlman@example.com,Scotland,standard,2024-01-25,29,27.4,1,60,0,yes
+CUST-100771,Grace,Hopper,grace.hopper@example.com,Wales,Basic,8/23/2023,29,11.23,0,46,1,yes
+CUST-100326,Ada,Lovelace,ada.lovelace@example.com,Midlands, standard ,5 Jul 2024,1,27.0,1,17,0,yes
+CUST-100425,Linus,Ritchie,linus.ritchie@example.com,North,basic,2022-04-06,11,10.62,1,6,0,no
+CUST-100379,Katherine,Torvalds,katherine.torvalds@example.com,East, standard ,8 May 2025,30,28.57,0,26,0,no
+CUST-101187,Katherine,Berners-Lee,katherine.berners-lee@example.com,Scotland, basic ,03/10/2022,15,12.08,2,7,1,no
+CUST-100697,Radia,Johnson,radia.johnson@example.com,N. Ireland, basic ,16/12/2024,30,10.03,0,37,0,yes
+CUST-100754,Linus,Lovelace,linus.lovelace@example.com,Scotland,BASIC,28/08/2022,6,12.76,2,22,0,yes
+CUST-100529,Anita,Lovelace,anita.lovelace@example.com,Scotland,BASIC,9 Apr 2021,48,9.76,0,11,0,no
+CUST-101074,Dennis,Berners-Lee,dennis.berners-lee@example.com,North,basic,14 Jun 2022,21,9.05,1,8,0,no
+CUST-100124,Edsger,Hamilton,edsger.hamilton@example.com,Midlands,Standard,10/03/2021,5,,1,21,0,yes
+CUST-100413,Linus,Dijkstra,linus.dijkstra@example.com,Midlands,PREMIUM,25/04/2022,48,74.09,1,35,0,no
+CUST-100123,Radia,Dijkstra,radia.dijkstra@example.com,South, premium ,2024-06-17,16,76.66,2,4,0,no
+CUST-100513,Tim,Perlman,tim.perlman@example.com,Wales,BASIC,10/22/2021,31,10.05,3,1,0,no
+CUST-100958,Alan,Perlman,alan.perlman@example.com,North,BASIC,11/14/2023,30,9.36,0,8,0,no
+CUST-100788,Dennis,Dijkstra,dennis.dijkstra@example.com,West,standard,2023-05-01,36,,3,33,0,no
+CUST-100798,Katherine,Johnson,katherine.johnson@example.com,N. Ireland, basic ,2025-09-19,29,12.52,1,3,0,no
+CUST-100603,Radia,Hamilton,radia.hamilton@example.com,East,premium,15 Oct 2023,22,54.22,0,1,0,no
+CUST-100803,Dennis,Johnson,dennis.johnson@example.com,N. Ireland,standard,8/9/2023,32,30.12,0,32,0,yes
+CUST-100272,Barbara,Borg,barbara.borg@example.com,East,Basic,25/04/2024,3,9.46,7,2,0,no
+CUST-101108,Barbara,Hamilton,barbara.hamilton@example.com,South,basic,2023-06-28,40,10.22,1,5,0,no
+CUST-100797,Barbara,Berners-Lee,barbara.berners-lee@example.com,Scotland,PREMIUM,8/27/2025,58,66.35,3,37,0,no
+CUST-100147,Grace,Dijkstra,grace.dijkstra@example.com,East,premium,2024-08-06,16,79.34,2,40,0,no
+CUST-100268,Anita,Liskov,anita.liskov@example.com,Wales,Standard,14/08/2023,17,27.46,1,42,0,no
+CUST-100345,Ada,Hamilton,ada.hamilton@example.com,Midlands, premium ,6/10/2023,19,56.12,3,23,0,yes
+CUST-100632,Tim,Torvalds,tim.torvalds@example.com,East,standard,11/2/2024,54,24.6,3,4,0,no
+CUST-100545,Tim,Torvalds,tim.torvalds@example.com,N. Ireland, basic ,22 Dec 2024,43,11.91,0,4,0,no
+CUST-101049,Katherine,Borg,katherine.borg@example.com,East,STANDARD,2023-02-03,24,24.04,2,22,0,no
+CUST-100918,Ada,Hopper,ada.hopper@example.com,Scotland,premium,2022-10-05,11,72.34,9,8,0,no
+CUST-100260,Radia,Perlman,radia.perlman@example.com,East,basic,7 Apr 2021,8,11.11,0,14,0,yes
+CUST-101095,Alan,Hamilton,alan.hamilton@example.com,Midlands, standard ,26/11/2025,27,29.48,1,9,0,no
+CUST-100807,Tim,Liskov,tim.liskov@example.com,West,STANDARD,2021-01-14,40,23.42,0,2,0,no
+CUST-100825,Radia,Torvalds,radia.torvalds@example.com,Scotland,premium,3/2/2023,41,54.2,1,16,0,no
+CUST-100556,Edsger,Turing,edsger.turing@example.com,N. Ireland, basic ,5 Sep 2023,27,12.1,0,7,0,no
+CUST-101128,Dennis,Borg,dennis.borg@example.com,West,Standard,08/05/2025,12,33.37,0,3,0,no
+CUST-100437,Margaret,Hopper,margaret.hopper@example.com,West, standard ,24/04/2024,3,33.55,0,13,0,yes
+CUST-100613,Margaret,Hopper,margaret.hopper@example.com,Midlands,STANDARD,11 Dec 2023,23,30.95,0,7,0,no
+CUST-100182,Linus,Torvalds,linus.torvalds@example.com,East,standard,07/07/2025,39,28.67,0,6,0,no
+CUST-100376,Katherine,Ritchie,katherine.ritchie@example.com,East,Basic,23 Jul 2021,10,9.1,6,25,1,yes
+CUST-100079,Anita,Dijkstra,anita.dijkstra@example.com,Scotland,basic,24 May 2024,25,12.77,1,42,0,yes
+CUST-100230,Anita,Hopper,anita.hopper@example.com,North,basic,10/21/2021,23,13.05,0,13,0,no
+CUST-100786,Alan,Berners-Lee,alan.berners-lee@example.com,West,BASIC,17/04/2022,19,9.27,0,5,0,no
+CUST-101106,Ada,Lovelace,ada.lovelace@example.com,Midlands,STANDARD,2023-03-27,26,,13,13,0,yes
+CUST-100338,Anita,Torvalds,anita.torvalds@example.com,N. Ireland,Standard,10/11/2024,25,,2,108,0,yes
+CUST-100374,Margaret,Lovelace,margaret.lovelace@example.com,Scotland,Standard,2/10/2022,22,29.95,6,5,0,no
+CUST-100309,Dennis,Perlman,dennis.perlman@example.com,West,premium,15/01/2021,29,67.23,0,18,0,no
+CUST-100716,Linus,Lovelace,linus.lovelace@example.com,South, standard ,16/12/2025,10,23.35,3,34,0,yes
+CUST-100429,Grace,Hopper,grace.hopper@example.com,,basic,16 Dec 2021,12,,1,9,0,yes
+CUST-100640,Anita,Hamilton,anita.hamilton@example.com,West,PREMIUM,5/13/2024,44,72.92,6,28,0,no
+CUST-100733,Anita,Borg,anita.borg@example.com,N. Ireland,BASIC,2023-10-19,32,13.04,1,12,0,yes
+CUST-100730,Alan,Torvalds,alan.torvalds@example.com,North,STANDARD,9/22/2023,26,,3,18,0,no
+CUST-101181,Alan,Ritchie,alan.ritchie@example.com,Midlands,Basic,16 Nov 2022,31,13.28,0,11,0,yes
+CUST-100631,Dennis,Lovelace,dennis.lovelace@example.com,Wales,STANDARD,10/2/2024,16,31.94,1,13,0,no
+CUST-100256,Margaret,Dijkstra,margaret.dijkstra@example.com,Wales, basic ,2024-12-11,,9.1,5,34,0,yes
+CUST-100328,Margaret,Johnson,margaret.johnson@example.com,N. Ireland,Basic,24/11/2025,34,,5,51,1,yes
+CUST-100164,Grace,Torvalds,grace.torvalds@example.com,North, basic ,22/09/2025,22,9.39,3,1,0,no
+CUST-101169,Barbara,Ritchie,barbara.ritchie@example.com,N. Ireland, basic ,18/12/2023,12,12.22,0,7,0,no
+CUST-100375,Ada,Lovelace,ada.lovelace@example.com,East,basic,2022-10-16,44,11.34,1,1,1,no
+CUST-100818,Ada,Dijkstra,ada.dijkstra@example.com,Wales,basic,27 Oct 2024,31,10.97,0,16,1,yes
+CUST-100720,Grace,Berners-Lee,grace.berners-lee@example.com,South,Premium,2/13/2023,,75.68,2,17,0,no
+CUST-100562,Radia,Berners-Lee,radia.berners-lee@example.com,South,Basic,2/28/2021,36,11.61,1,7,0,no
+CUST-100636,Grace,Hopper,grace.hopper@example.com,South, standard ,2023-11-08,6,24.68,3,6,0,no
+CUST-100054,Edsger,Johnson,edsger.johnson@example.com,West,basic,12 Apr 2023,23,10.51,0,11,0,no
+CUST-100482,Margaret,Hopper,margaret.hopper@example.com,Midlands, basic ,07/07/2025,23,10.31,2,20,0,yes
+CUST-100101,Barbara,Ritchie,barbara.ritchie@example.com,East,BASIC,2022-05-13,15,9.76,1,7,0,no
+CUST-100752,Tim,Ritchie,tim.ritchie@example.com,North,Standard,10 Mar 2022,14,24.14,1,34,0,yes
+CUST-100862,Barbara,Perlman,barbara.perlman@example.com,N. Ireland,Basic,12 Nov 2022,10,12.85,3,4,0,yes
+CUST-100193,Grace,Dijkstra,grace.dijkstra@example.com,N. Ireland,STANDARD,2023-11-27,38,30.05,0,6,0,no
+CUST-100290,Linus,Perlman,linus.perlman@example.com,Midlands,STANDARD,9/11/2025,21,29.34,0,4,0,yes
+CUST-101079,Linus,Liskov,linus.liskov@example.com,South,BASIC,2022-10-17,25,9.32,0,24,0,yes
+CUST-101117,Ada,Torvalds,ada.torvalds@example.com,East, premium ,25/08/2023,21,,0,1,0,no
+CUST-100073,Grace,Hopper,grace.hopper@example.com,Midlands, premium ,4/7/2021,3,68.54,0,3,1,no
+CUST-100755,Grace,Turing,grace.turing@example.com,North,Basic,18/09/2022,45,12.02,0,0,1,no
+CUST-100519,Dennis,Johnson,dennis.johnson@example.com,South, standard ,2024-09-20,23,23.12,1,0,0,no
+CUST-100604,Edsger,Hamilton,edsger.hamilton@example.com,South,standard,2021-05-14,1,31.19,7,7,0,no
+CUST-100129,Alan,Johnson,alan.johnson@example.com,West,Premium,2021-02-28,28,73.71,0,7,0,no
+CUST-100908,Radia,Berners-Lee,radia.berners-lee@example.com,South,Standard,26 Feb 2024,22,29.15,3,11,0,no
+CUST-100628,Linus,Perlman,linus.perlman@example.com,Scotland,Basic,11 May 2024,26,10.06,1,9,0,yes
+CUST-100729,Radia,Hopper,radia.hopper@example.com,Midlands,Basic,17 Jan 2023,28,13.41,1,22,1,no
+CUST-100386,Grace,Borg,grace.borg@example.com,Wales,standard,1/1/2021,30,28.93,0,46,0,yes
+CUST-100010,Dennis,Torvalds,dennis.torvalds@example.com,West, standard ,08/10/2022,29,28.49,0,16,0,no
+CUST-101094,Edsger,Ritchie,edsger.ritchie@example.com,West,Premium,24/11/2023,24,69.17,1,6,0,no
+CUST-100541,Linus,Lovelace,linus.lovelace@example.com,North,PREMIUM,20 Mar 2023,4,59.91,0,0,1,no
+CUST-100690,Anita,Ritchie,anita.ritchie@example.com,N. Ireland,basic,24/07/2022,1,11.87,0,4,0,no
+CUST-100093,Grace,Torvalds,grace.torvalds@example.com,Wales,Premium,2/17/2024,37,56.01,0,2,0,no
+CUST-100341,Tim,Perlman,tim.perlman@example.com,Midlands,standard,07/06/2024,36,33.55,1,29,0,no
+CUST-100596,Radia,Perlman,radia.perlman@example.com,Scotland,BASIC,19 Jun 2024,13,10.6,6,10,0,no
+CUST-100295,Barbara,Turing,barbara.turing@example.com,Midlands, basic ,19 Oct 2023,32,9.25,6,6,0,yes
+CUST-100791,Linus,Johnson,linus.johnson@example.com,N. Ireland,BASIC,21/05/2024,38,13.18,0,10,0,yes
+CUST-100507,Katherine,Liskov,katherine.liskov@example.com,N. Ireland, premium ,25/03/2022,4,73.61,5,4,0,no
+CUST-100650,Margaret,Perlman,margaret.perlman@example.com,North,BASIC,24/03/2024,21,9.4,6,3,1,no
+CUST-100849,Linus,Perlman,linus.perlman@example.com,West,standard,2022-06-16,11,29.85,3,4,0,no
+CUST-100919,Alan,Turing,alan.turing@example.com,Scotland, basic ,24/10/2023,,9.3,6,8,0,no
+CUST-100944,Radia,Johnson,radia.johnson@example.com,Midlands, standard ,18 Jun 2025,30,32.18,0,14,1,no
+CUST-100392,Ada,Hopper,ada.hopper@example.com,South,standard,2024-11-03,36,23.57,1,27,0,yes
+CUST-100011,Edsger,Lovelace,edsger.lovelace@example.com,North, basic ,28 Aug 2023,42,10.25,3,8,0,no
+CUST-100817,Margaret,Ritchie,margaret.ritchie@example.com,West,BASIC,14 Oct 2025,30,12.84,1,0,0,no
+CUST-100237,Katherine,Liskov,katherine.liskov@example.com,Wales, basic ,27/07/2021,23,10.14,6,27,0,yes
+CUST-101071,Linus,Hamilton,linus.hamilton@example.com,East, basic ,21 Feb 2021,44,11.82,1,15,0,no
+CUST-101000,Ada,Dijkstra,ada.dijkstra@example.com,N. Ireland,BASIC,17/12/2023,29,12.99,1,28,0,no
+CUST-100128,Tim,Perlman,tim.perlman@example.com,North,Basic,20 Jan 2025,18,10.74,1,23,0,no
+CUST-100837,Alan,Liskov,alan.liskov@example.com,East,Premium,2024-12-20,36,59.84,3,3,0,no
+CUST-100351,Radia,Johnson,radia.johnson@example.com,South, basic ,7 Apr 2025,40,13.2,0,5,1,no
+CUST-101165,Dennis,Borg,dennis.borg@example.com,South, basic ,8/15/2023,25,12.09,0,21,2,no
+CUST-100255,Edsger,Turing,edsger.turing@example.com,Midlands,Basic,2023-04-22,36,9.61,0,10,0,yes
+CUST-100470,Katherine,Turing,katherine.turing@example.com,N. Ireland,basic,19/11/2022,21,11.16,0,3,0,no
+CUST-100666,Tim,Perlman,tim.perlman@example.com,East,Standard,1/17/2021,9,28.73,1,2,0,no
+CUST-100625,Anita,Ritchie,anita.ritchie@example.com,East,premium,18/11/2021,29,,0,23,0,no
+CUST-100196,Katherine,Hamilton,katherine.hamilton@example.com,Wales,BASIC,06/06/2021,8,10.52,0,1,0,no
+CUST-101047,Katherine,Torvalds,katherine.torvalds@example.com,Wales, standard ,2/14/2022,25,23.92,8,8,0,yes
+CUST-100003,Linus,Berners-Lee,linus.berners-lee@example.com,Midlands,Basic,19/03/2021,1,11.16,1,23,0,yes
+CUST-100948,Tim,Dijkstra,tim.dijkstra@example.com,West,basic,2021-11-20,38,11.63,2,13,0,no
+CUST-100934,Tim,Lovelace,tim.lovelace@example.com,East, standard ,3/17/2022,21,32.4,1,22,0,no
+CUST-100155,Tim,Borg,tim.borg@example.com,South,Basic,2024-07-25,26,10.1,0,7,0,no
+CUST-100053,Dennis,Johnson,dennis.johnson@example.com,Scotland, basic ,16/11/2021,8,10.18,6,15,0,no
+CUST-100057,Katherine,Berners-Lee,katherine.berners-lee@example.com,N. Ireland,premium,20/03/2021,2,56.5,5,6,0,no
+CUST-100014,Katherine,Berners-Lee,katherine.berners-lee@example.com,East, basic ,24/11/2025,13,9.11,0,13,0,no
+CUST-100153,Radia,Hopper,radia.hopper@example.com,East, basic ,14 Jul 2022,25,11.99,0,3,0,no
+CUST-100942,Grace,Torvalds,grace.torvalds@example.com,Midlands,Basic,5/25/2024,1,12.99,13,1,0,yes
+CUST-101086,Ada,Liskov,ada.liskov@example.com,Wales, basic ,26/06/2022,20,10.72,2,8,0,no
+CUST-100259,Edsger,Hopper,edsger.hopper@example.com,South,Premium,8/18/2021,29,69.17,16,4,0,no
+CUST-100396,Anita,Hamilton,anita.hamilton@example.com,Midlands, standard ,04/12/2021,16,30.96,0,0,0,no
+CUST-100665,Anita,Ritchie,anita.ritchie@example.com,N. Ireland,premium,2021-06-20,37,74.28,0,11,0,yes
+CUST-100486,Tim,Dijkstra,tim.dijkstra@example.com,N. Ireland,Premium,10 Nov 2023,19,57.59,1,2,0,no
+CUST-101048,Radia,Borg,radia.borg@example.com,East,PREMIUM,2022-05-04,19,73.09,1,15,0,no
+CUST-100893,Edsger,Borg,edsger.borg@example.com,N. Ireland,premium,01/10/2024,35,78.99,8,1,0,no
+CUST-100117,Ada,Liskov,ada.liskov@example.com,Scotland, standard ,1/27/2025,11,,2,38,0,yes
+CUST-100140,Barbara,Berners-Lee,barbara.berners-lee@example.com,North,Basic,2/24/2024,10,13.36,1,26,0,yes
+CUST-100236,Katherine,Hopper,katherine.hopper@example.com,Wales,basic,9/8/2021,44,10.73,0,61,0,yes
+CUST-100521,Edsger,Borg,edsger.borg@example.com,N. Ireland,Basic,28 Sep 2025,,11.41,2,3,1,no
+CUST-101188,Tim,Torvalds,tim.torvalds@example.com,Scotland,basic,2023-11-02,12,10.48,2,27,0,yes
+CUST-100598,Linus,Berners-Lee,linus.berners-lee@example.com,West, basic ,06/06/2024,18,9.52,0,6,0,yes
+CUST-100700,Anita,Dijkstra,anita.dijkstra@example.com,South,Basic,9 Jul 2023,36,10.1,0,9,1,no
+CUST-100200,Radia,Turing,radia.turing@example.com,Wales,STANDARD,17 Feb 2025,13,31.35,1,5,0,no
+CUST-100406,Margaret,Johnson,margaret.johnson@example.com,East,BASIC,28/05/2022,1,13.45,4,13,0,yes
+CUST-100216,Tim,Borg,tim.borg@example.com,Wales,premium,2025-10-12,37,58.2,0,33,0,no
+CUST-100276,Ada,Lovelace,ada.lovelace@example.com,Midlands, basic ,3 Oct 2023,37,12.73,2,30,0,no
+CUST-100195,Anita,Hopper,anita.hopper@example.com,South,Standard,04/08/2021,18,32.94,2,42,1,no
+CUST-100109,Linus,Dijkstra,linus.dijkstra@example.com,East,Basic,10 Oct 2023,6,11.33,0,14,0,no
+CUST-100980,Anita,Berners-Lee,anita.berners-lee@example.com,Midlands,Premium,2025-04-04,29,75.29,4,35,0,no
+CUST-100806,Ada,Turing,ada.turing@example.com,Midlands,STANDARD,2023-09-19,1,22.86,4,11,1,no
+CUST-100607,Dennis,Hopper,dennis.hopper@example.com,West,Premium,10/2/2025,39,,4,5,1,no
+CUST-101029,Edsger,Johnson,edsger.johnson@example.com,East,standard,10/15/2021,18,33.36,3,10,0,no
+CUST-100135,Anita,Johnson,anita.johnson@example.com,East,STANDARD,2022-09-02,24,23.48,2,26,0,no
+CUST-100997,Barbara,Ritchie,barbara.ritchie@example.com,West, basic ,2022-06-19,23,11.13,4,11,0,no
+CUST-100348,Linus,Ritchie,linus.ritchie@example.com,North,Basic,10/18/2023,27,9.58,2,127,0,yes
+CUST-101140,Ada,Torvalds,ada.torvalds@example.com,N. Ireland, standard ,10/11/2021,3,23.81,3,0,0,no
+CUST-100137,Radia,Torvalds,radia.torvalds@example.com,Wales, basic ,13/05/2023,34,10.34,0,41,1,yes
+CUST-100669,Katherine,Torvalds,katherine.torvalds@example.com,Wales,standard,3 Jan 2024,32,22.81,2,13,2,yes
+CUST-100696,Edsger,Berners-Lee,edsger.berners-lee@example.com,Wales,basic,2024-11-04,,13.35,0,24,0,yes
+CUST-100933,Margaret,Ritchie,margaret.ritchie@example.com,Wales,Premium,01/01/2023,44,72.01,3,29,0,no
+CUST-100915,Anita,Torvalds,anita.torvalds@example.com,East,Basic,18 Jun 2021,,11.1,0,38,0,no
+CUST-101147,Linus,Ritchie,linus.ritchie@example.com,Scotland,PREMIUM,11/18/2023,6,56.56,1,7,0,no
+CUST-100323,Linus,Perlman,linus.perlman@example.com,Scotland, standard ,2025-12-04,31,29.01,0,25,1,no
+CUST-100954,Tim,Lovelace,tim.lovelace@example.com,,Standard,2/18/2022,3,27.95,2,12,1,no
+CUST-100648,Alan,Lovelace,alan.lovelace@example.com,N. Ireland,STANDARD,7/16/2025,10,27.86,0,13,1,no
+CUST-100655,Anita,Torvalds,anita.torvalds@example.com,Scotland, standard ,2025-07-09,24,27.42,5,79,0,yes
+CUST-100366,Margaret,Perlman,margaret.perlman@example.com,East,standard,12/5/2022,21,24.03,4,7,0,no
+CUST-100152,Radia,Turing,radia.turing@example.com,South,Premium,11 Mar 2023,8,54.78,3,45,0,yes
+CUST-101069,Linus,Torvalds,linus.torvalds@example.com,N. Ireland,Standard,26/10/2025,48,26.36,3,9,0,no
+CUST-101184,Margaret,Turing,margaret.turing@example.com,North,STANDARD,15/12/2023,22,27.96,1,5,0,no
+CUST-100904,Grace,Borg,grace.borg@example.com,North,Basic,08/08/2025,59,11.56,0,2,0,no
+CUST-100046,Dennis,Johnson,dennis.johnson@example.com,Midlands,basic,25 Aug 2021,27,10.0,0,30,1,yes
+CUST-100975,Anita,Perlman,anita.perlman@example.com,Wales,STANDARD,2024-06-20,29,26.17,4,18,0,yes
+CUST-100570,Grace,Lovelace,grace.lovelace@example.com,Wales,standard,04/10/2022,29,33.5,0,3,0,no
+CUST-100273,Katherine,Lovelace,katherine.lovelace@example.com,North,BASIC,13 Jun 2025,23,10.46,3,15,0,no
+CUST-100984,Margaret,Dijkstra,margaret.dijkstra@example.com,North,STANDARD,9/6/2022,11,28.01,2,20,0,yes
+CUST-100186,Grace,Lovelace,grace.lovelace@example.com,Scotland, premium ,23 Jan 2022,36,78.56,0,9,0,no
+CUST-100291,Alan,Hopper,alan.hopper@example.com,Wales,Standard,10 Jun 2024,23,22.86,0,2,0,no
+CUST-100546,Ada,Lovelace,ada.lovelace@example.com,South,BASIC,2024-08-22,39,11.31,4,18,0,no
+CUST-100637,Ada,Hamilton,ada.hamilton@example.com,West,STANDARD,20/09/2021,38,26.39,1,1,0,no
+CUST-100347,Anita,Turing,anita.turing@example.com,North,Standard,14/06/2024,,30.65,2,5,0,no
+CUST-100359,Alan,Berners-Lee,alan.berners-lee@example.com,Midlands, standard ,12/28/2023,,,1,18,0,no
+CUST-101005,Ada,Liskov,ada.liskov@example.com,South,standard,2022-02-19,16,27.04,0,29,0,no
+CUST-100201,Tim,Berners-Lee,tim.berners-lee@example.com,Scotland,basic,07/08/2023,12,9.16,0,12,0,yes
+CUST-100532,Linus,Torvalds,linus.torvalds@example.com,Scotland, standard ,2023-01-05,29,23.81,11,14,0,no
+CUST-100858,Edsger,Borg,edsger.borg@example.com,East,BASIC,15 Jul 2025,33,12.23,0,11,0,no
+CUST-100679,Alan,Berners-Lee,alan.berners-lee@example.com,East, standard ,17 May 2023,3,32.8,1,1,0,no
+CUST-100599,Anita,Borg,anita.borg@example.com,Wales,Basic,12 Dec 2021,22,12.53,7,36,0,yes
+CUST-100508,Edsger,Berners-Lee,edsger.berners-lee@example.com,West,standard,10/09/2021,6,28.7,4,28,0,yes
+CUST-100854,Radia,Dijkstra,radia.dijkstra@example.com,Scotland,Basic,4/21/2025,58,10.27,3,41,0,no
+CUST-100559,Ada,Liskov,ada.liskov@example.com,Scotland, basic ,07/02/2021,44,12.51,13,12,0,yes
+CUST-100728,Edsger,Perlman,edsger.perlman@example.com,South,BASIC,12/12/2024,21,11.85,6,60,1,yes
+CUST-100781,Edsger,Lovelace,edsger.lovelace@example.com,West,BASIC,01/10/2022,35,13.26,2,30,0,yes
+CUST-100950,Linus,Hopper,linus.hopper@example.com,West,basic,26 Dec 2023,1,12.45,1,17,0,yes
+CUST-100577,Katherine,Berners-Lee,katherine.berners-lee@example.com,South,standard,16/01/2022,21,28.2,2,20,0,yes
+CUST-100051,Edsger,Berners-Lee,edsger.berners-lee@example.com,West,BASIC,1/17/2023,24,10.04,3,15,0,yes
+CUST-100367,Grace,Liskov,grace.liskov@example.com,West,basic,08/06/2022,28,13.21,0,8,1,no
+CUST-100089,Alan,Ritchie,alan.ritchie@example.com,Wales,premium,2024-05-08,21,75.2,8,1,0,no
+CUST-100860,Linus,Perlman,linus.perlman@example.com,East,basic,11/8/2021,51,,0,12,0,no
+CUST-100289,Anita,Ritchie,anita.ritchie@example.com,West,STANDARD,02/08/2024,41,26.15,0,16,0,no
+CUST-100009,Radia,Hopper,radia.hopper@example.com,East,PREMIUM,15 Dec 2023,22,67.55,3,9,0,no
+CUST-101046,Alan,Ritchie,alan.ritchie@example.com,Midlands,BASIC,2/19/2021,12,9.97,0,2,0,no
+CUST-100510,Katherine,Berners-Lee,katherine.berners-lee@example.com,East,STANDARD,2023-07-13,33,,0,1,0,no
+CUST-100497,Radia,Hopper,radia.hopper@example.com,East,Standard,3/15/2024,1,24.85,1,28,0,no
+CUST-100388,Barbara,Dijkstra,barbara.dijkstra@example.com,N. Ireland,Basic,23 Oct 2023,36,12.85,2,7,0,no
+CUST-101027,Tim,Torvalds,tim.torvalds@example.com,N. Ireland, standard ,2022-06-06,11,28.27,0,4,0,no
+CUST-100134,Barbara,Dijkstra,barbara.dijkstra@example.com,South,standard,5/13/2023,6,32.32,1,2,0,no
+CUST-101191,Ada,Turing,ada.turing@example.com,East,Standard,05/12/2023,,25.56,1,6,0,no
+CUST-100780,Anita,Lovelace,anita.lovelace@example.com,East,premium,11/2/2024,31,62.72,1,6,0,no
+CUST-100461,Tim,Hopper,tim.hopper@example.com,East,BASIC,2/27/2025,27,13.42,1,8,0,no
+CUST-100322,Grace,Torvalds,grace.torvalds@example.com,North,BASIC,4/12/2023,10,9.73,1,16,0,no
+CUST-100313,Tim,Perlman,tim.perlman@example.com,N. Ireland,basic,24/08/2022,22,11.47,0,0,1,no
+CUST-100329,Radia,Hamilton,radia.hamilton@example.com,North, basic ,2021-08-08,47,10.48,0,35,0,no
+CUST-100638,Grace,Dijkstra,grace.dijkstra@example.com,East,STANDARD,12/10/2022,41,26.45,2,30,0,yes
+CUST-100899,Margaret,Lovelace,margaret.lovelace@example.com,East, basic ,6 Jul 2023,25,10.98,2,30,0,yes
+CUST-101155,Radia,Turing,radia.turing@example.com,South,basic,2021-04-25,42,10.29,1,13,0,no
+CUST-100160,Linus,Lovelace,linus.lovelace@example.com,West,basic,4/18/2021,11,10.04,0,2,0,no
+CUST-101077,Katherine,Borg,katherine.borg@example.com,N. Ireland,basic,2022-01-07,12,10.76,7,7,0,yes
+CUST-101043,Katherine,Lovelace,katherine.lovelace@example.com,West,PREMIUM,2025-05-01,37,69.58,2,17,0,no
+CUST-100981,Margaret,Johnson,margaret.johnson@example.com,East,Basic,10/10/2025,41,13.05,1,8,0,no
+CUST-100760,Katherine,Torvalds,katherine.torvalds@example.com,Wales,PREMIUM,2023-09-09,29,62.0,3,18,0,no
+CUST-100075,Barbara,Johnson,barbara.johnson@example.com,Wales,Standard,1/18/2021,28,29.06,4,1,0,no
+CUST-100552,Katherine,Ritchie,katherine.ritchie@example.com,West,Standard,1/26/2021,22,,1,10,0,yes
+CUST-100675,Katherine,Torvalds,katherine.torvalds@example.com,East,Standard,17 Feb 2025,1,31.52,4,46,0,yes
+CUST-100757,Ada,Hopper,ada.hopper@example.com,N. Ireland,Standard,04/01/2024,16,25.15,1,5,0,no
+CUST-100527,Edsger,Johnson,edsger.johnson@example.com,West,STANDARD,2023-06-10,46,26.07,1,34,1,no
+CUST-100369,Ada,Dijkstra,ada.dijkstra@example.com,Midlands,BASIC,14 Apr 2023,33,11.18,0,8,0,no
+CUST-101121,Katherine,Lovelace,katherine.lovelace@example.com,Wales,Standard,15 Sep 2023,,24.29,1,11,0,no
+CUST-100281,Edsger,Turing,edsger.turing@example.com,Scotland, basic ,20 Aug 2022,42,10.5,4,11,0,no
+CUST-100955,Katherine,Dijkstra,katherine.dijkstra@example.com,,Basic,2023-12-06,23,11.79,1,2,0,yes
+CUST-101059,Ada,Dijkstra,ada.dijkstra@example.com,West, standard ,2/2/2022,,27.83,0,20,2,no
+CUST-101003,Ada,Johnson,ada.johnson@example.com,East,BASIC,24/04/2022,26,11.52,0,6,0,no
+CUST-100763,Dennis,Johnson,dennis.johnson@example.com,North,Premium,9/6/2024,31,55.81,1,8,0,no
+CUST-100081,Edsger,Hopper,edsger.hopper@example.com,N. Ireland,BASIC,14/11/2021,21,10.65,3,61,0,yes
+CUST-100175,Margaret,Hopper,margaret.hopper@example.com,Scotland,Basic,27 Jan 2024,33,11.25,5,5,0,yes
+CUST-100985,Barbara,Dijkstra,barbara.dijkstra@example.com,South,basic,17 Apr 2024,17,9.95,4,21,0,yes
+CUST-100872,Dennis,Hopper,dennis.hopper@example.com,N. Ireland,premium,12 Mar 2025,29,77.33,0,98,0,yes
+CUST-100741,Linus,Lovelace,linus.lovelace@example.com,West,Premium,01/06/2021,17,79.98,0,7,0,no
+CUST-100539,Grace,Turing,grace.turing@example.com,Scotland,Standard,20/01/2021,33,,0,13,0,no
+CUST-100839,Katherine,Berners-Lee,katherine.berners-lee@example.com,N. Ireland,Basic,9/1/2025,24,12.73,2,15,0,yes
+CUST-101167,Linus,Perlman,linus.perlman@example.com,West,Basic,9/23/2023,36,11.86,8,5,0,no
+CUST-100544,Alan,Liskov,alan.liskov@example.com,West,Standard,24 May 2022,10,27.99,1,32,0,yes
+CUST-100491,Tim,Hamilton,tim.hamilton@example.com,South,Standard,16 Sep 2024,22,31.76,7,66,0,no
+CUST-100087,Linus,Torvalds,linus.torvalds@example.com,South,BASIC,11/4/2023,5,12.84,6,84,0,yes
+CUST-100974,Ada,Borg,ada.borg@example.com,South,basic,02/08/2022,24,11.98,2,19,0,yes
+CUST-100098,Radia,Perlman,radia.perlman@example.com,Wales, basic ,28/06/2023,19,11.7,0,81,0,yes
+CUST-100691,Edsger,Hopper,edsger.hopper@example.com,Midlands,PREMIUM,08/09/2023,30,,1,12,0,no
+CUST-101133,Grace,Liskov,grace.liskov@example.com,Midlands,BASIC,01/01/2023,39,13.31,0,0,0,no
+CUST-100365,Edsger,Hamilton,edsger.hamilton@example.com,Wales, standard ,7/3/2025,44,23.17,0,10,1,no
+CUST-100543,Edsger,Berners-Lee,edsger.berners-lee@example.com,North,BASIC,4/28/2024,30,10.91,1,37,1,yes
+CUST-100269,Linus,Perlman,linus.perlman@example.com,North,PREMIUM,12/25/2023,38,76.27,2,8,0,no
+CUST-101061,Radia,Torvalds,radia.torvalds@example.com,East,Standard,17/09/2022,9,25.19,1,39,0,no
+CUST-100310,Katherine,Torvalds,katherine.torvalds@example.com,South,Basic,12/5/2021,12,9.86,4,3,0,no
+CUST-100998,Alan,Borg,alan.borg@example.com,Wales,standard,5/2/2024,25,28.88,0,10,0,yes
+CUST-100893,Edsger,Borg,edsger.borg@example.com,N. Ireland,premium,01/10/2024,35,78.99,8,1,0,no
+CUST-100881,Tim,Hamilton,tim.hamilton@example.com,East,Basic,12/11/2021,13,10.35,2,23,0,no
+CUST-101162,Grace,Hopper,grace.hopper@example.com,Scotland, basic ,1 Feb 2023,14,9.38,0,18,0,no
+CUST-100159,Ada,Liskov,ada.liskov@example.com,Wales,Premium,2025-12-16,14,62.45,0,30,0,no
+CUST-101176,Tim,Dijkstra,tim.dijkstra@example.com,Wales,premium,13 Mar 2021,33,67.83,5,0,0,no
+CUST-100687,Grace,Perlman,grace.perlman@example.com,Wales, basic ,7 Feb 2023,37,10.75,0,11,0,no
+CUST-100480,Dennis,Dijkstra,dennis.dijkstra@example.com,Midlands,Standard,27/05/2024,18,24.75,1,5,0,no
+CUST-100458,Edsger,Lovelace,edsger.lovelace@example.com,Midlands,PREMIUM,2021-02-12,14,71.68,2,12,0,no
+CUST-100653,Katherine,Torvalds,katherine.torvalds@example.com,South,basic,19 Mar 2021,32,13.03,2,0,0,no
+CUST-100751,Tim,Hamilton,tim.hamilton@example.com,South,basic,16 Dec 2022,19,9.59,1,1,1,yes
+CUST-100356,Ada,Lovelace,ada.lovelace@example.com,N. Ireland,STANDARD,11/12/2023,11,28.45,1,6,0,no
+CUST-101084,Linus,Liskov,linus.liskov@example.com,Wales, basic ,03/09/2024,19,12.0,1,18,0,no
+CUST-101146,Edsger,Lovelace,edsger.lovelace@example.com,West,BASIC,2024-03-21,34,12.63,3,100,0,yes
+CUST-100709,Radia,Johnson,radia.johnson@example.com,South,STANDARD,12/6/2023,41,25.47,0,68,0,yes
+CUST-100704,Margaret,Borg,margaret.borg@example.com,West,BASIC,21 May 2023,1,9.58,1,18,0,no
+CUST-100538,Barbara,Johnson,barbara.johnson@example.com,N. Ireland,Standard,1/20/2022,1,30.77,0,8,0,yes
+CUST-100833,Ada,Torvalds,ada.torvalds@example.com,West,STANDARD,22/11/2024,32,33.04,2,14,0,no
+CUST-100630,Barbara,Hamilton,barbara.hamilton@example.com,Wales,BASIC,2024-09-14,31,10.3,0,0,0,no
+CUST-100446,Anita,Hamilton,anita.hamilton@example.com,North,STANDARD,15 May 2022,12,32.18,5,11,0,yes
+CUST-100983,Alan,Liskov,alan.liskov@example.com,Scotland,basic,17 Jul 2025,16,12.99,4,6,0,no
+CUST-100483,Alan,Liskov,alan.liskov@example.com,Midlands,basic,18/04/2022,23,11.25,4,31,0,no
+CUST-100606,Anita,Hopper,anita.hopper@example.com,East,Standard,2021-06-08,15,28.41,2,19,0,no
+CUST-100654,Barbara,Dijkstra,barbara.dijkstra@example.com,Scotland,BASIC,10/03/2021,1,10.38,2,11,0,no
+CUST-100466,Edsger,Dijkstra,edsger.dijkstra@example.com,Wales,premium,2023-11-05,50,62.12,3,7,1,no
+CUST-100301,Grace,Perlman,grace.perlman@example.com,South,Premium,2024-02-19,33,70.42,8,20,0,no
+CUST-100435,Katherine,Ritchie,katherine.ritchie@example.com,East, basic ,11/12/2025,15,10.77,4,17,0,yes
+CUST-100426,Grace,Perlman,grace.perlman@example.com,North,basic,10/2/2024,30,9.1,2,10,0,no
+CUST-100851,Alan,Perlman,alan.perlman@example.com,North,premium,07/12/2025,10,66.73,0,5,0,no
+CUST-101030,Margaret,Torvalds,margaret.torvalds@example.com,Wales,PREMIUM,10 Mar 2021,25,74.87,0,0,0,no
+CUST-101177,Edsger,Hopper,edsger.hopper@example.com,N. Ireland,Premium,4/21/2024,4,,2,11,0,no
+CUST-100456,Anita,Hamilton,anita.hamilton@example.com,South, premium ,2025-09-09,27,57.66,8,3,0,no
+CUST-100927,Anita,Lovelace,anita.lovelace@example.com,South, basic ,05/07/2024,42,,1,2,0,no
+CUST-100300,Radia,Liskov,radia.liskov@example.com,Scotland,Basic,25 May 2022,21,11.9,1,6,0,no
+CUST-100583,Alan,Borg,alan.borg@example.com,Wales,basic,28 Apr 2023,33,10.34,5,31,0,no
+CUST-100180,Ada,Liskov,ada.liskov@example.com,South,basic,14/08/2024,28,10.47,0,54,0,yes
+CUST-100308,Margaret,Liskov,margaret.liskov@example.com,N. Ireland,Standard,9/19/2025,29,32.82,1,15,0,no
+CUST-100177,Katherine,Hamilton,katherine.hamilton@example.com,East,standard,26/03/2022,27,27.31,2,4,0,no
+CUST-100611,Dennis,Hopper,dennis.hopper@example.com,South, basic ,2023-12-19,17,11.71,3,5,0,yes
+CUST-100804,Katherine,Dijkstra,katherine.dijkstra@example.com,East, premium ,26/02/2021,1,79.61,0,2,0,yes
+CUST-100419,Tim,Hamilton,tim.hamilton@example.com,Midlands, basic ,23 Jan 2021,7,11.49,1,19,1,yes
+CUST-100403,Edsger,Perlman,edsger.perlman@example.com,Scotland,Basic,8/26/2024,16,9.33,2,2,0,no
+CUST-101067,Dennis,Turing,dennis.turing@example.com,Scotland,Standard,8/22/2024,22,,1,1,0,no
+CUST-100588,Anita,Lovelace,anita.lovelace@example.com,N. Ireland,basic,12/14/2022,19,12.32,4,93,0,yes
+CUST-101063,Anita,Torvalds,anita.torvalds@example.com,Scotland,BASIC,4/25/2021,8,10.16,0,106,0,yes
+CUST-100219,Barbara,Dijkstra,barbara.dijkstra@example.com,West, basic ,5/18/2022,18,9.67,1,30,0,no
+CUST-100436,Anita,Dijkstra,anita.dijkstra@example.com,East, standard ,2/27/2024,34,33.16,0,40,0,no
+CUST-100447,Anita,Dijkstra,anita.dijkstra@example.com,Wales, basic ,21 Nov 2021,41,13.47,4,8,1,yes
+CUST-101032,Katherine,Perlman,katherine.perlman@example.com,East, standard ,18/05/2022,22,,1,22,0,no
+CUST-100465,Anita,Hopper,anita.hopper@example.com,North,Standard,2021-01-20,19,30.13,0,11,0,no
+CUST-100494,Katherine,Hamilton,katherine.hamilton@example.com,Midlands,STANDARD,6/3/2021,60,29.81,0,53,0,yes
+CUST-100586,Margaret,Ritchie,margaret.ritchie@example.com,East,Basic,2023-07-03,27,9.21,1,24,0,no
+CUST-100524,Edsger,Hamilton,edsger.hamilton@example.com,East,Standard,2023-07-26,7,31.26,4,0,0,no
+CUST-100055,Radia,Hamilton,radia.hamilton@example.com,N. Ireland,STANDARD,2022-05-10,1,,3,153,0,yes
+CUST-100605,Katherine,Perlman,katherine.perlman@example.com,Scotland, standard ,7/14/2021,19,28.2,1,2,1,no
+CUST-101105,Alan,Turing,alan.turing@example.com,Wales,premium,9/3/2022,53,57.18,0,2,0,no
+CUST-100517,Margaret,Turing,margaret.turing@example.com,West,STANDARD,14/10/2021,34,24.65,0,3,0,no
+CUST-100455,Grace,Lovelace,grace.lovelace@example.com,East, basic ,11 Jan 2025,9,12.01,4,8,0,yes
+CUST-100346,Grace,Ritchie,grace.ritchie@example.com,West, standard ,19/07/2025,25,24.83,6,17,0,no
+CUST-100029,Margaret,Berners-Lee,margaret.berners-lee@example.com,East, basic ,9/1/2021,33,11.32,1,1,0,no
+CUST-100489,Anita,Hamilton,anita.hamilton@example.com,East, basic ,2023-03-01,42,10.13,0,0,0,no
+CUST-101144,Radia,Turing,radia.turing@example.com,East,basic,04/11/2021,30,11.94,5,57,0,yes
+CUST-101124,Anita,Berners-Lee,anita.berners-lee@example.com,Wales,basic,6/9/2025,,,3,15,0,no
+CUST-100381,Ada,Lovelace,ada.lovelace@example.com,North,Basic,2025-09-17,35,11.95,2,14,0,no
+CUST-100692,Linus,Borg,linus.borg@example.com,South,BASIC,12/5/2021,40,,5,20,0,no
+CUST-100646,Katherine,Liskov,katherine.liskov@example.com,West, basic ,2023-05-23,19,13.18,2,39,1,no
+CUST-101040,Linus,Lovelace,linus.lovelace@example.com,West,PREMIUM,07/06/2021,29,70.79,0,7,0,no
+CUST-100761,Edsger,Perlman,edsger.perlman@example.com,East,Standard,07/02/2021,52,29.62,1,4,0,no
+CUST-100968,Barbara,Torvalds,barbara.torvalds@example.com,East,Standard,11/01/2025,38,,2,14,0,no
+CUST-100372,Tim,Torvalds,tim.torvalds@example.com,North,Standard,23/06/2021,33,25.53,3,4,0,no
+CUST-101132,Edsger,Berners-Lee,edsger.berners-lee@example.com,Midlands,premium,2021-04-09,17,79.3,0,11,0,no
+CUST-101198,Grace,Borg,grace.borg@example.com,Scotland, basic ,11/05/2025,21,,3,2,1,yes
+CUST-100809,Margaret,Turing,margaret.turing@example.com,South, basic ,5 Jan 2024,6,10.4,7,3,0,yes
+CUST-101034,Anita,Turing,anita.turing@example.com,Scotland,Standard,2 Oct 2023,26,27.1,4,12,0,no
+CUST-100350,Dennis,Johnson,dennis.johnson@example.com,Midlands, basic ,4/20/2022,20,9.81,0,21,0,yes
+CUST-100629,Dennis,Borg,dennis.borg@example.com,Midlands,premium,7/7/2025,7,74.68,0,15,0,no
+CUST-101185,Margaret,Liskov,margaret.liskov@example.com,West, standard ,2021-07-08,1,,0,21,0,no
+CUST-100257,Edsger,Torvalds,edsger.torvalds@example.com,West,Premium,27 Sep 2023,15,,1,52,0,yes
+CUST-100838,Linus,Lovelace,linus.lovelace@example.com,N. Ireland,standard,1/2/2024,20,27.97,4,22,0,no
+CUST-100451,Margaret,Berners-Lee,margaret.berners-lee@example.com,North,standard,24 Jun 2024,31,29.32,1,61,0,yes
+CUST-100410,Barbara,Ritchie,barbara.ritchie@example.com,North,Premium,23 Aug 2023,13,65.17,1,25,0,no
+CUST-100584,Margaret,Hamilton,margaret.hamilton@example.com,North,Basic,22 Oct 2024,24,,4,14,0,no
+CUST-100652,Margaret,Dijkstra,margaret.dijkstra@example.com,North,standard,19/04/2022,18,32.39,2,7,0,no
+CUST-100441,Radia,Torvalds,radia.torvalds@example.com,Scotland,premium,5/20/2021,45,,3,3,0,no
+CUST-100956,Barbara,Hamilton,barbara.hamilton@example.com,West,basic,8/5/2025,34,13.02,3,14,0,no
+CUST-100488,Radia,Johnson,radia.johnson@example.com,Midlands,BASIC,8/5/2023,42,11.71,0,18,0,no
+CUST-100032,Anita,Torvalds,anita.torvalds@example.com,East,standard,08/04/2024,24,,4,2,0,no
+CUST-100418,Dennis,Dijkstra,dennis.dijkstra@example.com,Midlands,STANDARD,2024-10-12,4,28.61,1,20,0,no
+CUST-100782,Barbara,Ritchie,barbara.ritchie@example.com,Midlands, standard ,08/02/2025,28,,1,12,0,no
+CUST-100070,Alan,Berners-Lee,alan.berners-lee@example.com,North, standard ,4 Jan 2022,39,29.01,0,22,0,no
+CUST-100103,Tim,Torvalds,tim.torvalds@example.com,South,PREMIUM,2021-08-12,7,72.08,0,6,0,no
+CUST-100940,Dennis,Berners-Lee,dennis.berners-lee@example.com,West,Standard,2024-05-16,29,26.37,0,16,0,no
+CUST-100205,Edsger,Lovelace,edsger.lovelace@example.com,Scotland,BASIC,2025-11-15,3,13.05,2,5,0,no
+CUST-100245,Barbara,Perlman,barbara.perlman@example.com,Scotland,standard,8 Mar 2024,,31.06,0,7,1,yes
+CUST-100222,Edsger,Dijkstra,edsger.dijkstra@example.com,West,BASIC,26/11/2023,16,11.2,0,12,0,yes
+CUST-100142,Margaret,Borg,margaret.borg@example.com,N. Ireland,BASIC,28/03/2023,17,12.0,1,14,0,no
+CUST-100058,Margaret,Hamilton,margaret.hamilton@example.com,West, basic ,2022-10-25,10,12.32,0,13,0,yes
+CUST-100405,Linus,Hamilton,linus.hamilton@example.com,West,premium,2025-03-08,19,68.6,1,31,0,no
+CUST-100523,Grace,Liskov,grace.liskov@example.com,Scotland,Basic,09/01/2022,1,10.51,0,10,0,no
+CUST-100554,Edsger,Dijkstra,edsger.dijkstra@example.com,South, basic ,10/14/2023,37,10.09,0,14,0,no
+CUST-100462,Alan,Liskov,alan.liskov@example.com,West,Basic,22 Jan 2023,16,11.39,0,8,0,no
+CUST-100762,Alan,Ritchie,alan.ritchie@example.com,N. Ireland, basic ,2 Jan 2022,22,12.04,1,47,0,no
+CUST-100149,Anita,Perlman,anita.perlman@example.com,Wales,STANDARD,9/7/2022,27,29.46,1,55,1,yes
+CUST-100207,Radia,Johnson,radia.johnson@example.com,North, basic ,9 Jul 2022,5,12.02,8,26,0,yes
+CUST-100371,Edsger,Berners-Lee,edsger.berners-lee@example.com,Midlands,Premium,12/23/2021,44,59.53,4,12,1,no
+CUST-100021,Anita,Berners-Lee,anita.berners-lee@example.com,West,standard,6/18/2021,15,,1,15,1,no
+CUST-100892,Ada,Lovelace,ada.lovelace@example.com,Wales,Basic,08/07/2024,49,13.15,0,0,0,no
+CUST-101180,Dennis,Torvalds,dennis.torvalds@example.com,East,BASIC,02/08/2021,24,13.46,0,8,0,no
+CUST-100249,Katherine,Perlman,katherine.perlman@example.com,Wales,Basic,4/18/2025,25,10.6,0,2,0,no
+CUST-100593,Barbara,Ritchie,barbara.ritchie@example.com,Scotland,STANDARD,25 Nov 2023,10,25.1,0,1,0,no
+CUST-101190,Ada,Berners-Lee,ada.berners-lee@example.com,N. Ireland,standard,3/26/2022,33,31.22,0,11,0,yes
+CUST-100274,Alan,Berners-Lee,alan.berners-lee@example.com,N. Ireland, basic ,2024-03-25,36,13.31,3,5,0,no
+CUST-100188,Anita,Ritchie,anita.ritchie@example.com,South,Basic,3/4/2024,19,9.75,7,37,0,yes
+CUST-100047,Margaret,Turing,margaret.turing@example.com,N. Ireland,standard,3/25/2024,10,28.18,0,9,0,no
+CUST-101131,Dennis,Liskov,dennis.liskov@example.com,West,basic,2022-09-05,19,13.11,0,5,0,no
+CUST-100457,Anita,Johnson,anita.johnson@example.com,Scotland,premium,8/20/2024,1,59.21,0,1,0,no
+CUST-100847,Grace,Torvalds,grace.torvalds@example.com,West,STANDARD,10/20/2022,25,26.89,1,0,0,no
+CUST-100574,Dennis,Lovelace,dennis.lovelace@example.com,East,Basic,10/06/2024,18,12.26,2,1,0,no
+CUST-100091,Grace,Lovelace,grace.lovelace@example.com,Midlands, standard ,06/03/2021,21,24.85,1,42,1,yes
+CUST-100978,Alan,Dijkstra,alan.dijkstra@example.com,West,BASIC,2024-10-19,14,9.38,0,0,0,no
+CUST-100772,Edsger,Torvalds,edsger.torvalds@example.com,South,Standard,2024-08-10,2,32.72,1,1,0,no
+CUST-101173,Margaret,Perlman,margaret.perlman@example.com,Scotland, basic ,03/10/2023,5,11.23,2,5,0,yes
+CUST-100502,Katherine,Borg,katherine.borg@example.com,Midlands,Basic,2025-11-04,30,,0,9,0,no
+CUST-101197,Dennis,Torvalds,dennis.torvalds@example.com,N. Ireland,basic,5 Feb 2024,11,12.04,0,0,0,no
+CUST-100857,Edsger,Berners-Lee,edsger.berners-lee@example.com,West, standard ,27/04/2023,13,32.09,0,9,0,no
+CUST-100240,Tim,Johnson,tim.johnson@example.com,West,standard,10/27/2023,1,28.06,2,15,0,no
+CUST-100383,Katherine,Lovelace,katherine.lovelace@example.com,North, standard ,4/28/2023,55,27.92,1,7,0,no
+CUST-100656,Grace,Ritchie,grace.ritchie@example.com,North,Standard,2024-11-15,4,27.08,0,1,0,no
+CUST-100573,Dennis,Borg,dennis.borg@example.com,Wales, basic ,15/10/2025,19,11.89,1,16,0,no
+CUST-100828,Barbara,Torvalds,barbara.torvalds@example.com,North,Premium,1/5/2024,32,65.52,2,25,0,yes
+CUST-100706,Edsger,Perlman,edsger.perlman@example.com,Wales,Premium,20/03/2024,19,57.98,0,3,0,yes
+CUST-100333,Katherine,Lovelace,katherine.lovelace@example.com,South,Premium,2024-11-07,7,70.45,2,4,0,yes
+CUST-100211,Barbara,Turing,barbara.turing@example.com,Wales,STANDARD,5 Jan 2024,1,30.01,2,50,1,yes
+CUST-100343,Anita,Liskov,anita.liskov@example.com,Midlands, standard ,20 Apr 2022,15,23.81,3,23,0,no
+CUST-100431,Tim,Lovelace,tim.lovelace@example.com,Midlands,Basic,9 Dec 2025,36,9.25,3,16,0,no
+CUST-101019,Dennis,Lovelace,dennis.lovelace@example.com,West,BASIC,02/07/2021,27,12.02,1,30,0,yes
+CUST-100976,Dennis,Perlman,dennis.perlman@example.com,Wales,standard,2/23/2023,35,29.17,0,7,0,no
+CUST-100731,Tim,Liskov,tim.liskov@example.com,East,BASIC,19 Oct 2023,21,9.31,1,3,0,no
+CUST-100342,Edsger,Hopper,edsger.hopper@example.com,N. Ireland, standard ,07/03/2025,46,23.89,5,26,0,yes
+CUST-100512,Grace,Lovelace,grace.lovelace@example.com,Midlands, standard ,06/09/2022,1,26.13,0,6,0,no
+CUST-101052,Barbara,Liskov,barbara.liskov@example.com,East,standard,24 Feb 2021,35,23.24,5,19,0,yes
+CUST-100939,Alan,Hamilton,alan.hamilton@example.com,North, premium ,2024-06-06,45,67.77,1,0,0,no
+CUST-100682,Alan,Torvalds,alan.torvalds@example.com,South,STANDARD,5 May 2022,33,30.22,13,22,0,no
+CUST-100145,Barbara,Ritchie,barbara.ritchie@example.com,South,BASIC,2021-06-01,18,10.99,2,6,0,yes
+CUST-100006,Grace,Berners-Lee,grace.berners-lee@example.com,Midlands, standard ,08/04/2023,18,25.25,1,6,0,no
+CUST-100378,Margaret,Borg,margaret.borg@example.com,Wales,BASIC,22 Nov 2024,10,9.39,0,63,0,yes
+CUST-100670,Barbara,Lovelace,barbara.lovelace@example.com,Scotland,Premium,8/2/2022,10,72.19,0,14,0,no
+CUST-100266,Anita,Hamilton,anita.hamilton@example.com,Wales,standard,19/01/2024,,28.86,0,0,0,no
+CUST-100863,Edsger,Perlman,edsger.perlman@example.com,West,basic,24/08/2025,45,9.79,2,6,0,no
+CUST-100566,Edsger,Lovelace,edsger.lovelace@example.com,Midlands,BASIC,04/05/2024,24,13.12,12,59,0,yes
+CUST-100534,Grace,Lovelace,grace.lovelace@example.com,, basic ,2023-03-18,19,11.18,2,10,0,no
+CUST-100443,Katherine,Borg,katherine.borg@example.com,West,Premium,17/10/2024,1,58.66,1,14,0,no
+CUST-100036,Tim,Perlman,tim.perlman@example.com,Midlands,BASIC,27 Nov 2023,30,11.76,1,9,0,no
+CUST-100454,Margaret,Hamilton,margaret.hamilton@example.com,South,standard,18/01/2025,22,30.43,0,8,0,no
+CUST-100228,Ada,Torvalds,ada.torvalds@example.com,North,Standard,2023-11-13,4,28.28,1,10,0,no
+CUST-100380,Katherine,Liskov,katherine.liskov@example.com,Scotland,BASIC,24/08/2023,30,10.09,1,22,0,no
+CUST-101154,Dennis,Torvalds,dennis.torvalds@example.com,South,STANDARD,14 Jan 2023,24,31.71,0,0,0,no
+CUST-100571,Dennis,Liskov,dennis.liskov@example.com,,Standard,2022-12-27,1,33.29,1,35,0,yes
+CUST-100615,Alan,Dijkstra,alan.dijkstra@example.com,, premium ,17 Sep 2025,1,65.23,0,20,0,no
+CUST-100724,Anita,Hopper,anita.hopper@example.com,North,Standard,19/06/2022,37,26.99,1,9,0,no
+CUST-100932,Tim,Liskov,tim.liskov@example.com,North,BASIC,27 May 2025,36,11.77,2,56,0,yes
+CUST-100485,Barbara,Liskov,barbara.liskov@example.com,N. Ireland,standard,06/09/2022,10,27.38,3,3,1,no
+CUST-100783,Linus,Liskov,linus.liskov@example.com,North, premium ,12/2/2023,36,67.41,2,4,0,no
+CUST-100031,Dennis,Lovelace,dennis.lovelace@example.com,East, basic ,18 Sep 2023,45,12.61,2,1,0,no
+CUST-100362,Anita,Torvalds,anita.torvalds@example.com,Wales, standard ,3/7/2021,39,,0,1,0,no
+CUST-100822,Linus,Borg,linus.borg@example.com,N. Ireland, standard ,2025-03-06,4,24.28,0,10,0,no
+CUST-100761,Edsger,Perlman,edsger.perlman@example.com,East,Standard,07/02/2021,52,29.62,1,4,0,no
+CUST-100966,Grace,Perlman,grace.perlman@example.com,North,premium,04/02/2022,1,64.37,0,15,0,no
+CUST-101078,Ada,Ritchie,ada.ritchie@example.com,Midlands,BASIC,2/22/2023,14,9.83,9,105,0,yes
+CUST-100052,Tim,Hamilton,tim.hamilton@example.com,West, basic ,21/03/2023,45,11.59,0,13,0,no
+CUST-100293,Ada,Berners-Lee,ada.berners-lee@example.com,North,standard,07/05/2022,2,27.27,0,19,0,no
+CUST-100199,Barbara,Ritchie,barbara.ritchie@example.com,N. Ireland,PREMIUM,20/02/2025,19,71.21,1,86,0,yes
+CUST-100568,Anita,Hamilton,anita.hamilton@example.com,West,standard,2024-01-22,9,28.22,1,14,0,no
+CUST-101164,Tim,Borg,tim.borg@example.com,Wales,standard,2024-05-01,34,25.23,2,52,0,no
+CUST-100829,Edsger,Perlman,edsger.perlman@example.com,N. Ireland, premium ,3 Apr 2025,6,61.09,0,28,0,no
+CUST-100930,Alan,Dijkstra,alan.dijkstra@example.com,Midlands,BASIC,3/20/2024,23,12.8,0,6,0,no
+CUST-100548,Anita,Turing,anita.turing@example.com,Midlands,PREMIUM,08/02/2025,36,74.96,3,23,0,no
+CUST-100601,Edsger,Hopper,edsger.hopper@example.com,Wales,BASIC,5 Jul 2022,16,12.56,0,8,0,yes
+CUST-100226,Edsger,Liskov,edsger.liskov@example.com,Midlands,Premium,28 Sep 2025,1,59.91,0,4,0,no
+CUST-100991,Dennis,Borg,dennis.borg@example.com,East,basic,8/9/2025,8,13.03,2,2,1,yes
+CUST-100499,Anita,Dijkstra,anita.dijkstra@example.com,South,STANDARD,2024-01-01,16,,0,33,0,yes
+CUST-100695,Dennis,Perlman,dennis.perlman@example.com,Wales, standard ,5 May 2024,44,30.62,0,1,0,no
+CUST-100463,Grace,Borg,grace.borg@example.com,Wales,PREMIUM,2024-02-12,23,80.24,8,10,0,no
+CUST-100535,Alan,Turing,alan.turing@example.com,North,standard,2025-10-26,5,30.27,0,9,0,no
+CUST-100334,Dennis,Lovelace,dennis.lovelace@example.com,East,STANDARD,7/26/2021,32,28.28,0,18,1,no
+CUST-100587,Ada,Johnson,ada.johnson@example.com,Midlands,Basic,03/08/2025,30,12.41,0,14,0,no
+CUST-100324,Ada,Turing,ada.turing@example.com,N. Ireland,Standard,2025-08-25,10,,2,2,0,no
+CUST-100017,Tim,Hopper,tim.hopper@example.com,Wales,basic,7/14/2023,13,13.23,1,43,0,no
+CUST-101145,Radia,Berners-Lee,radia.berners-lee@example.com,Wales,premium,12 Nov 2023,29,,3,6,0,no
+CUST-100845,Edsger,Hopper,edsger.hopper@example.com,Scotland, basic ,22/06/2022,3,11.9,2,6,0,no
+CUST-100901,Alan,Liskov,alan.liskov@example.com,South, premium ,04/01/2021,28,57.31,1,13,1,no
+CUST-100187,Margaret,Perlman,margaret.perlman@example.com,West,STANDARD,2025-02-10,14,29.41,5,1,0,no
+CUST-100692,Linus,Borg,linus.borg@example.com,South,BASIC,12/5/2021,40,,5,20,0,no
+CUST-100907,Anita,Dijkstra,anita.dijkstra@example.com,Wales,basic,3/15/2023,32,9.26,1,10,0,no
+CUST-101179,Ada,Ritchie,ada.ritchie@example.com,N. Ireland,Standard,2021-09-22,2,22.67,3,8,1,yes
+CUST-100007,Alan,Berners-Lee,alan.berners-lee@example.com,East, premium ,1/18/2023,16,75.17,1,7,1,no
+CUST-100620,Edsger,Hamilton,edsger.hamilton@example.com,Wales,Premium,19/03/2021,27,73.44,3,34,0,no
+CUST-100770,Margaret,Perlman,margaret.perlman@example.com,Scotland,STANDARD,11 Mar 2024,,24.83,2,35,0,no
+CUST-100959,Edsger,Johnson,edsger.johnson@example.com,South,STANDARD,12 May 2023,14,23.83,5,9,0,yes
+CUST-101166,Anita,Torvalds,anita.torvalds@example.com,Scotland,Basic,11/12/2021,,11.8,1,3,0,no
+CUST-100816,Linus,Hamilton,linus.hamilton@example.com,North,Standard,04/03/2024,28,30.87,1,3,0,no
+CUST-100662,Dennis,Liskov,dennis.liskov@example.com,Scotland,Standard,4/28/2022,22,26.86,1,28,0,no
+CUST-100749,Barbara,Ritchie,barbara.ritchie@example.com,West, basic ,2022-04-17,22,12.81,7,13,1,no
+CUST-100019,Ada,Hamilton,ada.hamilton@example.com,Midlands,basic,28/10/2023,27,,3,16,0,yes
+CUST-101064,Margaret,Turing,margaret.turing@example.com,South, premium ,2023-11-02,13,56.46,0,0,0,no
+CUST-100038,Linus,Perlman,linus.perlman@example.com,East, basic ,11/11/2021,20,9.35,4,18,0,yes
+CUST-100540,Anita,Perlman,anita.perlman@example.com,Midlands,basic,17 Apr 2022,6,10.21,2,13,0,no
+CUST-101129,Dennis,Berners-Lee,dennis.berners-lee@example.com,Midlands, standard ,25 Dec 2024,22,33.15,4,14,0,no
+CUST-100612,Dennis,Hopper,dennis.hopper@example.com,Wales,standard,4/10/2022,18,,0,44,0,yes
+CUST-101091,Alan,Johnson,alan.johnson@example.com,East, standard ,2023-10-02,17,,0,6,0,no
+CUST-100261,Barbara,Torvalds,barbara.torvalds@example.com,Midlands, standard ,17/10/2025,19,31.65,0,19,0,no
+CUST-101168,Tim,Hopper,tim.hopper@example.com,Wales,STANDARD,17 Aug 2022,40,32.55,7,12,0,no
+CUST-100384,Ada,Torvalds,ada.torvalds@example.com,East,Standard,28 Nov 2025,25,31.15,3,11,0,no
+CUST-101057,Tim,Dijkstra,tim.dijkstra@example.com,East,standard,17/11/2025,17,29.73,6,2,0,no
+CUST-100659,Ada,Liskov,ada.liskov@example.com,Scotland,Basic,5 Jan 2023,16,9.53,0,12,1,no
+CUST-101160,Radia,Lovelace,radia.lovelace@example.com,Wales,Standard,3/14/2023,6,27.43,2,6,0,yes
+CUST-100292,Tim,Hopper,tim.hopper@example.com,Wales,STANDARD,2025-04-25,18,31.05,3,13,0,no
+CUST-100569,Dennis,Perlman,dennis.perlman@example.com,North,PREMIUM,11/11/2024,36,66.5,2,5,0,no
+CUST-100069,Dennis,Dijkstra,dennis.dijkstra@example.com,N. Ireland,Basic,7/15/2024,14,12.14,6,6,1,yes
+CUST-100814,Anita,Perlman,anita.perlman@example.com,West, standard ,2025-06-17,11,28.97,0,11,0,no
+CUST-100363,Alan,Berners-Lee,alan.berners-lee@example.com,Scotland,standard,9 Dec 2021,15,24.46,5,13,0,no
+CUST-101189,Radia,Hamilton,radia.hamilton@example.com,North,basic,5/14/2024,20,,0,4,0,yes
+CUST-101038,Alan,Torvalds,alan.torvalds@example.com,North,basic,2023-02-02,27,12.38,5,0,0,no
+CUST-100616,Radia,Ritchie,radia.ritchie@example.com,Midlands,basic,2 Jun 2021,2,10.04,1,14,0,yes
+CUST-100084,Radia,Borg,radia.borg@example.com,N. Ireland, basic ,17/09/2021,5,13.01,1,14,0,yes
+CUST-100571,Dennis,Liskov,dennis.liskov@example.com,,Standard,2022-12-27,1,33.29,1,35,0,yes
+CUST-100304,Barbara,Hamilton,barbara.hamilton@example.com,Midlands,premium,7 Dec 2025,27,75.99,1,6,0,no
+CUST-100314,Alan,Liskov,alan.liskov@example.com,North, basic ,7/5/2023,16,12.8,8,61,2,yes
+CUST-100131,Radia,Borg,radia.borg@example.com,South, standard ,2021-09-08,,31.9,5,5,0,no
+CUST-100713,Tim,Perlman,tim.perlman@example.com,Midlands,PREMIUM,11 Jun 2022,23,74.21,0,0,1,no
+CUST-100267,Grace,Perlman,grace.perlman@example.com,Scotland,basic,2/3/2025,19,9.83,2,90,1,no
+CUST-100064,Linus,Dijkstra,linus.dijkstra@example.com,West,basic,2021-05-13,43,12.4,0,1,0,no
+CUST-100525,Edsger,Perlman,edsger.perlman@example.com,East,STANDARD,7 Jun 2022,40,24.22,2,8,0,no
+CUST-101149,Margaret,Ritchie,margaret.ritchie@example.com,East,PREMIUM,03/03/2024,20,,3,37,0,no
+CUST-101026,Linus,Turing,linus.turing@example.com,West, premium ,23/10/2021,13,,0,7,0,no
+CUST-100681,Grace,Hopper,grace.hopper@example.com,Scotland,basic,5/28/2024,31,10.89,4,21,0,no
+CUST-100400,Ada,Lovelace,ada.lovelace@example.com,Scotland, standard ,2023-06-11,29,24.24,0,10,0,no
+CUST-100409,Ada,Perlman,ada.perlman@example.com,N. Ireland,BASIC,26 Mar 2023,7,11.18,3,1,0,yes
+CUST-100707,Alan,Berners-Lee,alan.berners-lee@example.com,Midlands,Basic,24/02/2024,36,12.1,0,5,0,no
+CUST-100961,Anita,Hamilton,anita.hamilton@example.com,Wales, basic ,01/09/2025,32,11.14,0,1,0,no
+CUST-100764,Edsger,Borg,edsger.borg@example.com,East, premium ,17 Mar 2021,1,55.43,0,6,0,no
+CUST-100572,Ada,Dijkstra,ada.dijkstra@example.com,N. Ireland,STANDARD,5/28/2021,4,31.95,8,14,0,no
+CUST-101017,Alan,Hamilton,alan.hamilton@example.com,Wales, basic ,22 Sep 2021,32,9.15,0,42,1,no
+CUST-100296,Katherine,Ritchie,katherine.ritchie@example.com,N. Ireland,STANDARD,2/24/2021,15,22.91,4,96,0,yes
+CUST-100008,Tim,Borg,tim.borg@example.com,Scotland,PREMIUM,2025-10-06,23,68.32,4,66,0,no
+CUST-100427,Linus,Hopper,linus.hopper@example.com,Midlands,Standard,2024-01-24,42,23.74,0,4,0,no
+CUST-101024,Ada,Liskov,ada.liskov@example.com,North,basic,26/03/2022,34,,0,38,0,no
+CUST-100736,Alan,Dijkstra,alan.dijkstra@example.com,Midlands, basic ,6/23/2023,30,13.3,0,15,0,yes
+CUST-100094,Tim,Berners-Lee,tim.berners-lee@example.com,Scotland,STANDARD,2022-07-23,5,26.38,0,3,0,no
+CUST-100148,Grace,Borg,grace.borg@example.com,Wales, basic ,12/06/2023,19,11.33,1,32,1,yes
+CUST-100633,Edsger,Perlman,edsger.perlman@example.com,North, premium ,24/02/2024,46,72.13,0,9,0,no
+CUST-101088,Dennis,Berners-Lee,dennis.berners-lee@example.com,South,basic,12/4/2022,18,12.17,0,10,0,yes
+CUST-100315,Barbara,Hamilton,barbara.hamilton@example.com,South,Standard,2 Dec 2023,7,23.43,7,2,0,no
+CUST-100617,Margaret,Torvalds,margaret.torvalds@example.com,Wales, premium ,12/05/2025,1,76.29,0,13,1,no
+CUST-100039,Dennis,Hamilton,dennis.hamilton@example.com,Scotland,Basic,8 Jan 2023,44,10.8,3,18,0,no
+CUST-100592,Alan,Johnson,alan.johnson@example.com,N. Ireland, premium ,6 Sep 2023,36,60.37,1,8,0,no
+CUST-100663,Radia,Torvalds,radia.torvalds@example.com,North,BASIC,09/12/2021,14,10.29,1,40,1,yes
+CUST-100234,Katherine,Ritchie,katherine.ritchie@example.com,Midlands,PREMIUM,2025-02-18,1,55.99,1,10,0,no
+CUST-100370,Katherine,Borg,katherine.borg@example.com,West,BASIC,2022-05-04,10,11.68,1,49,0,yes
+CUST-100061,Linus,Hopper,linus.hopper@example.com,South,BASIC,23/09/2024,22,9.45,3,9,0,yes
+CUST-100714,Radia,Torvalds,radia.torvalds@example.com,N. Ireland, standard ,2023-04-14,26,28.41,3,12,0,no
+CUST-100826,Linus,Turing,linus.turing@example.com,West, premium ,9/5/2024,32,80.02,0,1,0,no
+CUST-100474,Barbara,Lovelace,barbara.lovelace@example.com,Scotland,PREMIUM,2024-05-27,11,59.54,0,55,0,yes
+CUST-100285,Alan,Johnson,alan.johnson@example.com,East,STANDARD,15 May 2024,42,29.03,1,4,0,no
+CUST-100999,Katherine,Liskov,katherine.liskov@example.com,East,STANDARD,9/18/2023,36,28.95,0,0,0,no
+CUST-101099,Barbara,Liskov,barbara.liskov@example.com,East,Premium,21/07/2023,21,67.18,1,41,0,no
+CUST-100530,Dennis,Hamilton,dennis.hamilton@example.com,Scotland,basic,2025-10-18,30,9.07,2,0,0,no
+CUST-101127,Edsger,Perlman,edsger.perlman@example.com,South,standard,20 Oct 2025,31,,3,65,0,yes
+CUST-100189,Tim,Hopper,tim.hopper@example.com,North,Standard,2023-06-04,12,29.12,2,26,1,no
+CUST-100698,Margaret,Perlman,margaret.perlman@example.com,East,Premium,08/11/2024,55,70.86,0,12,0,no
+CUST-101051,Barbara,Dijkstra,barbara.dijkstra@example.com,Wales, basic ,03/08/2022,22,12.85,2,52,0,yes
+CUST-100282,Tim,Torvalds,tim.torvalds@example.com,East,basic,12/28/2022,50,11.97,16,18,0,yes
+CUST-100460,Linus,Ritchie,linus.ritchie@example.com,N. Ireland,Standard,08/10/2025,11,23.47,0,34,0,yes
+CUST-100173,Grace,Torvalds,grace.torvalds@example.com,Wales,Standard,11/02/2022,35,25.83,4,121,0,yes
+CUST-100360,Margaret,Berners-Lee,margaret.berners-lee@example.com,Midlands,Standard,05/01/2023,13,28.65,2,37,0,no
+CUST-101103,Radia,Liskov,radia.liskov@example.com,West,standard,19 Aug 2021,19,32.17,7,37,0,yes
+CUST-100717,Radia,Hamilton,radia.hamilton@example.com,East,Basic,7 Oct 2023,1,9.15,1,11,0,yes
+CUST-100420,Grace,Johnson,grace.johnson@example.com,West,Basic,21/07/2025,23,12.33,1,10,0,no
+CUST-100231,Edsger,Hopper,edsger.hopper@example.com,East,basic,19/09/2021,42,12.62,2,22,0,no
+CUST-101158,Ada,Dijkstra,ada.dijkstra@example.com,N. Ireland,standard,5/14/2022,14,30.17,5,0,0,yes
+CUST-100579,Radia,Johnson,radia.johnson@example.com,South,BASIC,27/03/2024,,12.68,2,16,0,no
+CUST-100044,Alan,Johnson,alan.johnson@example.com,,Standard,2024-10-09,1,26.62,1,6,0,no
+CUST-101116,Grace,Johnson,grace.johnson@example.com,Midlands,Standard,5 Jun 2021,16,28.96,4,6,0,no
+CUST-100444,Ada,Liskov,ada.liskov@example.com,South,BASIC,02/08/2024,16,12.93,4,18,0,yes
+CUST-100325,Barbara,Hamilton,barbara.hamilton@example.com,Midlands, standard ,10/7/2023,16,25.62,2,6,0,no
+CUST-100622,Edsger,Hopper,edsger.hopper@example.com,West, standard ,16/04/2022,61,28.27,4,2,0,no
+CUST-100278,Margaret,Berners-Lee,margaret.berners-lee@example.com,South,Premium,6/16/2024,7,63.34,0,12,0,no
+CUST-100947,Grace,Hamilton,grace.hamilton@example.com,N. Ireland,premium,2024-04-28,35,54.48,4,13,0,no
+CUST-100092,Margaret,Berners-Lee,margaret.berners-lee@example.com,Wales,PREMIUM,21 Mar 2023,35,56.44,2,7,0,no
+CUST-100105,Barbara,Berners-Lee,barbara.berners-lee@example.com,Midlands, standard ,2022-05-28,3,27.16,0,28,0,yes
+CUST-101137,Radia,Liskov,radia.liskov@example.com,West,Premium,02/10/2022,,74.05,0,19,0,no
+CUST-100479,Barbara,Berners-Lee,barbara.berners-lee@example.com,Wales,STANDARD,2023-04-07,10,30.57,2,14,1,no
+CUST-100442,Anita,Berners-Lee,anita.berners-lee@example.com,Wales,Basic,2024-12-11,2,11.02,2,23,0,yes
+CUST-100404,Tim,Hopper,tim.hopper@example.com,West, basic ,2022-03-15,7,12.73,3,65,0,yes
+CUST-100868,Grace,Liskov,grace.liskov@example.com,East,STANDARD,21 Aug 2021,28,29.4,0,10,0,no
+CUST-101163,Edsger,Perlman,edsger.perlman@example.com,East,standard,2022-09-10,5,25.93,7,12,0,yes
+CUST-100996,Katherine,Liskov,katherine.liskov@example.com,N. Ireland, premium ,8/23/2022,27,55.38,3,11,0,no
+CUST-100082,Anita,Berners-Lee,anita.berners-lee@example.com,Scotland,Basic,4/15/2024,5,11.49,0,33,0,yes
+CUST-100504,Anita,Liskov,anita.liskov@example.com,South,BASIC,14 Feb 2021,28,9.33,0,30,0,no
+CUST-101022,Edsger,Ritchie,edsger.ritchie@example.com,West,Standard,2023-09-22,22,27.84,3,0,0,no
+CUST-100889,Edsger,Hopper,edsger.hopper@example.com,South,standard,12 Apr 2023,40,29.94,2,5,0,no
+CUST-101101,Anita,Lovelace,anita.lovelace@example.com,Wales, basic ,05/02/2023,24,10.41,1,39,0,yes
+CUST-100250,Katherine,Torvalds,katherine.torvalds@example.com,South,STANDARD,2021-02-17,1,24.53,9,68,0,yes
+CUST-100551,Ada,Hopper,ada.hopper@example.com,East, standard ,15/08/2021,33,32.18,0,0,0,no
+CUST-100853,Katherine,Ritchie,katherine.ritchie@example.com,North, basic ,1/3/2021,45,13.46,1,14,0,no
+CUST-100316,Dennis,Perlman,dennis.perlman@example.com,N. Ireland,STANDARD,21 Sep 2024,23,23.09,5,20,1,no
+CUST-100407,Tim,Liskov,tim.liskov@example.com,South,basic,2021-12-27,27,9.1,1,0,0,no
+CUST-100811,Anita,Liskov,anita.liskov@example.com,North,Basic,23/12/2024,26,13.27,8,3,0,no
+CUST-101143,Radia,Torvalds,radia.torvalds@example.com,N. Ireland,standard,2021-07-20,19,31.11,0,11,0,yes
+CUST-100227,Margaret,Liskov,margaret.liskov@example.com,Midlands,STANDARD,21/01/2024,10,26.98,0,47,1,no
+CUST-100844,Ada,Ritchie,ada.ritchie@example.com,South, standard ,4/19/2024,16,23.71,1,0,0,yes
+CUST-100321,Grace,Hopper,grace.hopper@example.com,South,Premium,24/05/2021,10,56.34,2,26,0,no
+CUST-100699,Katherine,Lovelace,katherine.lovelace@example.com,South,Standard,17/03/2024,9,27.64,3,4,0,no
+CUST-100217,Alan,Torvalds,alan.torvalds@example.com,Scotland, standard ,3/25/2021,26,23.45,3,8,0,yes
+CUST-100995,Barbara,Berners-Lee,barbara.berners-lee@example.com,N. Ireland,Basic,12/19/2023,13,10.67,4,4,1,no
+CUST-100287,Barbara,Lovelace,barbara.lovelace@example.com,Wales,standard,2024-12-26,18,32.71,1,1,0,yes
+CUST-100673,Alan,Hamilton,alan.hamilton@example.com,Scotland, basic ,2021-06-11,46,12.22,0,55,0,yes
+CUST-100518,Radia,Torvalds,radia.torvalds@example.com,South,Basic,22/01/2022,12,9.52,0,17,0,yes
+CUST-100307,Tim,Liskov,tim.liskov@example.com,West,Basic,2021-07-11,,9.08,1,19,0,no
+CUST-100037,Barbara,Berners-Lee,barbara.berners-lee@example.com,Wales,basic,25 Jan 2022,,10.24,7,12,0,no
+CUST-100127,Grace,Borg,grace.borg@example.com,Midlands,BASIC,20 Nov 2025,18,9.34,0,13,0,no
+CUST-100575,Edsger,Liskov,edsger.liskov@example.com,Wales,Standard,25 Jun 2021,22,28.53,6,8,0,no
+CUST-100063,Edsger,Hamilton,edsger.hamilton@example.com,West,premium,05/07/2024,3,,2,56,0,yes
+CUST-100125,Alan,Berners-Lee,alan.berners-lee@example.com,East, standard ,14 Dec 2023,2,32.85,0,8,0,no
+CUST-100197,Edsger,Dijkstra,edsger.dijkstra@example.com,East,Basic,7/9/2025,24,13.17,0,11,0,no
+CUST-100641,Tim,Turing,tim.turing@example.com,Midlands, basic ,20 Apr 2025,1,10.13,1,2,0,yes
+CUST-100224,Barbara,Lovelace,barbara.lovelace@example.com,North,Basic,2021-01-15,30,10.67,3,23,0,no
+CUST-100238,Ada,Berners-Lee,ada.berners-lee@example.com,East,Basic,6/18/2024,1,11.41,1,32,0,yes
+CUST-100793,Edsger,Lovelace,edsger.lovelace@example.com,West,BASIC,2022-06-27,,10.12,0,11,1,yes
+CUST-100244,Katherine,Turing,katherine.turing@example.com,South,BASIC,8 Apr 2021,23,10.98,5,8,0,no
+CUST-100766,Dennis,Turing,dennis.turing@example.com,Midlands, basic ,15/12/2022,15,9.24,0,4,0,no
+CUST-100271,Margaret,Hopper,margaret.hopper@example.com,Scotland,standard,2 Feb 2024,27,27.47,2,32,0,no
+CUST-101037,Tim,Berners-Lee,tim.berners-lee@example.com,Midlands,Premium,2023-03-27,,58.03,3,24,0,no
+CUST-100169,Dennis,Hopper,dennis.hopper@example.com,West,standard,2025-07-26,24,24.49,0,7,0,no
+CUST-100507,Katherine,Liskov,katherine.liskov@example.com,N. Ireland, premium ,25/03/2022,4,73.61,5,4,0,no
+CUST-100358,Tim,Berners-Lee,tim.berners-lee@example.com,Midlands,basic,03/03/2024,25,11.05,1,20,0,no
+CUST-100614,Tim,Borg,tim.borg@example.com,North,basic,09/07/2021,1,9.94,0,11,0,no
+CUST-101199,Alan,Ritchie,alan.ritchie@example.com,East,Basic,2 Jan 2021,28,13.25,0,4,0,yes
+CUST-100275,Barbara,Hamilton,barbara.hamilton@example.com,Scotland,PREMIUM,2022-12-09,8,62.33,0,4,0,no
+CUST-100377,Tim,Hamilton,tim.hamilton@example.com,Wales,BASIC,2025-02-01,26,13.07,3,17,0,yes
+CUST-100452,Katherine,Hamilton,katherine.hamilton@example.com,Wales,Basic,2022-07-14,26,11.76,0,8,0,no
+CUST-100610,Alan,Hamilton,alan.hamilton@example.com,N. Ireland,Basic,2024-04-22,7,11.89,0,23,0,yes
+CUST-100299,Barbara,Hopper,barbara.hopper@example.com,East, standard ,12/10/2023,19,30.19,1,28,0,yes
+CUST-100871,Radia,Hopper,radia.hopper@example.com,Wales,Basic,11/06/2023,36,11.02,0,23,0,no
+CUST-100779,Alan,Berners-Lee,alan.berners-lee@example.com,Scotland,STANDARD,01/06/2025,23,30.28,1,32,0,no
+CUST-100172,Radia,Hopper,radia.hopper@example.com,Midlands, basic ,17/12/2022,37,10.77,2,25,1,no
+CUST-100777,Dennis,Ritchie,dennis.ritchie@example.com,Midlands,Basic,2024-06-20,28,10.76,0,27,0,yes
+CUST-101012,Linus,Borg,linus.borg@example.com,East,Basic,11/5/2022,1,10.87,0,12,0,yes
+CUST-100286,Edsger,Dijkstra,edsger.dijkstra@example.com,East, premium ,10/7/2025,35,73.21,1,9,0,no
+CUST-100066,Barbara,Hopper,barbara.hopper@example.com,North, premium ,9 Jan 2022,49,61.65,5,29,0,no
+CUST-100824,Dennis,Borg,dennis.borg@example.com,West,Standard,5/8/2021,22,28.44,3,23,0,no
+CUST-101134,Margaret,Hopper,margaret.hopper@example.com,N. Ireland,basic,2023-03-05,30,10.99,0,5,0,yes
+CUST-100422,Linus,Torvalds,linus.torvalds@example.com,Wales, standard ,17 Dec 2025,20,24.44,2,12,0,no
+CUST-100247,Anita,Torvalds,anita.torvalds@example.com,Wales,Premium,2022-12-21,,70.57,4,1,0,no
+CUST-100450,Edsger,Borg,edsger.borg@example.com,South, basic ,10/23/2024,62,12.4,0,18,1,no
+CUST-100253,Katherine,Hamilton,katherine.hamilton@example.com,N. Ireland,premium,05/12/2022,31,,0,5,0,no
+CUST-100439,Edsger,Borg,edsger.borg@example.com,South,standard,1/1/2025,1,25.37,0,1,0,yes
+CUST-100361,Grace,Berners-Lee,grace.berners-lee@example.com,Midlands,premium,2/28/2023,25,57.07,3,32,2,yes
+CUST-100988,Katherine,Dijkstra,katherine.dijkstra@example.com,South,Standard,26 May 2021,,23.32,2,4,0,no
+CUST-101110,Barbara,Liskov,barbara.liskov@example.com,West, standard ,10/03/2025,20,27.3,1,2,0,no
+CUST-101157,Katherine,Berners-Lee,katherine.berners-lee@example.com,Wales,Standard,2025-10-03,28,27.33,0,6,0,no
+CUST-100394,Edsger,Perlman,edsger.perlman@example.com,Wales,PREMIUM,13 Apr 2025,8,71.57,5,29,0,no
+CUST-100336,Tim,Torvalds,tim.torvalds@example.com,South, basic ,15 Jul 2025,1,10.42,0,11,0,yes
+CUST-100830,Grace,Perlman,grace.perlman@example.com,East,premium,7 Aug 2022,20,58.29,0,0,1,no
+CUST-100819,Tim,Torvalds,tim.torvalds@example.com,West, standard ,9 Nov 2023,29,26.11,1,1,1,no
+CUST-101096,Linus,Torvalds,linus.torvalds@example.com,East,Basic,2025-04-09,1,10.9,1,33,0,yes
+CUST-100557,Anita,Turing,anita.turing@example.com,North,premium,2025-01-04,16,67.97,0,19,0,no
+CUST-100708,Margaret,Berners-Lee,margaret.berners-lee@example.com,Scotland,Standard,2025-03-18,19,,0,5,0,no
+CUST-101111,Tim,Johnson,tim.johnson@example.com,Midlands,Premium,10/11/2021,9,71.47,1,19,0,no
+CUST-100926,Dennis,Dijkstra,dennis.dijkstra@example.com,North, standard ,28 Jun 2023,29,26.57,1,49,0,yes
+CUST-100753,Anita,Johnson,anita.johnson@example.com,South,Standard,07/09/2024,14,26.67,3,8,0,no
+CUST-100179,Grace,Ritchie,grace.ritchie@example.com,Midlands,BASIC,2021-08-28,18,12.54,1,0,0,no
+CUST-101183,Tim,Hopper,tim.hopper@example.com,Midlands,Basic,10/01/2022,15,11.77,3,29,0,yes
+CUST-100792,Dennis,Torvalds,dennis.torvalds@example.com,N. Ireland,basic,15/02/2023,31,11.42,1,14,1,yes
+CUST-100305,Anita,Torvalds,anita.torvalds@example.com,South,premium,15/08/2022,3,63.84,1,11,0,no
+CUST-100740,Katherine,Dijkstra,katherine.dijkstra@example.com,Midlands, basic ,9/15/2023,34,10.8,3,37,0,yes
+CUST-100883,Alan,Hamilton,alan.hamilton@example.com,N. Ireland, premium ,2022-02-04,33,61.32,1,6,0,yes
+CUST-100992,Radia,Borg,radia.borg@example.com,West,basic,2024-12-13,9,11.36,1,19,0,yes
+CUST-100734,Linus,Berners-Lee,linus.berners-lee@example.com,Scotland,basic,13 Feb 2024,23,10.63,1,4,0,no
+CUST-100033,Radia,Liskov,radia.liskov@example.com,Midlands, premium ,2021-12-08,1,,0,68,0,yes
+CUST-100505,Katherine,Lovelace,katherine.lovelace@example.com,West,Standard,10 Jul 2021,13,27.42,4,7,0,no
+CUST-101031,Radia,Ritchie,radia.ritchie@example.com,Midlands,basic,2024-04-22,32,11.91,1,11,0,no
+CUST-100745,Linus,Ritchie,linus.ritchie@example.com,South,Standard,10/9/2021,32,32.91,0,19,0,no
+CUST-101073,Margaret,Berners-Lee,margaret.berners-lee@example.com,Scotland,basic,19/11/2021,14,12.89,1,32,0,yes
+CUST-100417,Katherine,Hamilton,katherine.hamilton@example.com,Midlands,Standard,07/06/2023,48,,1,17,0,no
+CUST-100472,Edsger,Hamilton,edsger.hamilton@example.com,,PREMIUM,21 Mar 2022,22,57.24,0,2,0,no
+CUST-100104,Tim,Hopper,tim.hopper@example.com,Scotland, basic ,15 Apr 2024,8,9.68,0,13,0,yes
+CUST-100340,Linus,Lovelace,linus.lovelace@example.com,South, basic ,21 Jan 2022,,11.67,0,38,0,no
+CUST-100727,Ada,Lovelace,ada.lovelace@example.com,Wales, standard ,2025-01-26,31,30.61,0,1,0,no
+CUST-100500,Anita,Lovelace,anita.lovelace@example.com,Midlands,premium,26/07/2025,23,60.15,0,14,0,no
+CUST-101089,Linus,Johnson,linus.johnson@example.com,South,STANDARD,14/06/2025,21,33.08,3,46,1,yes
+CUST-101186,Grace,Ritchie,grace.ritchie@example.com,West,STANDARD,11/4/2024,33,25.25,3,15,0,no
+CUST-100712,Katherine,Johnson,katherine.johnson@example.com,Midlands,Basic,07/03/2025,23,11.4,0,11,0,yes
+CUST-101119,Anita,Hopper,anita.hopper@example.com,North,premium,11/11/2023,24,59.32,0,9,1,no
+CUST-100710,Barbara,Ritchie,barbara.ritchie@example.com,North,Standard,12/22/2022,34,26.28,4,39,1,no
+CUST-101156,Ada,Turing,ada.turing@example.com,N. Ireland,Basic,12/08/2021,12,12.27,4,6,0,no
+CUST-100994,Radia,Ritchie,radia.ritchie@example.com,South,basic,15 Nov 2022,31,13.27,0,7,0,no
+CUST-100040,Radia,Perlman,radia.perlman@example.com,N. Ireland,BASIC,2024-05-12,1,10.28,0,1,1,yes
+CUST-100905,Linus,Turing,linus.turing@example.com,Wales, basic ,2023-01-08,13,13.06,0,5,0,yes
+CUST-100170,Margaret,Torvalds,margaret.torvalds@example.com,West,BASIC,2025-05-16,17,13.26,2,0,0,yes
+CUST-100920,Katherine,Torvalds,katherine.torvalds@example.com,North,Premium,19/11/2024,33,65.24,2,32,0,no
+CUST-100737,Barbara,Turing,barbara.turing@example.com,East,basic,2023-12-11,11,12.82,0,9,0,no
+CUST-100694,Tim,Perlman,tim.perlman@example.com,East,STANDARD,5/24/2023,3,32.98,4,15,0,no
+CUST-100213,Katherine,Hamilton,katherine.hamilton@example.com,North,standard,2/17/2021,22,,0,12,1,no
+CUST-101054,Margaret,Dijkstra,margaret.dijkstra@example.com,North, standard ,1 Aug 2021,30,25.45,2,37,0,no
+CUST-100127,Grace,Borg,grace.borg@example.com,Midlands,BASIC,20 Nov 2025,18,9.34,0,13,0,no
+CUST-100585,Katherine,Berners-Lee,katherine.berners-lee@example.com,East,PREMIUM,14 Oct 2022,39,68.57,0,28,0,no
+CUST-101065,Tim,Perlman,tim.perlman@example.com,Scotland,standard,8/2/2023,44,32.79,5,8,0,no
+CUST-100130,Radia,Lovelace,radia.lovelace@example.com,Midlands, basic ,4 Jun 2021,34,9.42,0,35,0,no
+CUST-100969,Dennis,Turing,dennis.turing@example.com,West,STANDARD,6/19/2025,25,28.38,0,60,0,yes
+CUST-100888,Alan,Johnson,alan.johnson@example.com,South, premium ,5 Dec 2022,24,75.13,3,91,1,yes
+CUST-101076,Linus,Berners-Lee,linus.berners-lee@example.com,Wales, standard ,13/07/2024,38,24.06,0,20,0,no
+CUST-100561,Radia,Liskov,radia.liskov@example.com,South,standard,2021-01-20,43,23.06,1,0,0,no
+CUST-100423,Anita,Berners-Lee,anita.berners-lee@example.com,North, premium ,2025-02-06,1,,2,5,0,yes
+CUST-100099,Margaret,Lovelace,margaret.lovelace@example.com,North, basic ,14/05/2024,4,11.14,7,4,0,yes
+CUST-100060,Radia,Hamilton,radia.hamilton@example.com,North,Basic,09/11/2022,13,13.0,0,24,0,no
+CUST-100964,Ada,Lovelace,ada.lovelace@example.com,N. Ireland,BASIC,13/07/2021,11,13.3,0,22,0,no
+CUST-100445,Linus,Berners-Lee,linus.berners-lee@example.com,Scotland,STANDARD,22 Nov 2023,8,27.65,0,53,0,yes
+CUST-100306,Anita,Ritchie,anita.ritchie@example.com,Scotland,Basic,12/15/2023,36,12.5,0,3,0,no
+CUST-100133,Ada,Torvalds,ada.torvalds@example.com,West,STANDARD,1/22/2023,8,,6,42,0,yes
+CUST-100794,Margaret,Torvalds,margaret.torvalds@example.com,South,STANDARD,25/06/2024,21,,0,49,0,no
+CUST-100349,Barbara,Lovelace,barbara.lovelace@example.com,Midlands,Basic,2025-10-04,16,10.98,0,2,0,no
+CUST-100335,Tim,Borg,tim.borg@example.com,Scotland,basic,7/20/2021,23,9.54,0,0,0,yes
+CUST-100477,Barbara,Lovelace,barbara.lovelace@example.com,East,STANDARD,5/9/2024,,28.06,0,4,0,no
+CUST-101014,Barbara,Liskov,barbara.liskov@example.com,Scotland,standard,2022-06-24,17,31.65,2,14,0,no
+CUST-100221,Grace,Ritchie,grace.ritchie@example.com,Wales,STANDARD,1/17/2025,11,23.51,0,6,1,no
+CUST-100909,Tim,Hamilton,tim.hamilton@example.com,Midlands,BASIC,20/10/2024,11,12.44,1,63,0,yes
+CUST-100184,Anita,Turing,anita.turing@example.com,North,basic,13 Jul 2025,34,12.39,0,45,1,no
+CUST-100658,Barbara,Hamilton,barbara.hamilton@example.com,Scotland,PREMIUM,2024-05-28,13,75.21,1,8,0,no
+CUST-100718,Tim,Borg,tim.borg@example.com,Scotland,BASIC,1/27/2021,26,9.6,0,8,0,no
+CUST-100030,Grace,Hopper,grace.hopper@example.com,Wales,PREMIUM,11/3/2021,1,63.7,3,8,0,no
+CUST-100709,Radia,Johnson,radia.johnson@example.com,South,STANDARD,12/6/2023,41,25.47,0,68,0,yes
+CUST-100144,Ada,Johnson,ada.johnson@example.com,Wales,BASIC,9/1/2023,30,9.59,2,0,0,no
+CUST-100723,Barbara,Hopper,barbara.hopper@example.com,South,PREMIUM,25/02/2022,27,58.04,2,5,0,no
+CUST-100198,Barbara,Turing,barbara.turing@example.com,N. Ireland, standard ,2022-10-03,34,24.08,1,1,0,yes
+CUST-101039,Dennis,Liskov,dennis.liskov@example.com,West, basic ,6 Feb 2023,9,11.14,0,5,0,no
+CUST-100671,Ada,Berners-Lee,ada.berners-lee@example.com,East,Standard,2021-04-10,35,26.4,0,7,0,no
+CUST-100894,Barbara,Hamilton,barbara.hamilton@example.com,North,Standard,4/6/2023,40,32.53,7,52,0,yes
+CUST-100775,Edsger,Berners-Lee,edsger.berners-lee@example.com,West,basic,12/11/2025,21,12.14,3,46,0,yes
+CUST-100283,Margaret,Dijkstra,margaret.dijkstra@example.com,East,Standard,8/15/2025,8,28.18,0,12,0,no
+CUST-100303,Anita,Berners-Lee,anita.berners-lee@example.com,Wales,PREMIUM,2 Jan 2023,28,,0,2,0,no
+CUST-100416,Alan,Liskov,alan.liskov@example.com,South,PREMIUM,26 Mar 2022,43,59.85,1,28,0,no
+CUST-100229,Edsger,Lovelace,edsger.lovelace@example.com,Wales,Basic,2023-08-03,,11.49,0,21,0,yes
+CUST-100209,Margaret,Berners-Lee,margaret.berners-lee@example.com,North, basic ,7/1/2022,1,10.55,3,24,1,no
+CUST-101123,Barbara,Berners-Lee,barbara.berners-lee@example.com,North,basic,24 Apr 2022,22,13.46,0,3,0,no
+CUST-100567,Radia,Hopper,radia.hopper@example.com,Midlands, basic ,10/13/2025,24,13.18,1,6,0,no
+CUST-100071,Radia,Hopper,radia.hopper@example.com,North,Standard,2023-07-04,32,22.68,0,8,0,no
+CUST-101066,Katherine,Borg,katherine.borg@example.com,N. Ireland, basic ,2022-05-22,7,12.37,0,8,0,yes
+CUST-100215,Margaret,Lovelace,margaret.lovelace@example.com,Midlands,Basic,6 Nov 2024,5,9.93,0,3,0,yes
+CUST-101010,Radia,Liskov,radia.liskov@example.com,West,Standard,2022-07-16,14,23.95,0,5,0,no
+CUST-100937,Barbara,Borg,barbara.borg@example.com,North, premium ,25/06/2021,1,68.62,0,18,0,yes
+CUST-100506,Dennis,Dijkstra,dennis.dijkstra@example.com,West,Basic,07/12/2022,11,10.26,0,94,0,yes
+CUST-100834,Edsger,Berners-Lee,edsger.berners-lee@example.com,N. Ireland,Basic,2022-02-20,17,9.12,0,0,1,no
+CUST-101002,Alan,Hamilton,alan.hamilton@example.com,Midlands,BASIC,7/6/2022,5,13.33,2,6,0,yes
+CUST-100744,Alan,Borg,alan.borg@example.com,East,Basic,2024-09-18,29,11.61,0,11,0,no
+CUST-100808,Alan,Hamilton,alan.hamilton@example.com,Scotland,basic,5/23/2024,28,11.61,0,40,1,no
+CUST-100191,Barbara,Johnson,barbara.johnson@example.com,Midlands, basic ,27 Dec 2022,23,12.43,7,31,0,yes
+CUST-100618,Radia,Liskov,radia.liskov@example.com,Midlands,standard,7/5/2023,1,31.34,0,13,0,yes
+CUST-100068,Anita,Dijkstra,anita.dijkstra@example.com,West,PREMIUM,25 Feb 2022,,54.68,2,1,0,no
+CUST-100815,Radia,Hopper,radia.hopper@example.com,N. Ireland,standard,2025-03-12,25,22.99,0,19,0,no
+CUST-100166,Edsger,Turing,edsger.turing@example.com,North,PREMIUM,03/07/2023,8,60.24,2,16,0,no
+CUST-101175,Radia,Torvalds,radia.torvalds@example.com,West,Standard,24/02/2024,31,24.43,2,20,0,yes
+CUST-101142,Margaret,Dijkstra,margaret.dijkstra@example.com,Scotland,standard,3 Mar 2022,45,23.69,0,43,1,no
+CUST-100686,Katherine,Liskov,katherine.liskov@example.com,Scotland,premium,23 Dec 2024,,73.94,8,11,0,no
+CUST-100882,Margaret,Ritchie,margaret.ritchie@example.com,West, standard ,2021-10-03,6,30.39,1,14,1,no
+CUST-101068,Barbara,Torvalds,barbara.torvalds@example.com,East,STANDARD,10/06/2022,44,25.85,1,82,0,yes
+CUST-101153,Katherine,Johnson,katherine.johnson@example.com,N. Ireland, standard ,1/22/2021,38,33.29,0,16,0,no
+CUST-100945,Edsger,Berners-Lee,edsger.berners-lee@example.com,South,basic,2025-03-05,12,12.78,1,9,0,no
+CUST-100216,Tim,Borg,tim.borg@example.com,Wales,premium,2025-10-12,37,58.2,0,33,0,no
+CUST-100122,Linus,Hamilton,linus.hamilton@example.com,East,Standard,17/05/2024,32,33.6,1,2,0,no
+CUST-100643,Barbara,Johnson,barbara.johnson@example.com,North,premium,4 Jan 2023,3,55.89,1,15,0,no
+CUST-100982,Tim,Dijkstra,tim.dijkstra@example.com,Wales, premium ,11/4/2024,5,57.66,4,6,0,no
+CUST-100765,Grace,Berners-Lee,grace.berners-lee@example.com,East, premium ,13/07/2023,10,75.11,0,4,0,no
+CUST-100248,Anita,Turing,anita.turing@example.com,East,BASIC,13 Apr 2023,6,12.33,0,4,1,no
+CUST-101045,Katherine,Dijkstra,katherine.dijkstra@example.com,N. Ireland,PREMIUM,2021-08-07,33,79.32,9,2,0,no
+CUST-101171,Anita,Liskov,anita.liskov@example.com,Scotland, basic ,4/25/2021,22,,0,26,0,no
+CUST-100118,Radia,Lovelace,radia.lovelace@example.com,North,STANDARD,5 Jun 2024,1,23.37,0,16,3,no
+CUST-100801,Tim,Lovelace,tim.lovelace@example.com,Scotland,premium,4/22/2022,57,64.07,4,56,0,no
+CUST-100703,Katherine,Ritchie,katherine.ritchie@example.com,Scotland,STANDARD,5 Jul 2021,24,26.95,0,10,0,no
+CUST-100138,Tim,Liskov,tim.liskov@example.com,Scotland,Basic,2024-11-03,1,,1,14,0,yes
+CUST-100558,Linus,Ritchie,linus.ritchie@example.com,,STANDARD,5 Oct 2022,,24.11,0,10,0,no
+CUST-100896,Margaret,Ritchie,margaret.ritchie@example.com,North, standard ,2021-07-24,35,32.96,2,4,1,no
+CUST-100683,Tim,Liskov,tim.liskov@example.com,North,Premium,11/20/2021,29,56.35,2,15,0,no
+CUST-100914,Grace,Borg,grace.borg@example.com,Scotland,standard,8/8/2024,32,23.24,5,12,0,no
+CUST-100511,Alan,Berners-Lee,alan.berners-lee@example.com,Midlands, basic ,4/15/2021,15,13.03,7,12,0,no
+CUST-100810,Linus,Borg,linus.borg@example.com,South, standard ,10/20/2022,18,33.4,2,50,0,yes
+CUST-100667,Barbara,Turing,barbara.turing@example.com,South,BASIC,20/05/2023,31,11.33,0,0,1,no
+CUST-100758,Radia,Liskov,radia.liskov@example.com,Scotland,Standard,2021-06-17,35,31.02,3,0,0,no
+CUST-100887,Anita,Hamilton,anita.hamilton@example.com,N. Ireland,Standard,23 Nov 2021,21,27.85,2,7,0,yes
+CUST-100476,Katherine,Lovelace,katherine.lovelace@example.com,West,BASIC,12 Feb 2025,12,11.39,2,16,0,no
+CUST-100879,Katherine,Ritchie,katherine.ritchie@example.com,Midlands,Standard,2022-02-21,1,23.41,0,40,0,no
+CUST-101126,Tim,Borg,tim.borg@example.com,West,basic,2024-03-25,42,11.57,0,1,0,no
+CUST-100923,Katherine,Turing,katherine.turing@example.com,Scotland,standard,27 Dec 2024,,29.52,0,11,0,no
+CUST-100550,Linus,Perlman,linus.perlman@example.com,Wales,premium,23/07/2021,42,57.33,1,15,0,no
+CUST-100095,Alan,Dijkstra,alan.dijkstra@example.com,Midlands, basic ,22 Dec 2021,29,11.51,1,14,0,no
+CUST-100916,Grace,Hamilton,grace.hamilton@example.com,Wales,PREMIUM,1/21/2023,31,74.78,0,1,0,no
+CUST-100972,Tim,Liskov,tim.liskov@example.com,West, standard ,2023-09-06,10,32.83,0,3,0,no
+CUST-100202,Linus,Hamilton,linus.hamilton@example.com,South,premium,5/10/2023,45,79.41,0,13,0,no
+CUST-100649,Linus,Ritchie,linus.ritchie@example.com,Midlands,Standard,2023-09-01,25,24.99,1,48,0,yes
+CUST-100711,Edsger,Liskov,edsger.liskov@example.com,Midlands,BASIC,9/27/2021,22,9.75,7,30,0,no
+CUST-100382,Alan,Turing,alan.turing@example.com,West,STANDARD,19 May 2025,9,25.38,1,8,0,no
+CUST-100748,Radia,Torvalds,radia.torvalds@example.com,Wales,BASIC,09/04/2024,22,12.86,0,22,1,no
+CUST-101114,Katherine,Johnson,katherine.johnson@example.com,East,standard,8 Feb 2023,30,27.53,1,5,0,no
+CUST-100012,Edsger,Ritchie,edsger.ritchie@example.com,Scotland, basic ,2024-10-15,31,11.54,0,3,0,no
+CUST-100141,Tim,Liskov,tim.liskov@example.com,Midlands,basic,26/10/2023,8,13.09,2,8,0,yes
+CUST-100176,Edsger,Hopper,edsger.hopper@example.com,South,standard,4/7/2024,33,27.35,4,3,0,no
+CUST-100634,Barbara,Ritchie,barbara.ritchie@example.com,Scotland, standard ,2/8/2023,25,32.91,1,31,0,yes
+CUST-100120,Dennis,Turing,dennis.turing@example.com,Scotland, premium ,9/25/2021,4,72.05,7,17,1,no
+CUST-100647,Linus,Turing,linus.turing@example.com,Wales,premium,2025-08-03,,69.42,0,6,0,no
+CUST-101172,Dennis,Liskov,dennis.liskov@example.com,Wales, standard ,1/25/2022,31,,4,11,0,no
+CUST-100967,Radia,Liskov,radia.liskov@example.com,Wales,basic,2023-01-21,1,9.23,1,8,0,no
+CUST-100318,Radia,Liskov,radia.liskov@example.com,N. Ireland,Basic,21 Aug 2023,37,9.84,2,0,0,no
+CUST-100921,Anita,Liskov,anita.liskov@example.com,N. Ireland,basic,08/07/2025,23,10.31,6,7,0,no
+CUST-100432,Grace,Johnson,grace.johnson@example.com,North,STANDARD,5/9/2021,1,22.83,0,42,0,no
+CUST-100522,Barbara,Ritchie,barbara.ritchie@example.com,North, basic ,2025-02-03,7,12.56,1,16,0,yes
+CUST-100364,Margaret,Berners-Lee,margaret.berners-lee@example.com,East, premium ,10 May 2025,8,64.53,3,5,0,no
+CUST-100514,Ada,Ritchie,ada.ritchie@example.com,N. Ireland,basic,2024-03-08,1,12.67,4,18,0,yes
+CUST-100401,Linus,Borg,linus.borg@example.com,East, basic ,6/4/2024,39,10.91,0,5,0,yes
+CUST-100880,Tim,Borg,tim.borg@example.com,Wales, standard ,7/21/2024,1,31.58,0,6,0,yes
+CUST-100467,Alan,Dijkstra,alan.dijkstra@example.com,Scotland,standard,2/15/2022,39,32.93,1,28,0,no
+CUST-100852,Katherine,Hopper,katherine.hopper@example.com,South, premium ,5/16/2022,35,70.42,1,4,0,no
+CUST-100951,Grace,Johnson,grace.johnson@example.com,Wales, standard ,28 Jul 2021,31,25.63,10,0,0,no
+CUST-101041,Anita,Berners-Lee,anita.berners-lee@example.com,,standard,3/18/2021,30,32.7,5,8,0,no
+CUST-100223,Linus,Johnson,linus.johnson@example.com,, basic ,11/09/2022,27,11.25,1,16,0,no
+CUST-100689,Alan,Berners-Lee,alan.berners-lee@example.com,Scotland,standard,03/08/2024,34,32.62,4,3,0,no
+CUST-101023,Radia,Hopper,radia.hopper@example.com,Scotland,standard,28 Dec 2024,20,28.91,0,9,2,yes
+CUST-100395,Anita,Liskov,anita.liskov@example.com,West,Premium,5/10/2021,19,62.36,0,23,0,no
+CUST-100843,Edsger,Liskov,edsger.liskov@example.com,Wales, basic ,7 Jun 2024,11,9.61,1,77,0,yes
+CUST-100722,Edsger,Johnson,edsger.johnson@example.com,North, standard ,2021-12-18,22,23.29,0,20,0,no
+CUST-100132,Alan,Dijkstra,alan.dijkstra@example.com,Midlands,standard,2025-03-20,33,,0,46,0,yes
+CUST-100922,Katherine,Turing,katherine.turing@example.com,N. Ireland,Basic,10 May 2022,19,12.28,3,9,1,yes
+CUST-101011,Ada,Ritchie,ada.ritchie@example.com,Midlands, standard ,17/06/2024,23,27.19,0,0,0,no
+CUST-100353,Ada,Dijkstra,ada.dijkstra@example.com,South,basic,9/23/2021,9,,0,27,0,no
+CUST-100390,Tim,Berners-Lee,tim.berners-lee@example.com,North,Standard,5 Apr 2025,17,31.69,3,2,2,yes
+CUST-100623,Katherine,Dijkstra,katherine.dijkstra@example.com,South,Basic,16/06/2021,20,12.55,0,28,0,yes
+CUST-100498,Tim,Lovelace,tim.lovelace@example.com,East,Basic,8/3/2022,1,9.41,6,9,0,yes
+CUST-100910,Linus,Lovelace,linus.lovelace@example.com,West,Standard,11/19/2022,,33.72,0,31,0,no
+CUST-100685,Radia,Lovelace,radia.lovelace@example.com,Wales,Basic,7/18/2022,,11.17,1,14,0,yes
+CUST-100756,Linus,Berners-Lee,linus.berners-lee@example.com,West,STANDARD,7/27/2021,26,30.91,0,5,0,no
+CUST-100678,Tim,Liskov,tim.liskov@example.com,N. Ireland,STANDARD,4/7/2024,28,23.87,1,47,0,no
+CUST-100537,Radia,Johnson,radia.johnson@example.com,South,Basic,2025-05-12,39,11.3,1,6,1,no
+CUST-100664,Tim,Berners-Lee,tim.berners-lee@example.com,N. Ireland, basic ,09/07/2023,6,11.48,1,3,1,no
+CUST-100161,Dennis,Hamilton,dennis.hamilton@example.com,Scotland, standard ,7/8/2022,11,25.95,3,67,0,yes
+CUST-100555,Radia,Johnson,radia.johnson@example.com,Scotland,Standard,9/23/2025,23,24.11,0,20,0,no
+CUST-100960,Katherine,Perlman,katherine.perlman@example.com,West,premium,26/03/2023,11,59.02,5,76,0,yes
+CUST-100539,Grace,Turing,grace.turing@example.com,Scotland,Standard,20/01/2021,33,,0,13,0,no
+CUST-100600,Grace,Ritchie,grace.ritchie@example.com,West,Premium,13/01/2023,7,70.51,0,3,0,no
+CUST-101107,Anita,Borg,anita.borg@example.com,East,BASIC,13 Mar 2021,18,11.37,1,7,0,no
+CUST-100533,Alan,Perlman,alan.perlman@example.com,Midlands,Basic,5/23/2022,22,9.98,7,16,0,no
+CUST-101020,Ada,Perlman,ada.perlman@example.com,West,premium,11/9/2025,28,71.07,0,14,1,no
+CUST-100354,Katherine,Lovelace,katherine.lovelace@example.com,East,basic,10/3/2021,36,12.96,4,4,0,yes
+CUST-100684,Tim,Torvalds,tim.torvalds@example.com,East, basic ,16 Aug 2025,1,12.48,1,4,0,no
+CUST-100965,Ada,Hamilton,ada.hamilton@example.com,Wales,Premium,2025-04-16,19,60.58,0,7,0,no
+CUST-100900,Edsger,Lovelace,edsger.lovelace@example.com,N. Ireland,Basic,14 Feb 2023,16,11.22,0,11,0,no
+CUST-100013,Grace,Hamilton,grace.hamilton@example.com,Scotland,BASIC,6/27/2025,25,12.93,1,47,1,yes
+CUST-100185,Linus,Berners-Lee,linus.berners-lee@example.com,Scotland,STANDARD,9/22/2022,15,23.55,0,25,0,no
+CUST-101083,Grace,Lovelace,grace.lovelace@example.com,West, basic ,3/25/2025,16,9.7,1,50,0,no
+CUST-100813,Linus,Johnson,linus.johnson@example.com,N. Ireland,PREMIUM,5 Jun 2023,4,56.43,1,0,0,no
+CUST-101082,Tim,Perlman,tim.perlman@example.com,N. Ireland,basic,13/02/2024,31,9.58,4,42,0,yes
+CUST-100970,Anita,Dijkstra,anita.dijkstra@example.com,West,Standard,07/08/2021,36,27.63,4,0,0,no
+CUST-100917,Ada,Torvalds,ada.torvalds@example.com,N. Ireland,basic,27/01/2021,9,13.34,2,5,0,yes
+CUST-100739,Linus,Lovelace,linus.lovelace@example.com,East,basic,24/01/2024,26,11.59,1,21,0,yes
+CUST-100203,Edsger,Perlman,edsger.perlman@example.com,West, basic ,10/20/2021,29,13.08,2,20,0,yes
+CUST-100528,Alan,Perlman,alan.perlman@example.com,Scotland,standard,14 Jun 2022,46,29.43,3,19,0,no
+CUST-101120,Edsger,Ritchie,edsger.ritchie@example.com,Midlands, basic ,2025-03-10,39,11.13,1,10,0,no
+CUST-100408,Dennis,Borg,dennis.borg@example.com,West,basic,17/12/2024,33,10.6,1,0,0,no
+CUST-100594,Grace,Hamilton,grace.hamilton@example.com,N. Ireland,basic,2/3/2021,45,12.99,2,27,0,no
+CUST-100902,Dennis,Hopper,dennis.hopper@example.com,West,standard,24/11/2025,21,31.59,2,0,0,no
+CUST-100635,Dennis,Borg,dennis.borg@example.com,Scotland,Standard,5/17/2021,18,23.22,2,24,1,no
+CUST-100076,Grace,Hopper,grace.hopper@example.com,Scotland,basic,4/13/2023,,10.41,5,3,0,yes
+CUST-101060,Barbara,Berners-Lee,barbara.berners-lee@example.com,South,basic,03/05/2025,44,11.75,0,10,0,no
+CUST-100100,Ada,Ritchie,ada.ritchie@example.com,North,basic,8/4/2023,1,12.2,0,43,0,yes
+CUST-100581,Barbara,Liskov,barbara.liskov@example.com,Scotland,basic,24 Apr 2024,7,12.31,0,28,1,no
+CUST-100121,Linus,Hamilton,linus.hamilton@example.com,South, basic ,25/05/2025,9,12.49,2,3,0,yes
+CUST-100866,Margaret,Turing,margaret.turing@example.com,Midlands,standard,7/18/2022,20,29.66,0,4,0,no
+CUST-100812,Dennis,Dijkstra,dennis.dijkstra@example.com,N. Ireland,premium,20/06/2024,31,76.26,3,14,0,no
+CUST-100495,Dennis,Torvalds,dennis.torvalds@example.com,Wales, premium ,2025-12-18,14,77.25,4,8,0,yes
+CUST-100246,Edsger,Liskov,edsger.liskov@example.com,Midlands,Premium,3/18/2023,29,57.39,3,105,1,yes
+CUST-100774,Grace,Liskov,grace.liskov@example.com,Midlands,basic,11/27/2021,25,10.33,5,7,0,no
+CUST-101135,Anita,Berners-Lee,anita.berners-lee@example.com,South,basic,26/11/2022,6,,1,9,0,yes
+CUST-100280,Dennis,Hamilton,dennis.hamilton@example.com,N. Ireland,STANDARD,25/03/2024,6,25.52,0,3,0,no
+CUST-100389,Barbara,Turing,barbara.turing@example.com,Midlands,basic,2021-08-05,38,,1,1,0,no
+CUST-100602,Linus,Perlman,linus.perlman@example.com,South,Basic,01/11/2024,8,12.58,1,6,0,yes
+CUST-100028,Anita,Johnson,anita.johnson@example.com,Midlands,BASIC,21 Jan 2022,31,12.67,2,29,0,no
+CUST-101104,Dennis,Johnson,dennis.johnson@example.com,East, basic ,8 Dec 2022,33,12.86,8,18,0,no
+CUST-100805,Anita,Liskov,anita.liskov@example.com,North, standard ,24/06/2023,1,30.09,4,4,0,no
+CUST-100621,Anita,Lovelace,anita.lovelace@example.com,West,premium,2 Aug 2025,25,71.24,0,8,0,no
+CUST-100936,Edsger,Berners-Lee,edsger.berners-lee@example.com,West, premium ,11/05/2024,38,69.5,3,1,0,no
+CUST-101016,Alan,Hopper,alan.hopper@example.com,West,Basic,1 Jun 2022,23,9.84,2,44,0,yes
+CUST-101042,Grace,Hopper,grace.hopper@example.com,South, basic ,2021-09-08,37,12.0,2,10,0,no
+CUST-100167,Linus,Turing,linus.turing@example.com,Wales,STANDARD,3/8/2025,7,25.59,2,15,0,no
+CUST-101136,Ada,Berners-Lee,ada.berners-lee@example.com,West, standard ,2021-04-13,48,22.86,2,14,0,no
+CUST-100493,Ada,Berners-Lee,ada.berners-lee@example.com,South,Standard,4/16/2023,26,25.52,4,11,0,no
+CUST-100890,Linus,Borg,linus.borg@example.com,Wales,Basic,10/10/2021,31,12.73,1,38,0,yes
+CUST-101055,Grace,Berners-Lee,grace.berners-lee@example.com,East,STANDARD,2024-03-10,,22.85,5,8,0,no
+CUST-100773,Tim,Berners-Lee,tim.berners-lee@example.com,West,standard,3/6/2021,10,33.15,5,28,0,no
+CUST-100553,Linus,Ritchie,linus.ritchie@example.com,North, standard ,03/06/2024,25,29.3,0,6,0,no
+CUST-101093,Margaret,Ritchie,margaret.ritchie@example.com,N. Ireland,premium,22 Jun 2022,24,76.94,1,37,0,no
+CUST-101161,Alan,Perlman,alan.perlman@example.com,South,basic,10 Jul 2024,1,9.65,0,24,0,yes
+CUST-100790,Anita,Borg,anita.borg@example.com,Wales,Premium,01/07/2022,25,59.22,0,5,0,yes
+CUST-100886,Anita,Ritchie,anita.ritchie@example.com,Midlands, standard ,24 Oct 2021,22,26.32,3,24,0,no
+CUST-100925,Radia,Liskov,radia.liskov@example.com,Midlands,Premium,2022-07-27,35,63.46,1,26,0,no
+CUST-100302,Anita,Dijkstra,anita.dijkstra@example.com,N. Ireland, standard ,06/12/2023,1,27.08,5,0,0,yes
+CUST-100065,Anita,Lovelace,anita.lovelace@example.com,North,standard,7 Apr 2021,26,28.82,1,4,0,no
+CUST-101058,Radia,Lovelace,radia.lovelace@example.com,East, basic ,3/7/2022,31,13.08,3,4,0,no
+CUST-100015,Barbara,Turing,barbara.turing@example.com,West,premium,13/10/2023,22,63.85,5,17,0,no
+CUST-100674,Ada,Hopper,ada.hopper@example.com,N. Ireland,STANDARD,23/02/2024,6,24.03,0,16,0,no
+CUST-101170,Edsger,Borg,edsger.borg@example.com,N. Ireland, standard ,2023-05-09,21,31.02,0,2,0,no
+CUST-101006,Alan,Berners-Lee,alan.berners-lee@example.com,Midlands,standard,1/8/2024,15,27.33,3,10,0,no
+CUST-100428,Katherine,Torvalds,katherine.torvalds@example.com,South,Premium,27/08/2022,30,57.68,2,24,0,no
+CUST-100875,Edsger,Hopper,edsger.hopper@example.com,East,Premium,6/12/2023,34,63.85,0,1,0,no
+CUST-100759,Margaret,Liskov,margaret.liskov@example.com,Midlands,Basic,22/03/2025,,12.6,11,10,0,no
+CUST-100158,Barbara,Johnson,barbara.johnson@example.com,Scotland,premium,2021-07-26,22,72.14,0,30,0,no
+CUST-100344,Radia,Ritchie,radia.ritchie@example.com,South,standard,21 May 2021,2,26.81,1,46,0,yes
+CUST-100891,Linus,Dijkstra,linus.dijkstra@example.com,West, standard ,24 Jun 2024,17,32.01,5,0,0,no
+CUST-100738,Edsger,Borg,edsger.borg@example.com,North, basic ,26 Feb 2021,20,11.58,0,16,0,no
+CUST-100115,Ada,Berners-Lee,ada.berners-lee@example.com,Wales,Premium,17 Mar 2023,12,55.66,2,38,0,no
+CUST-100565,Anita,Lovelace,anita.lovelace@example.com,North,premium,22/04/2024,28,73.19,1,22,0,no
+CUST-100957,Tim,Torvalds,tim.torvalds@example.com,Midlands,standard,2021-03-19,20,32.63,0,45,0,no
+CUST-100337,Dennis,Liskov,dennis.liskov@example.com,Scotland,Basic,6 Oct 2025,21,11.33,0,6,0,no
+CUST-100235,Radia,Hopper,radia.hopper@example.com,Midlands,standard,5/19/2024,14,30.95,3,0,0,no
+CUST-100657,Ada,Lovelace,ada.lovelace@example.com,Wales,STANDARD,25/11/2021,21,24.42,6,14,0,no
+CUST-101072,Grace,Turing,grace.turing@example.com,Wales,standard,6/12/2021,7,33.51,0,3,0,no
+CUST-100106,Linus,Dijkstra,linus.dijkstra@example.com,,basic,24/05/2022,36,12.49,0,35,0,no
+CUST-100962,Anita,Turing,anita.turing@example.com,,Premium,24 Mar 2025,17,59.88,2,34,0,no
+CUST-100110,Ada,Ritchie,ada.ritchie@example.com,East,standard,8/12/2023,28,23.76,1,15,0,no
+CUST-100251,Barbara,Berners-Lee,barbara.berners-lee@example.com,Wales,STANDARD,11 May 2022,1,32.22,0,26,0,no
+CUST-101100,Alan,Johnson,alan.johnson@example.com,N. Ireland,Basic,12/18/2021,15,9.7,5,21,0,yes
+CUST-100735,Dennis,Dijkstra,dennis.dijkstra@example.com,N. Ireland,BASIC,23 Oct 2023,27,12.08,1,10,0,yes
+CUST-100242,Edsger,Turing,edsger.turing@example.com,Midlands,BASIC,20/12/2023,27,,2,49,0,yes
+CUST-101152,Katherine,Dijkstra,katherine.dijkstra@example.com,Midlands,STANDARD,18/11/2024,34,31.25,0,7,0,no
+CUST-100785,Edsger,Turing,edsger.turing@example.com,West,premium,2021-03-11,9,64.88,1,55,0,no
+CUST-100433,Alan,Perlman,alan.perlman@example.com,Scotland, basic ,26/03/2021,24,9.19,1,11,0,no
+CUST-100560,Katherine,Torvalds,katherine.torvalds@example.com,Wales,STANDARD,04/09/2022,26,28.4,0,1,0,no
+CUST-100536,Dennis,Liskov,dennis.liskov@example.com,Wales,standard,22/03/2024,1,31.0,1,9,0,no
+CUST-100787,Margaret,Perlman,margaret.perlman@example.com,North,STANDARD,25 Oct 2021,39,30.33,1,17,0,no
+CUST-100279,Dennis,Lovelace,dennis.lovelace@example.com,West,standard,10/13/2025,11,29.85,0,1,0,no
+CUST-100112,Tim,Perlman,tim.perlman@example.com,Wales,standard,9 Sep 2024,17,23.29,1,32,0,yes
+CUST-100842,Edsger,Johnson,edsger.johnson@example.com,North,BASIC,10/3/2024,18,,0,19,0,yes
+CUST-101112,Margaret,Perlman,margaret.perlman@example.com,,Basic,1 Jul 2025,30,11.72,0,9,0,no
+CUST-100220,Edsger,Liskov,edsger.liskov@example.com,Midlands,PREMIUM,15/02/2021,14,62.5,0,23,0,yes
+CUST-100496,Katherine,Perlman,katherine.perlman@example.com,N. Ireland,PREMIUM,1 Aug 2022,28,67.31,1,11,0,no
+CUST-100795,Grace,Borg,grace.borg@example.com,East,basic,2023-01-24,18,11.87,2,57,0,yes
+CUST-101036,Linus,Liskov,linus.liskov@example.com,North,standard,08/01/2021,18,31.97,5,63,0,yes
+CUST-100399,Grace,Liskov,grace.liskov@example.com,Midlands,STANDARD,24 Aug 2023,46,,0,21,0,no
+CUST-100077,Grace,Borg,grace.borg@example.com,N. Ireland, basic ,01/06/2022,32,11.51,0,84,0,yes
+CUST-100005,Margaret,Hamilton,margaret.hamilton@example.com,Midlands,basic,2023-01-15,16,11.34,2,4,0,no
+CUST-100162,Radia,Borg,radia.borg@example.com,Scotland,standard,2021-08-24,36,28.97,1,4,0,no
+CUST-100331,Barbara,Johnson,barbara.johnson@example.com,Scotland,basic,9/19/2021,7,12.29,3,29,0,no
+CUST-100715,Barbara,Ritchie,barbara.ritchie@example.com,South,PREMIUM,11/26/2025,1,54.75,2,0,0,no
+CUST-100016,Edsger,Turing,edsger.turing@example.com,South,standard,8/23/2022,21,,0,10,1,no
+CUST-101118,Edsger,Borg,edsger.borg@example.com,North,premium,9 Apr 2022,29,76.39,1,10,0,no
+CUST-100516,Margaret,Borg,margaret.borg@example.com,Scotland,basic,9/1/2024,12,10.81,1,4,1,yes
+CUST-100869,Dennis,Turing,dennis.turing@example.com,Scotland,premium,18/11/2024,6,61.79,1,9,0,no
+CUST-100946,Tim,Borg,tim.borg@example.com,Scotland,standard,2022-02-02,24,26.22,0,15,0,no
+CUST-100225,Dennis,Perlman,dennis.perlman@example.com,East, premium ,2/13/2022,39,55.34,1,6,0,no
+CUST-100943,Edsger,Torvalds,edsger.torvalds@example.com,West,PREMIUM,09/06/2025,24,77.8,4,11,0,no
+CUST-100332,Dennis,Perlman,dennis.perlman@example.com,North, basic ,2024-12-02,,10.07,0,27,0,yes
+CUST-101070,Linus,Perlman,linus.perlman@example.com,South,standard,7 Jan 2023,49,26.28,7,5,0,no
+CUST-100018,Grace,Johnson,grace.johnson@example.com,West, basic ,2024-11-18,32,13.31,1,0,0,no
+CUST-100126,Barbara,Hopper,barbara.hopper@example.com,N. Ireland,Basic,10 Mar 2023,1,,2,7,1,yes
+CUST-100088,Dennis,Berners-Lee,dennis.berners-lee@example.com,Midlands,Basic,15 Apr 2021,,9.81,0,50,0,yes
+CUST-101050,Anita,Liskov,anita.liskov@example.com,N. Ireland,Basic,08/03/2021,5,12.96,0,16,0,no
+CUST-100111,Dennis,Turing,dennis.turing@example.com,South,STANDARD,12 Dec 2022,34,30.29,2,16,0,no
+CUST-100963,Radia,Borg,radia.borg@example.com,, basic ,4/22/2024,22,10.33,7,17,0,yes
+CUST-100414,Alan,Liskov,alan.liskov@example.com,Wales,Basic,2024-10-17,20,12.85,2,20,1,no
+CUST-100086,Anita,Lovelace,anita.lovelace@example.com,N. Ireland,Premium,2022-06-15,21,79.19,0,2,0,no
+CUST-100526,Radia,Borg,radia.borg@example.com,N. Ireland,BASIC,12/05/2022,59,11.17,5,6,0,no
+CUST-100112,Tim,Perlman,tim.perlman@example.com,Wales,standard,9 Sep 2024,17,23.29,1,32,0,yes
+CUST-100877,Katherine,Ritchie,katherine.ritchie@example.com,South,Standard,6/9/2021,54,27.84,1,3,0,no
+CUST-100677,Margaret,Borg,margaret.borg@example.com,Wales,Standard,2021-09-09,31,30.35,0,64,2,yes
+CUST-100398,Alan,Dijkstra,alan.dijkstra@example.com,South, basic ,2021-04-16,33,10.46,0,17,0,no
+CUST-100484,Radia,Perlman,radia.perlman@example.com,North, standard ,2024-11-10,29,29.84,1,7,0,no
+CUST-100865,Linus,Johnson,linus.johnson@example.com,Scotland,BASIC,2024-08-12,2,11.04,2,6,1,no
+CUST-101033,Margaret,Dijkstra,margaret.dijkstra@example.com,N. Ireland,premium,26/03/2025,17,,1,6,1,yes
+CUST-100680,Edsger,Dijkstra,edsger.dijkstra@example.com,N. Ireland, basic ,12/27/2023,17,13.23,2,7,0,yes
+CUST-100878,Katherine,Hopper,katherine.hopper@example.com,East, standard ,2 Jan 2024,6,30.44,1,5,0,no
+CUST-100626,Ada,Hamilton,ada.hamilton@example.com,Midlands, basic ,2025-04-02,41,10.91,1,66,1,yes
+CUST-100821,Anita,Lovelace,anita.lovelace@example.com,North,PREMIUM,14 Mar 2024,1,60.84,3,25,0,no
+CUST-100481,Grace,Johnson,grace.johnson@example.com,N. Ireland,basic,20/02/2024,6,10.06,3,7,0,no
+CUST-100004,Katherine,Dijkstra,katherine.dijkstra@example.com,Wales,basic,22 Jul 2021,31,10.88,7,15,0,no
+CUST-100412,Katherine,Lovelace,katherine.lovelace@example.com,N. Ireland, premium ,2023-02-26,11,,1,5,0,no
+CUST-100639,Dennis,Hopper,dennis.hopper@example.com,Scotland,PREMIUM,2023-10-19,,79.04,0,18,0,no
+CUST-100174,Grace,Ritchie,grace.ritchie@example.com,East,standard,11/18/2024,41,26.05,0,24,0,no
+CUST-100702,Grace,Hamilton,grace.hamilton@example.com,West, basic ,4 Nov 2025,4,,0,78,0,yes
+CUST-100668,Dennis,Liskov,dennis.liskov@example.com,South,Premium,12/28/2024,32,54.24,7,48,0,no
+CUST-100317,Barbara,Hamilton,barbara.hamilton@example.com,N. Ireland, standard ,27 Apr 2025,,24.92,1,77,0,no
+CUST-100116,Anita,Hopper,anita.hopper@example.com,South, standard ,9 Jul 2024,,31.44,0,18,0,no
+CUST-100987,Tim,Johnson,tim.johnson@example.com,Scotland,BASIC,24 Feb 2024,2,11.68,1,33,0,yes
+CUST-100097,Anita,Hamilton,anita.hamilton@example.com,Scotland, standard ,01/01/2021,27,25.21,0,2,0,no
+CUST-101151,Radia,Turing,radia.turing@example.com,N. Ireland,standard,2021-08-23,24,25.36,1,0,0,no
+CUST-100885,Margaret,Hamilton,margaret.hamilton@example.com,North,Premium,2024-06-17,19,76.58,1,15,0,no
+CUST-100163,Margaret,Ritchie,margaret.ritchie@example.com,West, standard ,5 Jul 2022,23,26.74,1,1,0,no
+CUST-100056,Dennis,Borg,dennis.borg@example.com,N. Ireland,basic,6/20/2025,41,10.55,1,16,0,no
+CUST-100563,Ada,Torvalds,ada.torvalds@example.com,Wales, standard ,06/07/2024,32,31.92,5,50,0,no
+CUST-100311,Radia,Ritchie,radia.ritchie@example.com,Midlands,Basic,5 Dec 2025,16,12.71,0,5,0,no
+CUST-100701,Barbara,Torvalds,barbara.torvalds@example.com,West,Standard,01/11/2024,16,27.27,0,16,0,no
+CUST-100136,Margaret,Borg,margaret.borg@example.com,Midlands, premium ,3/28/2024,17,76.84,0,4,0,no
+CUST-100769,Dennis,Borg,dennis.borg@example.com,North,STANDARD,7 Dec 2025,35,23.26,0,24,0,yes
+CUST-100438,Anita,Ritchie,anita.ritchie@example.com,Wales,STANDARD,04/11/2022,30,25.31,0,8,0,no
+CUST-100582,Ada,Ritchie,ada.ritchie@example.com,Wales,STANDARD,17/09/2024,7,30.87,0,7,1,yes
+CUST-100373,Margaret,Lovelace,margaret.lovelace@example.com,Midlands,STANDARD,7/20/2023,18,23.07,0,1,0,no
+CUST-100549,Ada,Perlman,ada.perlman@example.com,Midlands,BASIC,8/8/2021,34,10.22,1,0,1,no
+CUST-100898,Grace,Torvalds,grace.torvalds@example.com,East,STANDARD,2022-09-22,15,22.89,0,51,0,no
+CUST-100448,Anita,Ritchie,anita.ritchie@example.com,N. Ireland, basic ,2023-10-27,27,10.53,7,2,0,yes
+CUST-100509,Tim,Borg,tim.borg@example.com,North,standard,2022-05-28,5,31.08,1,9,0,yes
+CUST-101141,Ada,Lovelace,ada.lovelace@example.com,Scotland, basic ,2023-03-02,35,10.38,1,18,1,no
+CUST-100501,Margaret,Liskov,margaret.liskov@example.com,North,Premium,2024-11-28,43,63.89,0,82,0,no
+CUST-101113,Barbara,Liskov,barbara.liskov@example.com,Scotland, basic ,20 Dec 2025,34,9.78,0,1,0,no
+CUST-100831,Ada,Borg,ada.borg@example.com,Midlands,basic,14/10/2024,31,12.68,2,12,0,no
+CUST-100732,Tim,Berners-Lee,tim.berners-lee@example.com,Scotland, premium ,17/07/2025,25,62.73,1,8,0,no
+CUST-100660,Radia,Berners-Lee,radia.berners-lee@example.com,N. Ireland,premium,09/06/2022,42,66.03,2,27,0,no
+CUST-100873,Tim,Berners-Lee,tim.berners-lee@example.com,Wales,PREMIUM,12/22/2022,30,79.41,0,1,0,no
+CUST-100609,Grace,Borg,grace.borg@example.com,South,BASIC,2024-12-14,18,9.78,2,14,0,yes
+CUST-100352,Margaret,Perlman,margaret.perlman@example.com,Wales,Basic,2021-07-13,39,11.4,3,48,0,yes
+CUST-101013,Grace,Ritchie,grace.ritchie@example.com,N. Ireland,Standard,09/10/2021,,24.23,0,21,0,no
+CUST-101097,Linus,Lovelace,linus.lovelace@example.com,Scotland,Basic,03/07/2024,12,12.53,0,16,0,yes
+CUST-100430,Barbara,Torvalds,barbara.torvalds@example.com,South,premium,2023-04-13,46,79.8,2,3,1,no
+CUST-100688,Dennis,Dijkstra,dennis.dijkstra@example.com,South, premium ,2024-07-09,25,66.41,0,5,0,no
+CUST-100642,Margaret,Ritchie,margaret.ritchie@example.com,West,premium,11/4/2021,25,79.47,0,12,1,no
+CUST-101182,Katherine,Berners-Lee,katherine.berners-lee@example.com,South, basic ,23/05/2024,32,9.79,7,5,0,no
+CUST-100270,Grace,Dijkstra,grace.dijkstra@example.com,Midlands,basic,2025-09-13,12,9.22,1,8,0,no
+CUST-100204,Margaret,Hopper,margaret.hopper@example.com,N. Ireland, basic ,15 May 2023,35,12.76,0,75,0,yes
+CUST-100832,Radia,Torvalds,radia.torvalds@example.com,Wales,Basic,2024-12-16,14,11.74,3,20,0,no
+CUST-100841,Margaret,Lovelace,margaret.lovelace@example.com,N. Ireland,premium,14 Jun 2023,12,80.41,3,14,0,no
+CUST-100912,Alan,Torvalds,alan.torvalds@example.com,East,standard,2021-01-08,2,,6,88,0,yes
+CUST-100789,Grace,Johnson,grace.johnson@example.com,N. Ireland, basic ,28/04/2025,21,12.77,8,28,0,no
+CUST-100846,Grace,Turing,grace.turing@example.com,Midlands,standard,8/12/2021,14,23.96,0,20,0,no
+CUST-100624,Anita,Ritchie,anita.ritchie@example.com,Scotland,Basic,2025-07-15,30,12.3,4,5,1,no
+CUST-100645,Linus,Berners-Lee,linus.berners-lee@example.com,East, basic ,23 Apr 2024,26,,6,39,0,yes
+CUST-101081,Margaret,Borg,margaret.borg@example.com,N. Ireland,premium,9/15/2023,41,67.98,0,3,1,no
+CUST-100986,Katherine,Berners-Lee,katherine.berners-lee@example.com,N. Ireland,PREMIUM,17 Apr 2021,7,71.06,0,2,0,no
+CUST-100385,Katherine,Turing,katherine.turing@example.com,South,basic,6/23/2022,14,9.82,0,22,1,no
+CUST-101193,Linus,Hopper,linus.hopper@example.com,South,STANDARD,18 Jun 2022,39,30.52,3,15,0,yes
+CUST-100993,Alan,Johnson,alan.johnson@example.com,Midlands,Premium,2021-12-07,1,79.28,1,57,0,yes
+CUST-101195,Margaret,Berners-Lee,margaret.berners-lee@example.com,South,Premium,15/05/2025,26,,1,9,0,no
+CUST-100027,Barbara,Hamilton,barbara.hamilton@example.com,N. Ireland,standard,4 Sep 2021,8,23.65,3,14,0,no
+CUST-100928,Dennis,Dijkstra,dennis.dijkstra@example.com,North,PREMIUM,18/08/2024,16,,0,0,0,no
+CUST-101174,Tim,Ritchie,tim.ritchie@example.com,Wales, basic ,2025-04-25,18,10.87,2,37,0,no
+CUST-100239,Linus,Johnson,linus.johnson@example.com,N. Ireland,basic,8/23/2022,2,,1,6,0,no
+CUST-100597,Edsger,Dijkstra,edsger.dijkstra@example.com,N. Ireland,Basic,1/10/2023,36,9.12,0,9,0,no
+CUST-100941,Margaret,Johnson,margaret.johnson@example.com,Scotland, standard ,2025-08-08,,23.2,0,9,0,yes
+CUST-101053,Radia,Lovelace,radia.lovelace@example.com,N. Ireland,premium,5/28/2023,26,68.75,0,8,1,no
+CUST-100074,Katherine,Johnson,katherine.johnson@example.com,Midlands,PREMIUM,2023-07-26,,77.41,0,11,0,yes
+CUST-100547,Alan,Perlman,alan.perlman@example.com,N. Ireland, premium ,05/12/2023,27,80.98,0,28,0,no
+CUST-101035,Dennis,Hopper,dennis.hopper@example.com,West,premium,24/06/2025,34,,1,26,0,no
+CUST-101098,Dennis,Johnson,dennis.johnson@example.com,South,basic,17 Jul 2024,8,9.92,0,5,0,no
+CUST-100953,Anita,Turing,anita.turing@example.com,East, standard ,7 Dec 2021,29,23.11,0,43,0,no
+CUST-100312,Dennis,Turing,dennis.turing@example.com,Midlands,Basic,23/12/2025,,,4,12,0,yes
+CUST-101044,Anita,Liskov,anita.liskov@example.com,North,basic,2025-07-04,27,,2,2,1,no
+CUST-100262,Margaret,Lovelace,margaret.lovelace@example.com,Scotland,BASIC,2 Feb 2023,1,10.05,7,12,0,yes
+CUST-100895,Barbara,Ritchie,barbara.ritchie@example.com,Midlands,Basic,09/08/2021,17,10.67,0,30,0,yes
+CUST-100001,Radia,Lovelace,radia.lovelace@example.com,South, basic ,18 Oct 2023,3,12.07,0,2,1,no
+CUST-100355,Linus,Turing,linus.turing@example.com,East,basic,2023-12-07,1,,1,10,0,no
+CUST-100214,Dennis,Berners-Lee,dennis.berners-lee@example.com,N. Ireland,basic,25 Aug 2023,12,13.35,4,18,0,no
+CUST-100861,Dennis,Berners-Lee,dennis.berners-lee@example.com,Scotland, basic ,2022-04-25,9,11.66,0,27,0,no
+CUST-101196,Grace,Hopper,grace.hopper@example.com,East, basic ,2024-07-03,,12.56,2,2,0,yes
+CUST-100929,Anita,Turing,anita.turing@example.com,East, premium ,24 Aug 2021,1,79.31,5,30,0,no
+CUST-100041,Dennis,Hamilton,dennis.hamilton@example.com,South,BASIC,24/02/2023,39,13.48,0,3,0,no
+CUST-100693,Grace,Dijkstra,grace.dijkstra@example.com,West,BASIC,5/1/2024,9,,7,20,0,no
+CUST-100415,Radia,Liskov,radia.liskov@example.com,Wales,premium,2021-04-02,33,56.27,6,6,0,no
+CUST-100218,Dennis,Berners-Lee,dennis.berners-lee@example.com,Wales,standard,8/14/2022,29,24.72,0,12,0,no
+CUST-100778,Edsger,Berners-Lee,edsger.berners-lee@example.com,South, basic ,5/24/2021,,12.31,0,3,0,no
+CUST-100469,Tim,Johnson,tim.johnson@example.com,Midlands,PREMIUM,2022-02-15,16,78.4,0,12,0,no
+CUST-100979,Linus,Turing,linus.turing@example.com,East,BASIC,4/7/2025,1,,3,7,0,no
+CUST-100747,Anita,Torvalds,anita.torvalds@example.com,South,basic,8/19/2023,1,9.41,1,13,0,no
+CUST-100026,Grace,Hopper,grace.hopper@example.com,West, basic ,6 Dec 2022,13,,0,99,0,yes
+CUST-100802,Linus,Ritchie,linus.ritchie@example.com,Wales, standard ,11/12/2021,1,28.18,0,5,0,no
+CUST-100010,Dennis,Torvalds,dennis.torvalds@example.com,West, standard ,08/10/2022,29,28.49,0,16,0,no
+CUST-100619,Anita,Liskov,anita.liskov@example.com,Midlands,Standard,2023-07-16,21,33.59,4,6,0,no
+CUST-100608,Katherine,Turing,katherine.turing@example.com,,STANDARD,2 Aug 2025,1,31.7,0,28,0,no
+CUST-100742,Anita,Torvalds,anita.torvalds@example.com,East, premium ,22 Jan 2021,12,68.26,2,1,0,no
+CUST-100464,Katherine,Hamilton,katherine.hamilton@example.com,N. Ireland, basic ,14 May 2025,1,10.29,2,4,0,yes
+CUST-100911,Radia,Hopper,radia.hopper@example.com,East,standard,12/09/2021,29,30.54,5,44,0,yes
+CUST-100297,Alan,Ritchie,alan.ritchie@example.com,South,Standard,13/08/2022,19,27.47,3,23,0,no
+CUST-100836,Edsger,Ritchie,edsger.ritchie@example.com,North, premium ,2022-03-25,31,72.16,0,41,1,no
+CUST-100820,Katherine,Hamilton,katherine.hamilton@example.com,North, premium ,2024-06-09,25,,1,12,1,no
+CUST-100402,Grace,Torvalds,grace.torvalds@example.com,West, basic ,07/05/2021,25,11.61,1,20,0,no
+CUST-100884,Tim,Perlman,tim.perlman@example.com,North, standard ,1/10/2023,49,25.28,0,29,0,no
+CUST-100146,Margaret,Lovelace,margaret.lovelace@example.com,N. Ireland,STANDARD,2022-08-13,34,,2,21,0,no
+CUST-100453,Dennis,Ritchie,dennis.ritchie@example.com,North,standard,2022-04-25,22,23.49,0,11,0,yes
+CUST-100859,Anita,Hopper,anita.hopper@example.com,North, premium ,9 Sep 2022,33,73.44,1,41,0,no
+CUST-101028,Ada,Torvalds,ada.torvalds@example.com,Wales,Basic,2023-01-01,1,11.15,0,11,0,no
+CUST-101194,Anita,Dijkstra,anita.dijkstra@example.com,Wales, standard ,5 Feb 2021,2,33.7,7,10,0,yes
+CUST-100827,Tim,Ritchie,tim.ritchie@example.com,North,basic,2024-05-03,38,9.72,5,15,0,no
+CUST-100339,Tim,Torvalds,tim.torvalds@example.com,East, premium ,2022-02-01,24,75.17,2,14,0,no
+CUST-100903,Barbara,Johnson,barbara.johnson@example.com,Wales,STANDARD,12/12/2023,19,23.16,0,27,0,no
+CUST-100971,Barbara,Berners-Lee,barbara.berners-lee@example.com,Midlands,standard,5/26/2022,30,25.87,1,8,1,no
+CUST-101001,Tim,Johnson,tim.johnson@example.com,East,BASIC,8 Dec 2022,42,,7,2,1,no
+CUST-100576,Ada,Liskov,ada.liskov@example.com,N. Ireland,PREMIUM,19/05/2023,29,58.96,5,6,0,no
+CUST-100800,Radia,Perlman,radia.perlman@example.com,Wales, basic ,4/16/2024,1,9.76,2,4,0,yes
+CUST-100651,Katherine,Hopper,katherine.hopper@example.com,Wales,basic,14/03/2025,24,10.3,0,3,0,no
+CUST-100989,Margaret,Hopper,margaret.hopper@example.com,N. Ireland,Premium,4/9/2021,1,69.22,2,7,1,no
+CUST-100590,Ada,Turing,ada.turing@example.com,Wales,PREMIUM,2022-06-17,17,60.11,3,17,1,no
+CUST-100835,Edsger,Hamilton,edsger.hamilton@example.com,Midlands, standard ,18 Mar 2022,14,24.45,0,15,0,no
+CUST-100719,Grace,Lovelace,grace.lovelace@example.com,Midlands,basic,2024-12-16,34,9.34,1,23,0,yes
+CUST-100627,Radia,Hamilton,radia.hamilton@example.com,Wales,BASIC,08/07/2021,44,10.36,1,24,0,no
+CUST-100265,Dennis,Liskov,dennis.liskov@example.com,West,BASIC,17/03/2022,,10.65,0,1,0,no
+CUST-100078,Grace,Perlman,grace.perlman@example.com,North, premium ,2024-05-08,22,68.21,1,15,0,no
+CUST-100397,Anita,Dijkstra,anita.dijkstra@example.com,West,Basic,2/25/2022,5,12.86,0,23,0,yes
+CUST-100473,Edsger,Borg,edsger.borg@example.com,Midlands, basic ,8/11/2022,23,,2,7,0,no
+CUST-100157,Tim,Liskov,tim.liskov@example.com,Wales,Standard,2022-09-15,42,26.35,0,13,0,no
+CUST-100210,Radia,Turing,radia.turing@example.com,West, basic ,2023-08-20,7,,1,2,1,no
+CUST-101075,Grace,Turing,grace.turing@example.com,North,Standard,1 Nov 2022,8,29.75,0,27,0,yes
+CUST-101008,Margaret,Ritchie,margaret.ritchie@example.com,East,BASIC,13/02/2024,23,9.53,0,8,0,no
+CUST-100391,Edsger,Lovelace,edsger.lovelace@example.com,Scotland, standard ,2022-02-19,,24.48,4,8,0,no
+CUST-100151,Ada,Johnson,ada.johnson@example.com,West,Basic,12/16/2021,46,12.52,1,21,0,no
+CUST-100767,Alan,Ritchie,alan.ritchie@example.com,Wales,STANDARD,7/8/2021,10,32.16,3,6,0,no
+CUST-101062,Dennis,Perlman,dennis.perlman@example.com,West,premium,11/17/2022,37,74.18,0,19,0,no
+CUST-101150,Grace,Ritchie,grace.ritchie@example.com,North,BASIC,2023-08-19,30,11.3,0,50,0,yes
+CUST-101109,Anita,Torvalds,anita.torvalds@example.com,Wales, standard ,06/02/2025,38,24.54,0,12,0,yes
+CUST-100952,Ada,Johnson,ada.johnson@example.com,Wales,Premium,8 Jun 2024,29,,6,18,0,no
+CUST-100387,Dennis,Hopper,dennis.hopper@example.com,Midlands,BASIC,2022-11-16,43,12.67,3,11,0,no
+CUST-100085,Alan,Hopper,alan.hopper@example.com,West,Basic,4 Apr 2023,45,9.62,1,41,0,yes
+CUST-100000,Radia,Borg,radia.borg@example.com,East, standard ,8/26/2025,28,32.99,0,3,0,no
+CUST-100487,Linus,Torvalds,linus.torvalds@example.com,North,STANDARD,9/14/2022,34,24.64,0,37,0,yes
+CUST-100938,Dennis,Hamilton,dennis.hamilton@example.com,West,premium,19/02/2024,30,74.58,10,4,0,no
+CUST-101015,Alan,Hopper,alan.hopper@example.com,N. Ireland, standard ,23 Mar 2023,47,27.09,3,7,0,no
+CUST-101122,Alan,Hopper,alan.hopper@example.com,N. Ireland, standard ,08/08/2025,50,23.4,2,6,0,no
+CUST-100035,Dennis,Turing,dennis.turing@example.com,N. Ireland,premium,23 Jul 2025,18,80.31,0,7,0,no
+CUST-100913,Tim,Berners-Lee,tim.berners-lee@example.com,N. Ireland,Basic,2024-02-06,33,10.65,1,2,0,no
+CUST-100102,Dennis,Perlman,dennis.perlman@example.com,East,Basic,10/23/2024,28,10.67,1,44,0,yes
+CUST-100990,Anita,Perlman,anita.perlman@example.com,East, standard ,2022-01-10,31,31.7,0,63,1,yes
+CUST-100595,Linus,Hamilton,linus.hamilton@example.com,North,BASIC,1 Oct 2025,1,10.28,1,1,0,no
+CUST-100298,Margaret,Berners-Lee,margaret.berners-lee@example.com,N. Ireland,standard,8/22/2021,9,33.69,0,16,0,no
+CUST-100896,Margaret,Ritchie,margaret.ritchie@example.com,North, standard ,2021-07-24,35,32.96,2,4,1,no
+CUST-100874,Dennis,Liskov,dennis.liskov@example.com,East,basic,2023-02-18,,10.79,0,80,0,yes
+CUST-100087,Linus,Torvalds,linus.torvalds@example.com,South,BASIC,11/4/2023,5,12.84,6,84,0,yes
+CUST-100288,Tim,Johnson,tim.johnson@example.com,North,Premium,2025-01-13,2,68.33,0,16,0,no
+CUST-100171,Katherine,Borg,katherine.borg@example.com,N. Ireland,Standard,05/04/2022,,32.81,1,73,0,yes
+CUST-101091,Alan,Johnson,alan.johnson@example.com,East, standard ,2023-10-02,17,,0,6,0,no
+CUST-101092,Anita,Perlman,anita.perlman@example.com,East,basic,28 Oct 2025,1,11.45,1,21,0,yes
+CUST-100062,Grace,Johnson,grace.johnson@example.com,Scotland,basic,10 Mar 2022,15,9.95,0,40,0,no
+CUST-100233,Grace,Johnson,grace.johnson@example.com,Midlands, basic ,3/1/2022,16,13.33,1,8,0,no
+CUST-100672,Dennis,Berners-Lee,dennis.berners-lee@example.com,Wales,STANDARD,06/12/2021,35,23.64,3,32,0,no
+CUST-100241,Grace,Hopper,grace.hopper@example.com,Scotland,PREMIUM,2022-06-14,1,74.46,2,5,0,no
+CUST-100750,Ada,Johnson,ada.johnson@example.com,South,Standard,2021-02-22,14,32.77,1,34,0,no
+CUST-100080,Radia,Johnson,radia.johnson@example.com,East,basic,12/02/2023,45,10.8,1,8,0,yes
+CUST-100478,Edsger,Berners-Lee,edsger.berners-lee@example.com,Wales,STANDARD,02/12/2022,33,,2,0,1,yes
+CUST-100107,Tim,Ritchie,tim.ritchie@example.com,West,premium,28/01/2023,21,70.73,3,15,0,no
+CUST-100475,Grace,Liskov,grace.liskov@example.com,East, basic ,4/5/2024,31,10.43,0,11,1,no
+CUST-101139,Linus,Ritchie,linus.ritchie@example.com,Wales,BASIC,17/12/2022,41,10.05,0,9,0,no
+CUST-100492,Tim,Berners-Lee,tim.berners-lee@example.com,North,basic,2022-09-21,43,11.88,1,26,0,yes
+CUST-100072,Barbara,Turing,barbara.turing@example.com,West,standard,7/22/2021,9,28.95,0,46,0,no
+CUST-100154,Tim,Perlman,tim.perlman@example.com,West,Premium,25 Feb 2021,22,74.17,3,0,0,no
+CUST-100320,Ada,Perlman,ada.perlman@example.com,West,STANDARD,26 Jun 2023,17,28.34,5,36,0,yes
+CUST-100580,Ada,Johnson,ada.johnson@example.com,Scotland,basic,2025-11-08,26,12.02,5,15,0,yes
+CUST-100294,Linus,Turing,linus.turing@example.com,Midlands,basic,6/7/2023,18,11.19,6,10,0,yes
+CUST-100139,Katherine,Hopper,katherine.hopper@example.com,South, basic ,7/10/2025,38,,2,5,0,no
+CUST-100284,Ada,Turing,ada.turing@example.com,East,STANDARD,22 Apr 2024,1,24.3,2,71,0,yes
+CUST-100208,Ada,Torvalds,ada.torvalds@example.com,Scotland,Standard,2024-11-02,32,26.17,0,0,0,no
+CUST-100490,Anita,Borg,anita.borg@example.com,Wales,Standard,2/7/2021,,29.83,1,2,0,no
+CUST-100357,Alan,Perlman,alan.perlman@example.com,Midlands,BASIC,24/02/2021,30,12.81,1,2,1,no
+CUST-100096,Linus,Berners-Lee,linus.berners-lee@example.com,West,Premium,6 Aug 2023,6,65.09,3,31,0,no
+CUST-100440,Dennis,Hamilton,dennis.hamilton@example.com,East, basic ,2024-10-22,,10.35,2,32,0,yes
+CUST-100330,Dennis,Berners-Lee,dennis.berners-lee@example.com,South,Basic,11 May 2025,32,12.72,1,2,0,no
+CUST-100020,Ada,Dijkstra,ada.dijkstra@example.com,Midlands,STANDARD,15 Sep 2022,36,25.22,4,17,0,no
+CUST-100855,Katherine,Berners-Lee,katherine.berners-lee@example.com,North,basic,17/08/2024,42,12.42,0,10,0,no
+CUST-100059,Katherine,Lovelace,katherine.lovelace@example.com,Wales,STANDARD,8/23/2024,38,26.37,0,33,0,no
+CUST-100411,Barbara,Turing,barbara.turing@example.com,West,Basic,26/07/2022,,9.85,2,16,1,no
+CUST-100746,Dennis,Lovelace,dennis.lovelace@example.com,South, standard ,8/5/2022,10,23.67,0,67,0,yes
+CUST-101130,Alan,Lovelace,alan.lovelace@example.com,Scotland,premium,26 Jan 2024,33,57.64,0,0,0,no
+CUST-100768,Ada,Berners-Lee,ada.berners-lee@example.com,N. Ireland,Basic,11/08/2022,38,,0,0,0,no
+CUST-100178,Anita,Hopper,anita.hopper@example.com,West,BASIC,06/02/2021,17,9.15,0,10,1,no
+CUST-101087,Ada,Dijkstra,ada.dijkstra@example.com,N. Ireland, standard ,06/12/2022,22,24.54,1,34,0,yes
+CUST-100319,Edsger,Torvalds,edsger.torvalds@example.com,West,basic,10 May 2023,52,9.22,5,9,0,no
+CUST-100449,Edsger,Perlman,edsger.perlman@example.com,South,standard,10/26/2023,27,24.1,1,7,0,yes
+CUST-100823,Grace,Lovelace,grace.lovelace@example.com,East, basic ,10/09/2022,3,,0,3,0,no
+CUST-100564,Alan,Turing,alan.turing@example.com,North, basic ,08/09/2022,22,10.9,1,4,1,no
+CUST-101004,Barbara,Dijkstra,barbara.dijkstra@example.com,West,basic,2023-12-20,26,11.74,1,3,0,no
+CUST-100840,Edsger,Turing,edsger.turing@example.com,Wales,basic,10 Jun 2025,1,13.13,1,10,1,no
+CUST-101021,Dennis,Borg,dennis.borg@example.com,N. Ireland,Standard,9/12/2024,33,28.54,0,35,0,no
+CUST-100113,Barbara,Lovelace,barbara.lovelace@example.com,Wales,Standard,6/8/2021,19,23.68,2,0,0,no
+CUST-100421,Tim,Johnson,tim.johnson@example.com,West,STANDARD,11/5/2024,15,31.47,0,14,0,no
+CUST-100102,Dennis,Perlman,dennis.perlman@example.com,East,Basic,10/23/2024,28,10.67,1,44,0,yes
+CUST-100025,Edsger,Dijkstra,edsger.dijkstra@example.com,N. Ireland,BASIC,2022-07-25,1,10.84,3,17,0,yes
+CUST-100067,Ada,Berners-Lee,ada.berners-lee@example.com,N. Ireland,BASIC,2021-06-28,4,11.31,6,37,0,yes
+CUST-100542,Tim,Johnson,tim.johnson@example.com,Scotland,BASIC,2021-04-27,11,11.93,1,76,0,yes
+CUST-100114,Linus,Ritchie,linus.ritchie@example.com,West, basic ,07/01/2023,13,,3,23,0,no
+CUST-100721,Dennis,Turing,dennis.turing@example.com,Midlands,Standard,2021-09-27,11,31.16,1,17,0,no
+CUST-100503,Anita,Perlman,anita.perlman@example.com,East,Standard,3/6/2021,12,23.64,0,32,1,yes
+CUST-100589,Margaret,Hamilton,margaret.hamilton@example.com,East,BASIC,21 Apr 2023,18,10.42,1,114,0,yes
+CUST-100705,Anita,Torvalds,anita.torvalds@example.com,South,BASIC,28 Dec 2024,20,,2,8,0,no
+CUST-100119,Anita,Torvalds,anita.torvalds@example.com,N. Ireland, basic ,16 Feb 2025,46,11.44,8,3,0,yes
+CUST-100591,Barbara,Borg,barbara.borg@example.com,North,BASIC,27 Apr 2025,47,10.44,5,21,0,no
+CUST-101192,Linus,Borg,linus.borg@example.com,West,premium,24/09/2024,45,54.0,0,1,0,no
+CUST-100644,Ada,Berners-Lee,ada.berners-lee@example.com,West,STANDARD,22/05/2024,22,28.68,0,12,0,no
+CUST-100856,Radia,Johnson,radia.johnson@example.com,North,Basic,2025-03-10,,11.06,3,2,0,no
+CUST-100183,Alan,Perlman,alan.perlman@example.com,Midlands,Basic,3/11/2024,28,11.28,8,48,0,no
+CUST-100661,Grace,Dijkstra,grace.dijkstra@example.com,N. Ireland,Premium,21 Sep 2022,18,60.48,0,3,0,no
+CUST-100264,Anita,Hopper,anita.hopper@example.com,South,Standard,02/05/2021,,24.0,0,4,0,no
+CUST-100784,Grace,Hamilton,grace.hamilton@example.com,Wales, basic ,10/4/2024,1,11.14,2,28,0,no
+CUST-101090,Edsger,Borg,edsger.borg@example.com,Scotland,basic,2/9/2021,24,12.6,0,10,0,no
+CUST-101007,Ada,Hopper,ada.hopper@example.com,South,standard,25/03/2023,12,30.46,1,7,0,no
+CUST-100906,Ada,Dijkstra,ada.dijkstra@example.com,West,premium,2024-10-14,26,57.4,3,15,0,yes
+CUST-100243,Ada,Dijkstra,ada.dijkstra@example.com,East, premium ,15 Sep 2021,7,58.75,0,4,0,no
+CUST-100181,Katherine,Borg,katherine.borg@example.com,Scotland,STANDARD,2022-09-14,12,26.14,7,27,1,no
