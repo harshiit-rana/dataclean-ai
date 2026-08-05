@@ -107,25 +107,60 @@ def _suggested_exclusions(df: pd.DataFrame, goal: GoalContext, task: str) -> lis
             }
         )
 
-    # Row-unique columns are identifiers. They can't generalize -- every future row has a
-    # value the model has never seen -- but they can look highly predictive during training.
     rows = len(df)
     for column in df.columns:
         if column == target or column in {s["column"] for s in suggestions}:
             continue
-        if rows >= 20 and df[column].nunique(dropna=True) / rows > 0.95:
+        if _looks_like_an_identifier(df[column], rows):
             suggestions.append(
                 {
                     "column": column,
-                    "reason": f"Nearly every row has a different value, so this identifies "
-                    f"rows rather than describing them. A model can't learn anything from it "
-                    f"that would apply to a new row.",
+                    "reason": "Nearly every row has a different value, so this identifies "
+                    "rows rather than describing them. A model can't learn anything from it "
+                    "that would apply to a new row.",
                     "kind": "identifier",
                     "severity": "medium",
                 }
             )
 
     return suggestions
+
+
+IDENTIFIER_UNIQUENESS = 0.95
+MIN_ROWS_TO_JUDGE_UNIQUENESS = 20
+
+
+def _looks_like_an_identifier(series: pd.Series, rows: int) -> bool:
+    """Row-unique columns are usually identifiers: they can't generalize, because every future
+    row carries a value the model has never seen, yet they look highly predictive in training.
+
+    Uniqueness alone isn't the test, though. A continuous measurement is *naturally* near-
+    unique -- 809 employees have 809 different salaries -- and calling salary an identifier
+    would strip out the most informative column in the file. So a float is never an
+    identifier on these grounds, and an integer has to look like a key as well as be unique:
+    a dense run of values, the shape an auto-increment column has. That leaves the case this
+    is really for -- text ids, order numbers, emails -- caught as before.
+    """
+    if rows < MIN_ROWS_TO_JUDGE_UNIQUENESS:
+        return False
+
+    distinct = int(series.nunique(dropna=True))
+    if distinct / rows <= IDENTIFIER_UNIQUENESS:
+        return False
+
+    if pd.api.types.is_float_dtype(series):
+        return False
+
+    if pd.api.types.is_integer_dtype(series):
+        values = series.dropna()
+        if values.empty:
+            return False
+        span = int(values.max()) - int(values.min()) + 1
+        # A key runs 1001, 1002, 1003...; a measurement that happens to be integral is
+        # scattered across a range far wider than the number of rows.
+        return span <= len(values) * 1.05
+
+    return True
 
 
 def _date_columns(df: pd.DataFrame) -> list[str]:

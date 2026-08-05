@@ -68,6 +68,10 @@ are both running locally, you're ready to make changes.
   before the split lets test rows influence the values written into training rows. There's a
   test asserting the fitted imputer's learned median came from the training fold alone --
   keep it passing.
+- **Charts read the app's surface, never the OS.** `useChartTheme` looks only at the `dark`
+  class on `<html>` — the same signal Tailwind's `darkMode: ["class"]` uses. Falling back to
+  `prefers-color-scheme` is how the correlation heatmap ended up painting near-zero cells
+  charcoal on a white page: the machine was dark, the app was not.
 - **Charts ship a table view.** Some palette slots sit below 3:1 on the light surface, and a
   tooltip is a way to inspect a value rather than read one. Every chart goes through
   `ChartCard` with its data as a table.

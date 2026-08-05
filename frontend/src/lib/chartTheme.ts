@@ -64,12 +64,17 @@ const DARK: ChartTheme = {
   isDark: true,
 };
 
+/** Charts follow the app's surface, and nothing else.
+ *
+ * Tailwind is configured `darkMode: ["class"]`, so the page is dark exactly when the `dark`
+ * class is on <html> -- the OS preference doesn't move it. Reading the OS preference here as
+ * a fallback is how the correlation heatmap ended up painting its near-zero cells charcoal on
+ * a white page: the machine was in dark mode, the app was not, and the palettes disagreed
+ * about which surface they were sitting on. One source of truth, the same one the CSS uses.
+ */
 function detectDark(): boolean {
   if (typeof document === "undefined") return false;
-  // The app's own toggle wins; the OS preference is the fallback.
-  if (document.documentElement.classList.contains("dark")) return true;
-  if (document.documentElement.classList.contains("light")) return false;
-  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ?? false;
+  return document.documentElement.classList.contains("dark");
 }
 
 /** Recharts needs real colour strings, not CSS variables, so the palette is resolved in JS
@@ -78,17 +83,9 @@ export function useChartTheme(): ChartTheme {
   const [dark, setDark] = useState(detectDark);
 
   useEffect(() => {
-    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
-    const update = () => setDark(detectDark());
-
-    media?.addEventListener("change", update);
-    const observer = new MutationObserver(update);
+    const observer = new MutationObserver(() => setDark(detectDark()));
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
-
-    return () => {
-      media?.removeEventListener("change", update);
-      observer.disconnect();
-    };
+    return () => observer.disconnect();
   }, []);
 
   return dark ? DARK : LIGHT;

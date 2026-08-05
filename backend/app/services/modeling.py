@@ -33,9 +33,22 @@ DEFAULT_TEST_SIZE = 0.2
 RANDOM_STATE = 42  # fixed so a rerun of the same session reproduces the same numbers
 
 # One-hot encoding a column with hundreds of categories produces hundreds of near-empty
-# columns and a model that memorizes rows. Anything above this is dropped from the features
-# with a note rather than silently exploding the matrix.
-MAX_CATEGORIES_TO_ENCODE = 30
+# columns and a model that memorizes rows. Anything above the limit is dropped from the
+# features with a note rather than silently exploding the matrix.
+#
+# The limit scales with the row count, because "too many categories" is a statement about
+# how many rows each category gets, not an absolute number. A fixed cap of 30 threw away
+# Department_Region (36 values) on an 809-row file -- roughly 22 rows per category, plainly
+# learnable, and the most informative column in the data. The floor keeps a small file from
+# losing every categorical column; the ceiling keeps a large one from one-hotting free text.
+ROWS_PER_CATEGORY = 10
+MIN_CATEGORIES_TO_ENCODE = 10
+MAX_CATEGORIES_TO_ENCODE = 50
+
+
+def category_limit(rows: int) -> int:
+    """How many distinct values a categorical column may have and still be worth encoding."""
+    return max(MIN_CATEGORIES_TO_ENCODE, min(MAX_CATEGORIES_TO_ENCODE, rows // ROWS_PER_CATEGORY))
 
 
 class ModelingError(Exception):
@@ -171,6 +184,7 @@ def classify_features(
     numeric: list[str] = []
     categorical: list[str] = []
     dropped: list[dict] = []
+    limit = category_limit(len(df))
 
     for column in df.columns:
         if column == target_column:
@@ -194,13 +208,13 @@ def classify_features(
             continue
 
         distinct = int(series.nunique(dropna=True))
-        if distinct > MAX_CATEGORIES_TO_ENCODE:
+        if distinct > limit:
             dropped.append(
                 {
                     "column": column,
-                    "reason": f"{distinct} different values -- too many to turn into model "
-                    f"inputs without the model simply memorizing rows. Usually an ID, a "
-                    f"name, or free text.",
+                    "reason": f"{distinct} different values -- too many for {len(df)} rows to "
+                    f"turn into model inputs without the model simply memorizing rows. "
+                    f"Usually an ID, a name, or free text.",
                 }
             )
             continue
@@ -311,7 +325,19 @@ def build_pipeline(model_name: str, numeric: list[str], categorical: list[str]):
                     [
                         ("impute", SimpleImputer(strategy="most_frequent")),
                         # Categories seen only in the test set must not blow up prediction.
-                        ("encode", OneHotEncoder(handle_unknown="ignore", min_frequency=0.01)),
+                        # sparse_output=False because HistGradientBoosting refuses sparse
+                        # input -- without it the strongest of the three models silently
+                        # fails to train on any dataset that has a categorical column. The
+                        # matrix is safe to keep dense: MAX_CATEGORIES_TO_ENCODE caps how
+                        # wide the encoding can get.
+                        (
+                            "encode",
+                            OneHotEncoder(
+                                handle_unknown="ignore",
+                                min_frequency=0.01,
+                                sparse_output=False,
+                            ),
+                        ),
                     ]
                 ),
                 categorical,

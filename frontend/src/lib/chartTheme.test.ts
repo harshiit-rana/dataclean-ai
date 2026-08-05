@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
-import { inkOn, rampColor } from "./chartTheme";
+import { renderHook } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { inkOn, rampColor, useChartTheme } from "./chartTheme";
 
 describe("rampColor", () => {
   const ramp = ["#a", "#b", "#c", "#d", "#e"];
@@ -43,5 +44,34 @@ describe("inkOn", () => {
 
   it("accepts a hex string without the leading hash", () => {
     expect(inkOn("ffffff")).toBe("#0b0b0b");
+  });
+});
+
+describe("useChartTheme", () => {
+  afterEach(() => {
+    document.documentElement.classList.remove("dark");
+    vi.restoreAllMocks();
+  });
+
+  it("follows the app's surface, not the operating system", () => {
+    // Found live: the machine was in dark mode, the app renders light regardless (nothing
+    // ever adds the `dark` class), and the correlation heatmap painted its near-zero cells
+    // charcoal on a white page. Charts have to read the same signal the CSS reads.
+    vi.spyOn(window, "matchMedia").mockReturnValue({
+      matches: true,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    } as unknown as MediaQueryList);
+
+    const { result } = renderHook(() => useChartTheme());
+    expect(result.current.isDark).toBe(false);
+    // A pale mid-point is what makes "pale is none" true on a white page.
+    expect(result.current.divergingMid).toBe("#f0efec");
+  });
+
+  it("goes dark when the app does", () => {
+    document.documentElement.classList.add("dark");
+    const { result } = renderHook(() => useChartTheme());
+    expect(result.current.isDark).toBe(true);
   });
 });

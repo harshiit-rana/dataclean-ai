@@ -20,6 +20,13 @@ frontend/dist/
 frontend/.vite/
 frontend/tsconfig.tsbuildinfo
 
+# Things the app hands back, dropped in the repo root while trying it out. They're the
+# user's own data, not the project's -- /samples is where checked-in CSVs live.
+/*.csv
+/*.joblib
+/dataclean_export*.zip
+/train_model.py
+
 # OS / editor
 .DS_Store
 Thumbs.db

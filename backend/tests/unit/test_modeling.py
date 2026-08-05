@@ -82,6 +82,31 @@ class TestFeatureClassification:
         assert "employee_id" in dropped
         assert "too many" in dropped["employee_id"]
 
+    def test_the_category_limit_scales_with_the_row_count(self):
+        """"Too many categories" is a statement about how many rows each category gets, not
+        an absolute number. A fixed cap of 30 threw away a 36-value department column on an
+        809-row file -- 22 rows each, plainly learnable, and the best column in the data."""
+        assert modeling.category_limit(809) >= 36
+        # Floor: a small file shouldn't lose every categorical column it has.
+        assert modeling.category_limit(60) == modeling.MIN_CATEGORIES_TO_ENCODE
+        # Ceiling: a large one shouldn't one-hot free text just because it has the rows.
+        assert modeling.category_limit(500_000) == modeling.MAX_CATEGORIES_TO_ENCODE
+
+    def test_a_column_the_row_count_can_support_is_kept(self, classification_df):
+        codes = [f"dept_{i % 36}" for i in range(len(classification_df))]
+        classification_df["department"] = codes
+        big = pd.concat([classification_df] * 3, ignore_index=True)  # 900 rows
+        features = modeling.classify_features(big, "outcome")
+        assert "department" in features["categorical"]
+
+    def test_the_same_column_is_dropped_when_there_are_too_few_rows(self, classification_df):
+        small = classification_df.head(60).copy()
+        small["department"] = [f"dept_{i % 36}" for i in range(len(small))]
+        features = modeling.classify_features(small, "outcome")
+        dropped = {d["column"]: d["reason"] for d in features["dropped"]}
+        assert "department" in dropped
+        assert "60 rows" in dropped["department"]  # the reason names what it was measured against
+
     def test_user_exclusions_are_honoured_and_explained(self, classification_df):
         features = modeling.classify_features(classification_df, "outcome", ["noise"])
         assert "noise" not in features["numeric"]
@@ -403,6 +428,29 @@ class TestTrainCandidates:
             model_names=["logistic_regression", "random_forest_classifier"],
         )
         assert result["best_model"] in {"logistic_regression", "random_forest_classifier"}
+
+    def test_gradient_boosting_trains_when_there_are_categorical_columns(
+        self, classification_df
+    ):
+        """Found live: the one-hot encoder returned a sparse matrix and HistGradientBoosting
+        refuses sparse input, so the model the UI calls "typically the most accurate of the
+        three" silently failed to train on every dataset that had a categorical column --
+        which is nearly all of them. It showed up only as an empty row in the results."""
+        assert "region" in modeling.classify_features(classification_df, "outcome")["categorical"]
+
+        result = modeling.train_candidates(
+            classification_df, target_column="outcome", task="classification",
+            model_names=["gradient_boosting_classifier"],
+        )
+        assert [r["model"] for r in result["results"]] == ["gradient_boosting_classifier"]
+        assert result["results"][0]["metrics"]["accuracy"] > 0
+
+    def test_gradient_boosting_trains_for_regression_too(self, regression_df):
+        result = modeling.train_candidates(
+            regression_df, target_column="price", task="regression",
+            model_names=["gradient_boosting_regressor"],
+        )
+        assert [r["model"] for r in result["results"]] == ["gradient_boosting_regressor"]
 
     def test_a_model_for_the_wrong_task_is_ignored(self, classification_df):
         result = modeling.train_candidates(

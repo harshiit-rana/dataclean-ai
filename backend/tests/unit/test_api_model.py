@@ -95,6 +95,39 @@ class TestPlan:
         identifiers = [s for s in plan["suggested_exclusions"] if s["column"] == "employee_id"]
         assert identifiers and identifiers[0]["kind"] == "identifier"
 
+    def test_a_measurement_is_not_an_identifier_just_because_it_is_unique(self):
+        """Found live: 809 employees have 809 different salaries, so the uniqueness rule
+        called salary an identifier and pre-ticked the most informative column in the file
+        for removal. A continuous measurement is *naturally* near-unique."""
+        plan = client.get(f"/api/model/{_session()}/plan").json()
+        excluded = set(plan["excluded_columns"])
+        assert "signal" not in excluded
+        assert "noise" not in excluded
+
+    def test_a_whole_number_measurement_is_not_an_identifier_either(self):
+        """Salaries in whole pounds are integers and near-unique, but scattered across a
+        range far wider than the row count -- unlike a key, which runs 1001, 1002, 1003."""
+        rng = np.random.default_rng(3)
+        n = 300
+        salary = rng.integers(30_000, 120_000, n)
+        # Related to the target but nowhere near determining it, or it would be excluded as
+        # leakage and the test would pass without the identifier rule doing anything.
+        probability = 1 / (1 + np.exp(-(salary - 75_000) / 25_000))
+        buffer = io.StringIO()
+        pd.DataFrame(
+            {
+                "staff_number": range(5000, 5000 + n),  # a real key: dense and sequential
+                "salary": salary,
+                "outcome": np.where(rng.random(n) < probability, "yes", "no"),
+            }
+        ).to_csv(buffer, index=False)
+
+        session_id = _session(buffer.getvalue().encode())
+        plan = client.get(f"/api/model/{session_id}/plan").json()
+        excluded = set(plan["excluded_columns"])
+        assert "salary" not in excluded
+        assert "staff_number" in excluded
+
     def test_suggestions_are_proposals_the_user_can_reject(self):
         """A leaky column is sometimes legitimately available at prediction time, and only
         the person who owns the data knows that. So training must accept fewer exclusions

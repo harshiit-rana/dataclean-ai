@@ -12,6 +12,9 @@ interface ReadinessPanelProps {
   refreshKey?: number;
   /** Offer the link on to model building. Off on the model page itself. */
   showModelLink?: boolean;
+  /** Whether this page has the conversational cleaning box. Only the clean page does, and
+   * pointing at a box that isn't on screen is worse than not mentioning one. */
+  canKeepCleaning?: boolean;
 }
 
 const VERDICTS: Record<string, { title: string; blurb: string; className: string }> = {
@@ -41,6 +44,7 @@ export function ReadinessPanel({
   sessionId,
   refreshKey = 0,
   showModelLink = true,
+  canKeepCleaning = false,
 }: ReadinessPanelProps) {
   const [readiness, setReadiness] = useState<ReadinessResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -115,8 +119,10 @@ export function ReadinessPanel({
         {remaining.total > 0 && (
           <p className="text-xs text-muted-foreground">
             {remaining.total} issue{remaining.total === 1 ? "" : "s"} still present in the data
-            {remaining.high > 0 && ` (${remaining.high} high severity)`}. You can keep cleaning
-            with the box above.
+            {remaining.high > 0 && ` (${remaining.high} high severity)`}.
+            {canKeepCleaning
+              ? " Describe another change below to keep cleaning."
+              : " Go back to the cleaning step to keep working on them."}
           </p>
         )}
 

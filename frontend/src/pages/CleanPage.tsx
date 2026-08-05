@@ -29,6 +29,24 @@ export function CleanPage() {
     setReadinessKey((key) => key + 1);
   }, []);
 
+  // Counted from the persisted log once there is one, because undo and the chat box both
+  // change what has been applied after the streamed run finished -- the run's own tallies
+  // stop being true the moment either is used.
+  const counts = useMemo(() => {
+    if (actionLog === null) {
+      return {
+        applied: run.appliedCount,
+        skipped: run.skippedCount,
+        superseded: run.supersededCount,
+      };
+    }
+    return {
+      applied: actionLog.filter((a) => a.status === "applied").length,
+      skipped: actionLog.filter((a) => a.status === "rejected").length,
+      superseded: actionLog.filter((a) => a.status === "superseded").length,
+    };
+  }, [actionLog, run.appliedCount, run.skippedCount, run.supersededCount]);
+
   const navState = location.state as {
     decisions?: Record<string, "approved" | "rejected">;
     skipReasons?: Record<string, string>;
@@ -91,7 +109,7 @@ export function CleanPage() {
       )}
 
       {run.status === "done" && sessionId && (
-        <ReadinessPanel sessionId={sessionId} refreshKey={readinessKey} />
+        <ReadinessPanel sessionId={sessionId} refreshKey={readinessKey} canKeepCleaning />
       )}
 
       {run.status === "done" && sessionId && (
@@ -105,10 +123,10 @@ export function CleanPage() {
           </CardHeader>
           <CardContent className="flex flex-col gap-4 text-sm">
             <p className="text-muted-foreground">
-              {run.appliedCount} fix{run.appliedCount === 1 ? "" : "es"} applied
-              {run.skippedCount > 0 && `, ${run.skippedCount} skipped`}
-              {run.supersededCount > 0 &&
-                `, ${run.supersededCount} no longer needed once the others ran`}
+              {counts.applied} fix{counts.applied === 1 ? "" : "es"} applied
+              {counts.skipped > 0 && `, ${counts.skipped} skipped`}
+              {counts.superseded > 0 &&
+                `, ${counts.superseded} no longer needed once the others ran`}
               .
             </p>
             <div className="flex flex-wrap gap-2">

@@ -46,7 +46,8 @@ def _preprocessing_block(numeric: list[str], categorical: list[str]) -> tuple[li
             '            "categorical",\n'
             "            Pipeline([\n"
             '                ("impute", SimpleImputer(strategy="most_frequent")),\n'
-            '                ("encode", OneHotEncoder(handle_unknown="ignore", min_frequency=0.01)),\n'
+            '                ("encode", OneHotEncoder(handle_unknown="ignore", min_frequency=0.01,\n'
+            "                                         sparse_output=False)),\n"
             "            ]),\n"
             "            CATEGORICAL_FEATURES,\n"
             "        ),"
