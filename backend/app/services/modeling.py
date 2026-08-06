@@ -446,6 +446,14 @@ def baseline_score(y_train, y_test, task: str) -> dict:
 # luckiest. Tabulated rather than pulling in scipy for five numbers.
 _Z_BY_CANDIDATE_COUNT = {1: 1.645, 2: 1.96, 3: 2.13, 4: 2.24, 5: 2.33}
 
+# Below this there is no verdict to give. Not "the model is bad" -- *unjudgeable*, which is a
+# different statement and the only honest one. Found live on the RSNA knee dataset: 4,407 rows
+# of which 58 carried a label, so a 20% split left twelve test rows, and the app called AUC
+# 0.89 on those twelve "useful". One row landing differently moves that number by 0.08. A
+# verdict a single row can overturn is not a verdict.
+MIN_TEST_ROWS_TO_JUDGE = 30
+MIN_TEST_ROWS_PER_CLASS_TO_JUDGE = 10
+
 
 def _auc_noise_threshold(class_counts: list[int] | None, model_count: int = 2) -> float:
     """The AUC a model with no skill can reach by luck alone on a test set this small.
@@ -456,13 +464,57 @@ def _auc_noise_threshold(class_counts: list[int] | None, model_count: int = 2) -
     random datasets, so a fixed 0.60 cut-off would have called most of that a real signal.
 
     Falls back to a plain 0.60 when the class counts aren't known.
+
+    Deliberately uncapped. There used to be a `min(0.75, ...)` here, which sounds cautious and
+    is the exact opposite: the formula raises the bar precisely when evidence is thinnest, so
+    a ceiling only ever fires on the smallest test sets and *lowers* the bar there. On twelve
+    test rows it pulled the threshold from 0.79 down to 0.75.
     """
     if not class_counts or len(class_counts) != 2 or min(class_counts) < 1:
         return 0.60
     n1, n2 = class_counts
     standard_error = float(np.sqrt((n1 + n2 + 1) / (12 * n1 * n2)))
     z = _Z_BY_CANDIDATE_COUNT.get(max(1, model_count), 2.33)
-    return min(0.75, 0.5 + z * standard_error)
+    return 0.5 + z * standard_error
+
+
+def _too_small_to_judge(
+    test_rows: int | None, class_counts: list[int] | None
+) -> dict | None:
+    """Is there enough held-out data to say anything at all?
+
+    Separate from the noise floor on purpose. The noise floor asks "could luck produce this
+    score?"; this asks the prior question, "is there enough evidence here for any answer to
+    mean something?" A model can clear the noise floor on twelve rows and still be
+    unjudgeable, because the interval around that estimate spans most of the usable range.
+    """
+    if not test_rows:
+        return None
+
+    rarest = min(class_counts) if class_counts and len(class_counts) == 2 else None
+    if test_rows >= MIN_TEST_ROWS_TO_JUDGE and (
+        rarest is None or rarest >= MIN_TEST_ROWS_PER_CLASS_TO_JUDGE
+    ):
+        return None
+
+    if rarest is not None and rarest < MIN_TEST_ROWS_PER_CLASS_TO_JUDGE:
+        detail = (
+            f"only {rarest} of the {test_rows} test rows carry the rarer answer, and at least "
+            f"{MIN_TEST_ROWS_PER_CLASS_TO_JUDGE} are needed before a score means anything"
+        )
+    else:
+        detail = (
+            f"{test_rows} test rows is below the {MIN_TEST_ROWS_TO_JUDGE} needed before a "
+            f"score means anything"
+        )
+
+    return {
+        "verdict": "not_enough_test_data",
+        "headline": f"There isn't enough held-back data to judge this model -- {detail}. "
+        f"Whatever it scored, a single row landing differently would move it. This is not a "
+        f"statement that the model is bad; it is a statement that nothing here can tell you "
+        f"either way. Get more labelled rows before trusting any number on this page.",
+    }
 
 
 def assess_result(
@@ -483,6 +535,13 @@ def assess_result(
     rather than left for the user to work out, and it is made against what luck alone could
     have produced on a test set of this size.
     """
+    # Asked before anything else. Every verdict below is a claim about what the test set
+    # shows, so if the test set is too small to show anything, none of them can be made --
+    # including "no better than guessing", which is just as much a claim as "useful".
+    unjudgeable = _too_small_to_judge(test_rows, class_counts)
+    if unjudgeable is not None:
+        return unjudgeable
+
     if task == "regression":
         r2 = float(metrics.get("r2", 0.0))
         # R² of 0 is exactly the performance of always predicting the mean; below 0 is worse.

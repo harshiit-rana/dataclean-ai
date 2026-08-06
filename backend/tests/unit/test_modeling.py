@@ -308,6 +308,47 @@ class TestAssessment:
         assert small["verdict"] == "no_better_than_guessing"
         assert "by luck" in small["headline"]
 
+    def test_a_test_set_too_small_to_judge_gets_no_verdict(self):
+        """Found live on the RSNA knee dataset. 4,407 rows, 58 of them labelled, so a 20%
+        split left twelve test rows -- and the app called AUC 0.89 on those twelve "useful".
+        One row landing differently moves that number by 0.08."""
+        result = modeling.assess_result(
+            {"accuracy": 0.83, "roc_auc": 0.89}, {"accuracy": 0.58}, "classification",
+            test_rows=12, class_counts=[7, 5],
+        )
+        assert result["verdict"] == "not_enough_test_data"
+        assert "0.89" not in result["headline"], "quoting the score re-asserts what it denies"
+
+    def test_it_says_unjudgeable_rather_than_bad(self):
+        """A different claim, and the distinction is the point: "we cannot tell" must not be
+        delivered as "this does not work", which would be just as unfounded."""
+        result = modeling.assess_result(
+            {"accuracy": 0.5, "roc_auc": 0.52}, {"accuracy": 0.5}, "classification",
+            test_rows=14, class_counts=[7, 7],
+        )
+        assert result["verdict"] == "not_enough_test_data"
+        assert "not a statement that the model is bad" in result["headline"]
+
+    def test_a_rare_class_can_be_too_thin_even_on_enough_rows(self):
+        """200 test rows sounds ample until you notice three of them carry the answer."""
+        result = modeling.assess_result(
+            {"accuracy": 0.98, "roc_auc": 0.91}, {"accuracy": 0.98}, "classification",
+            test_rows=200, class_counts=[197, 3],
+        )
+        assert result["verdict"] == "not_enough_test_data"
+
+    def test_an_adequate_test_set_is_still_judged_normally(self):
+        result = modeling.assess_result(
+            {"accuracy": 0.88, "roc_auc": 0.91}, {"accuracy": 0.70}, "classification",
+            test_rows=400, class_counts=[280, 120],
+        )
+        assert result["verdict"] == "useful"
+
+    def test_the_noise_floor_is_not_capped(self):
+        """The `min(0.75, ...)` that used to sit here fired only on the smallest test sets --
+        the exact case the formula exists to be strict about -- and lowered the bar there."""
+        assert modeling._auc_noise_threshold([7, 5], model_count=1) > 0.75
+
     def test_noise_threshold_shrinks_as_evidence_grows(self):
         assert modeling._auc_noise_threshold([42, 18]) > modeling._auc_noise_threshold([1400, 600])
         assert modeling._auc_noise_threshold(None) == 0.60

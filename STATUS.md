@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 6 August 2026 · 32 commits · 350 backend tests, 47 frontend tests
+Last updated: 7 August 2026 · 33 commits · 364 backend tests, 47 frontend tests
 
 ---
 
@@ -141,6 +141,12 @@ target. So results are judged against what luck alone could produce on a test se
 and against always guessing the same answer. On data with no signal, 23 of 25 runs are
 correctly flagged and none are called useful.
 
+There is a fourth verdict before those three: **not enough test data to judge**. Below 30 test
+rows, or 10 in the rarer class, no verdict is given at all — and that includes "this model does
+not work", which is just as much a claim about the test set as "this model works" is. The
+distinction matters because the two failures look identical from the outside and call for
+opposite responses: a bad model needs different columns, an unjudgeable one needs more rows.
+
 **Thirteen diagnostics**, as interactive charts with a table view behind every one: ROC,
 precision-recall, confusion matrix, per-class breakdown, calibration, threshold trade-off,
 class balance, feature importance, permutation importance, cross-validation spread, learning
@@ -170,6 +176,38 @@ reported metrics.
   render — none of these end a session that already touched your data.
 
 ---
+
+## Tested against something it was never designed for
+
+Run against the RSNA Knee Abnormality Detection competition data (7 August 2026) — deliberately
+hostile input: 4,407 studies, twelve simultaneous targets, free-text radiology reports in five
+languages, and the actual signal in 570 GB of DICOM images. The tool cannot enter this
+competition, and the useful question was never whether it could. It was **what the tool claims
+when it is out of its depth.**
+
+It claimed too much. Three defects, all now fixed and pinned by tests:
+
+- **The readiness verdict didn't bind.** `assess_readiness` returned `blocked` — 4,349 of 4,407
+  rows had no label — and the training route, which never asked, fitted on the 58 that remained
+  and reported the result as **useful**. The app's central claim is that it will say no; it said
+  no and then proceeded anyway.
+- **"Enough rows" counted rows it could not learn from.** It reported *"4,407 rows, comfortably
+  above the 50 needed"* directly above a check reporting 4,349 rows with no answer. Both read
+  the same frame; only one described what would be trained on.
+- **The noise floor was capped at 0.75.** `min(0.75, ...)` sounds cautious and is the exact
+  opposite: the formula raises the bar precisely when evidence is thinnest, so a ceiling only
+  ever fires on the smallest test sets and *lowers* it there. On twelve test rows it pulled the
+  threshold from 0.79 down to 0.75, and AUC 0.89 sailed through as a real finding.
+
+Two data-quality findings in the competition data itself, both inside five minutes:
+`Fluid_Sensitive` and `Fat_Suppression` are documented as independent sequence properties and
+are **byte-identical across all 24,371 series**; and a de-identification find-and-replace turned
+`1.` into `intact` in 87 reports, so *"a 1.3 cm bone cyst"* reads *"a intact3 cm bone cyst"*.
+
+What the tool genuinely cannot do here, stated plainly: twelve targets at once (one target per
+session), images, and free text as a *feature* — the `Report` column was dropped as an
+"identifier" because nearly every value is distinct, which reaches the right action for the
+wrong reason and discards the most informative column in the file.
 
 ## Deliberately not built
 
@@ -209,7 +247,12 @@ improvement loop, scored the same honest way:
 - **Missingness indicators.** A blank `monthly_spend` means contractor, and that fact is itself
   a signal — we know it carries signal, because the leakage detector already looks for exactly
   this.
-- **Text length** for free-text columns.
+- **Text length** for free-text columns — and, more importantly, a *reason* for free text that
+  isn't "identifier". The RSNA run dropped a column of radiology reports on the grounds that
+  "nearly every row has a different value, so this identifies rows rather than describing
+  them." For a paragraph of clinical prose that is precisely backwards: it is the most
+  descriptive column in the file. Right action, wrong reason — and in a tool whose entire
+  premise is that the reason is the product, a wrong reason is the defect.
 
 Same constraint as the tuned settings: each derived feature must be a declared recipe so
 `train_model.py` can reproduce it. A model the export can't rebuild is a model trapped in the app.

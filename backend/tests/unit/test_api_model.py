@@ -197,6 +197,50 @@ class TestPlan:
         assert client.get("/api/model/not-a-session/plan").status_code == 404
 
 
+class TestABlockedVerdictBinds:
+    """Found live on the RSNA knee dataset: readiness returned "blocked" because 4,349 of
+    4,407 rows had no label, and `/train` -- which never asked -- trained on the 58 that
+    remained and reported the result as useful. A tool whose central claim is that it will say
+    no cannot have a route that says no and then proceeds anyway."""
+
+    @staticmethod
+    def _mostly_unlabelled_csv(n: int = 400, labelled: int = 40) -> bytes:
+        rng = np.random.default_rng(5)
+        outcome = list(rng.choice(["yes", "no"], labelled)) + [None] * (n - labelled)
+        buffer = io.StringIO()
+        pd.DataFrame(
+            {"signal": rng.normal(0, 1, n).round(4), "outcome": outcome}
+        ).to_csv(buffer, index=False)
+        return buffer.getvalue().encode()
+
+    def test_training_is_refused_when_readiness_is_blocked(self):
+        session_id = _session(self._mostly_unlabelled_csv())
+        assert client.get(f"/api/readiness/{session_id}").json()["verdict"] == "blocked"
+
+        response = client.post(
+            f"/api/model/{session_id}/train", json={"include_deep_diagnostics": False}
+        )
+        assert response.status_code >= 400
+        assert "nothing was trained" in response.text
+
+    def test_the_refusal_repeats_the_blocking_reason(self):
+        """"Cannot train" without the reason makes the user go hunting for a fact the app
+        already has."""
+        session_id = _session(self._mostly_unlabelled_csv())
+        response = client.post(
+            f"/api/model/{session_id}/train", json={"include_deep_diagnostics": False}
+        )
+        assert "outcome" in response.text
+
+    def test_a_clean_dataset_is_still_trained(self):
+        """The guard has to be narrow, or it becomes the thing that stops the app working."""
+        response = client.post(
+            f"/api/model/{_session()}/train",
+            json={"excluded_columns": ["employee_id"], "include_deep_diagnostics": False},
+        )
+        assert response.status_code == 200
+
+
 class TestTraining:
     def test_trains_and_returns_metrics(self):
         result = client.post(

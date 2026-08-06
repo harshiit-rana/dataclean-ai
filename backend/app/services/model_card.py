@@ -27,6 +27,7 @@ _VERDICT_HEADINGS = {
     "useful": "This model works",
     "marginal": "This model is weak",
     "no_better_than_guessing": "This model does not work",
+    "not_enough_test_data": "There isn't enough data to judge this model",
 }
 
 _METRIC_LABELS = {

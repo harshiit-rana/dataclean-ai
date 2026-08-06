@@ -38,3 +38,7 @@ Thumbs.db
 
 # Source design doc -- kept locally, not published to the public repo
 DataClean_AI_PRD_v1.0.docx
+
+# Competition data used for testing. Licensed "Subject to Competition Rules" -- it is not
+# ours to redistribute, so it stays local no matter how useful it is as a test case.
+kaggle competition/

@@ -315,7 +315,10 @@ export interface ModelResult {
   primary_metric: string;
   results: CandidateResult[];
   best_model: string;
-  assessment: { verdict: "useful" | "marginal" | "no_better_than_guessing"; headline: string };
+  assessment: {
+    verdict: "useful" | "marginal" | "no_better_than_guessing" | "not_enough_test_data";
+    headline: string;
+  };
   deep_diagnostics: {
     skipped?: string | null;
     cross_validation?: CrossValidation | null;

@@ -42,6 +42,12 @@ const VERDICT_STYLES: Record<string, { title: string; className: string }> = {
     title: "This model does not work",
     className: "border-destructive/40 bg-destructive/5",
   },
+  // Deliberately not styled as a failure. "We cannot tell" is not "it is bad", and colouring
+  // it red would push people towards the wrong conclusion just as hard as calling it useful.
+  not_enough_test_data: {
+    title: "There isn't enough data to judge this model",
+    className: "border-sky-500/40 bg-sky-500/5",
+  },
 };
 
 function formatMetric(value: unknown): string {

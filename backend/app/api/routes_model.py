@@ -266,6 +266,19 @@ async def train_model(
     if task is None:
         raise TrainingFailedError(f"'{target}' has no usable values to learn from.")
 
+    # The readiness verdict has to bind, or it is decoration. It was advisory until the RSNA
+    # knee dataset went through: readiness returned "blocked" because 4,349 of 4,407 rows had
+    # no label, the Model page never asked, and the app trained on the 58 that remained and
+    # reported the result as useful. A tool whose whole claim is that it will say no cannot
+    # have a route that says no and then proceeds anyway.
+    readiness = ml_readiness.assess_readiness(df, goal)
+    if readiness.get("verdict") == "blocked":
+        blockers = readiness.get("blockers") or ["This data cannot support a model."]
+        raise TrainingFailedError(
+            "This data cannot support a model that would mean anything, so nothing was "
+            "trained. " + " ".join(blockers)
+        )
+
     model_names = request.model_names or [spec.name for spec in modeling.models_for_task(task)]
 
     def run() -> dict:

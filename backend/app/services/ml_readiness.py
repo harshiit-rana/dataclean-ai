@@ -568,28 +568,60 @@ def assess_readiness(df: pd.DataFrame, goal_context: GoalContext | None) -> dict
     report["task_type"] = task_type
 
     # --- enough to learn from ------------------------------------------------------------
-    if row_count < MIN_ROWS_FOR_MODELLING:
+    #
+    # Counted on rows that carry an answer, not on rows in the file. A row with no target is
+    # not training data -- it is dropped before fitting -- so measuring the file overstates
+    # the evidence by exactly the number of rows that cannot be used. Found live on the RSNA
+    # knee dataset, where this check reported "4,407 rows, comfortably above the 50 needed"
+    # while the check two lines below it reported 4,349 rows with no answer. Both were reading
+    # the same frame and only one of them was describing what would be trained on.
+    trainable_rows = int(df[target].notna().sum())
+    unlabelled = row_count - trainable_rows
+    if trainable_rows < MIN_ROWS_FOR_MODELLING:
+        shortfall = (
+            f"Only {trainable_rows:,} of the {row_count:,} rows have a value for '{target}'."
+            if unlabelled
+            else f"Only {trainable_rows:,} rows are left."
+        )
         log.add(
             readiness_checks.Check(
                 name="enough_rows",
-                label="Enough rows",
+                label="Enough rows to learn from",
                 status="failed",
-                finding=f"Only {row_count} rows are left.",
+                finding=shortfall,
                 evidence=f"That is too few to train a model that will hold up on data it "
                 f"hasn't seen -- around {MIN_ROWS_FOR_MODELLING} is a bare minimum, and more "
-                f"is much better.",
-                remedy="Undo a fix that dropped rows, or start from a larger extract.",
+                f"is much better. Rows with no answer cannot be trained on.",
+                remedy="Undo a fix that dropped rows, or start from a larger extract."
+                if not unlabelled
+                else f"Find the answers for the remaining rows. Filling '{target}' in with a "
+                f"guess would not help -- it would train the model on invented answers.",
                 severity="blocker",
+            )
+        )
+    elif unlabelled:
+        log.add(
+            readiness_checks.Check(
+                name="enough_rows",
+                label="Enough rows to learn from",
+                status="warning",
+                finding=f"{trainable_rows:,} rows carry a value for '{target}' and can be "
+                f"trained on, out of {row_count:,} in the file.",
+                evidence=f"The other {unlabelled:,} rows are above the "
+                f"{MIN_ROWS_FOR_MODELLING} minimum but will be dropped before fitting, so "
+                f"every score comes from the smaller number.",
+                remedy="Judge the results against the rows that were usable, not the file size.",
+                severity="warning",
             )
         )
     else:
         log.add(
             readiness_checks.Check(
                 name="enough_rows",
-                label="Enough rows",
+                label="Enough rows to learn from",
                 status="passed",
-                finding=f"{row_count:,} rows, comfortably above the {MIN_ROWS_FOR_MODELLING} "
-                f"needed to hold back a test set that means anything.",
+                finding=f"{trainable_rows:,} rows, comfortably above the "
+                f"{MIN_ROWS_FOR_MODELLING} needed to hold back a test set that means anything.",
             )
         )
 
@@ -741,7 +773,7 @@ def assess_readiness(df: pd.DataFrame, goal_context: GoalContext | None) -> dict
 # run and why, rather than an empty report that reads like a clean bill of health.
 _TARGET_DEPENDENT_CHECKS: tuple[tuple[str, str], ...] = (
     ("target_present", "The target is still in the data"),
-    ("enough_rows", "Enough rows"),
+    ("enough_rows", "Enough rows to learn from"),
     ("has_features", "Something to predict from"),
     ("target_complete", "Every row has an answer"),
     ("target_shape", "The answers can be told apart"),

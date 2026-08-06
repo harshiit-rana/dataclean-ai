@@ -74,6 +74,21 @@ are both running locally, you're ready to make changes.
   the report was indistinguishable from one where they had all passed. Never add an early
   return there — record a skip instead. `blockers` and `warnings` are derived views over the
   checks, so a new check gets into the summary, the panel and the audit report for free.
+- **A blocked verdict binds.** `/api/model/{id}/train` calls `assess_readiness` and refuses
+  when the verdict is `blocked`. This was advisory until a dataset with 4,349 of 4,407 rows
+  unlabelled went through: readiness said `blocked`, the training route never asked, and the
+  app fitted on the 58 remaining rows and reported the result as useful. A verdict the app
+  ignores is decoration. If you add a route that produces a model, it asks first.
+- **Count the rows you can learn from, not the rows in the file.** `enough_rows` measures
+  `df[target].notna().sum()`. The same dataset had it reporting "4,407 rows, comfortably above
+  the 50 needed" directly above a check reporting 4,349 rows with no answer. Any check whose
+  subject is training has to measure the rows that will actually be trained on.
+- **Too little test data is its own verdict, not a bad score.** `assess_result` returns
+  `not_enough_test_data` below 30 test rows or 10 in the rarer class, before any other verdict
+  is considered — because `no_better_than_guessing` is just as much a claim about the test set
+  as `useful` is, and neither can be made from twelve rows. Related: `_auc_noise_threshold` is
+  deliberately uncapped. The `min(0.75, ...)` that used to be there fired only on the smallest
+  test sets — the exact case the formula exists to be strict about — and lowered the bar.
 - **Nothing selects on the test set.** The improvement loop searches against cross-validated
   folds of the training data and opens the held-out set exactly once, at the end. If you add
   a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and

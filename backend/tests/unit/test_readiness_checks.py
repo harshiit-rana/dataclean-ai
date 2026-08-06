@@ -68,6 +68,55 @@ class TestEveryCheckReportsItself:
         assert rows["remedy"], "a finding the user cannot act on is only half-reported"
 
 
+class TestEnoughRowsCountsRowsItCanLearnFrom:
+    """Found live on the RSNA knee dataset. This check reported "4,407 rows, comfortably
+    above the 50 needed" while the check two lines below it reported 4,349 rows with no
+    answer. Both read the same frame; only one described what would be trained on."""
+
+    @staticmethod
+    def frame(rows: int, labelled: int) -> pd.DataFrame:
+        rng = np.random.default_rng(11)
+        answers = list(rng.choice(["yes", "no"], labelled)) + [None] * (rows - labelled)
+        return pd.DataFrame({"signal": rng.normal(0, 1, rows).round(3), "outcome": answers})
+
+    def test_a_mostly_unlabelled_file_does_not_pass_on_its_size(self):
+        report = ml_readiness.assess_readiness(
+            self.frame(4407, 58), goal(target_column="outcome")
+        )
+        rows = find(report, "enough_rows")
+        assert rows["status"] != "passed"
+        assert "58" in rows["finding"]
+
+    def test_below_the_minimum_it_blocks_and_names_both_numbers(self):
+        report = ml_readiness.assess_readiness(
+            self.frame(4407, 20), goal(target_column="outcome")
+        )
+        rows = find(report, "enough_rows")
+        assert rows["status"] == "failed"
+        assert rows["severity"] == "blocker"
+        assert "20" in rows["finding"] and "4,407" in rows["finding"]
+
+    def test_it_refuses_to_recommend_filling_the_gap_in(self):
+        """The remedy for a missing answer is finding the answer. Imputing it would train the
+        model on invented labels, which is worse than having fewer rows."""
+        report = ml_readiness.assess_readiness(
+            self.frame(4407, 20), goal(target_column="outcome")
+        )
+        assert "guess" in find(report, "enough_rows")["remedy"]
+
+    def test_enough_labelled_rows_still_warns_about_the_gap(self):
+        report = ml_readiness.assess_readiness(
+            self.frame(4407, 900), goal(target_column="outcome")
+        )
+        rows = find(report, "enough_rows")
+        assert rows["status"] == "warning"
+        assert "900" in rows["finding"]
+
+    def test_a_fully_labelled_file_passes_without_a_caveat(self, healthy):
+        report = ml_readiness.assess_readiness(healthy, goal(target_column="outcome"))
+        assert find(report, "enough_rows")["status"] == "passed"
+
+
 class TestChecksThatCouldNotRun:
     def test_no_target_leaves_a_transcript_of_what_was_skipped(self, healthy):
         """The case that motivated the refactor. The old code returned early, so a report
