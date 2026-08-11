@@ -241,6 +241,7 @@ def split_data(
     *,
     strategy: str = "random",
     time_column: str | None = None,
+    group_column: str | None = None,
     test_size: float = DEFAULT_TEST_SIZE,
 ):
     """Holds out a test set. Returns (X_train, X_test, y_train, y_test).
@@ -248,8 +249,14 @@ def split_data(
     `strategy="time"` sorts by `time_column` and takes the most recent rows as the test set.
     When the data has a time dimension a random split lets the model learn from the future to
     predict the past, which inflates the score and can't happen in production.
+
+    `strategy="group"` keeps every row belonging to one entity on one side of the split. When
+    the same customer, patient or machine appears in many rows, a random split puts some of
+    their rows in training and some in test, and the model scores well by recognising the
+    entity rather than learning the pattern. The app has detected this for a while and could
+    only advise treating the scores as optimistic; this is the fix it was pointing at.
     """
-    from sklearn.model_selection import train_test_split
+    from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
     labelled = df[df[target_column].notna()]
     if len(labelled) < MIN_ROWS_TO_TRAIN:
@@ -277,6 +284,37 @@ def split_data(
             features.loc[test_idx],
             labels.loc[train_idx],
             labels.loc[test_idx],
+        )
+
+    if strategy == "group":
+        if not group_column or group_column not in labelled.columns:
+            raise ModelingError(
+                "A grouped split needs the column that says which rows belong to the same "
+                "thing."
+            )
+        groups = labelled[group_column]
+        if groups.isna().any():
+            raise ModelingError(
+                f"'{group_column}' is blank on some rows, so they cannot be assigned to a "
+                f"group. Fill or drop those rows before splitting on it."
+            )
+        distinct = int(groups.nunique())
+        # Two groups can only ever produce a 50/50 split, and one produces none at all. The
+        # number here is low deliberately -- it is the point below which the split becomes
+        # arithmetically impossible, not a judgement about how much data is enough.
+        if distinct < 5:
+            raise ModelingError(
+                f"'{group_column}' has only {distinct} distinct "
+                f"{'value' if distinct == 1 else 'values'}, which is too few to hold some "
+                f"back as a test set. Use a random split, or group on something else."
+            )
+        splitter = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=RANDOM_STATE)
+        train_pos, test_pos = next(splitter.split(features, labels, groups=groups))
+        return (
+            features.iloc[train_pos],
+            features.iloc[test_pos],
+            labels.iloc[train_pos],
+            labels.iloc[test_pos],
         )
 
     # Stratify classification splits so a rare class isn't absent from one side entirely.
@@ -692,6 +730,7 @@ def train_candidates(
     excluded_columns: list[str] | None = None,
     split_strategy: str = "random",
     time_column: str | None = None,
+    group_column: str | None = None,
     include_deep_diagnostics: bool = True,
     model_params: dict[str, dict] | None = None,
 ) -> dict:
@@ -705,7 +744,15 @@ def train_candidates(
     if target_column not in df.columns:
         raise ModelingError(f"'{target_column}' is not in the data.")
 
-    features = classify_features(df, target_column, excluded_columns)
+    # The column being grouped on cannot also be an input. Every group in the test set is one
+    # the model has never seen by construction, so as a feature it can only ever contribute
+    # unseen categories -- and if it did carry signal, that signal would be the memorisation
+    # the grouped split exists to prevent.
+    withheld = list(excluded_columns or [])
+    if split_strategy == "group" and group_column and group_column not in withheld:
+        withheld.append(group_column)
+
+    features = classify_features(df, target_column, withheld)
     if not features["numeric"] and not features["categorical"]:
         raise ModelingError(
             "There are no usable columns left to predict from. Every other column was "
@@ -713,7 +760,12 @@ def train_candidates(
         )
 
     X_train, X_test, y_train, y_test = split_data(
-        df, target_column, task, strategy=split_strategy, time_column=time_column
+        df,
+        target_column,
+        task,
+        strategy=split_strategy,
+        time_column=time_column,
+        group_column=group_column,
     )
     used = features["numeric"] + features["categorical"]
     X_train, X_test = X_train[used], X_test[used]
@@ -779,6 +831,13 @@ def train_candidates(
     # scratch on each fold -- reusing a fitted one would score it on rows it trained on.
     deep: dict = {}
     if include_deep_diagnostics:
+        # Indexed off the concatenated train+test frames rather than the original, so the
+        # groups line up row for row with what cross-validation is handed.
+        cv_groups = None
+        if split_strategy == "group" and group_column:
+            order = list(X_train.index) + list(X_test.index)
+            cv_groups = df.loc[order, group_column]
+
         deep = diagnostics.compute_deep_diagnostics(
             lambda: build_pipeline(
                 best["model"],
@@ -792,6 +851,7 @@ def train_candidates(
             y_train,
             y_test,
             task,
+            groups=cv_groups,
         )
 
     return {
@@ -801,8 +861,22 @@ def train_candidates(
         "split": {
             "strategy": split_strategy,
             "time_column": time_column if split_strategy == "time" else None,
+            "group_column": group_column if split_strategy == "group" else None,
             "train_rows": int(len(X_train)),
             "test_rows": int(len(X_test)),
+            # How many entities ended up on each side. The row counts alone hide the thing
+            # that matters about a grouped split: 800 training rows drawn from 4 customers is
+            # not 800 independent observations.
+            "train_groups": (
+                int(df.loc[list(X_train.index), group_column].nunique())
+                if split_strategy == "group" and group_column
+                else None
+            ),
+            "test_groups": (
+                int(df.loc[list(X_test.index), group_column].nunique())
+                if split_strategy == "group" and group_column
+                else None
+            ),
         },
         "baseline": baseline,
         "primary_metric": key,

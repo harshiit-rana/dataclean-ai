@@ -185,7 +185,7 @@ class TestPlan:
         session_id = _session(_learnable_csv(with_dates=True))
         plan = client.get(f"/api/model/{session_id}/plan").json()
         assert "joined" in plan["date_columns"]
-        assert {o["value"] for o in plan["split_options"]} == {"random", "time"}
+        assert {o["value"] for o in plan["split_options"]} == {"random", "time", "group"}
 
     def test_a_session_without_a_target_is_refused_with_an_explanation(self):
         session_id = _session(target_column=None)
@@ -380,3 +380,63 @@ class TestCorrelations:
         result = client.get(f"/api/model/{_session()}/correlations").json()
         assert set(result["columns"]) == {"signal", "noise"}
         assert result["cells"]
+
+
+class TestGroupedSplitOverTheApi:
+    """The readiness panel has been naming repeated-entity columns for a while and telling
+    users the split could not act on them. These check that the plan now offers exactly those
+    columns, and that choosing one reaches the split."""
+
+    @staticmethod
+    def _repeated_entities_csv(customers: int = 80, per: int = 12) -> bytes:
+        rng = np.random.default_rng(7)
+        buffer = io.StringIO()
+        pd.DataFrame(
+            {
+                "customer_id": np.repeat([f"CUST-{i:03d}" for i in range(customers)], per),
+                "account_age_days": np.repeat(
+                    rng.integers(100, 9000, customers), per
+                ).astype(float),
+                "spend": rng.normal(50, 15, customers * per).round(2),
+                "outcome": np.repeat(rng.choice(["yes", "no"], customers), per),
+            }
+        ).to_csv(buffer, index=False)
+        return buffer.getvalue().encode()
+
+    def test_the_plan_offers_the_repeating_column(self):
+        plan = client.get(f"/api/model/{_session(self._repeated_entities_csv())}/plan").json()
+        assert "customer_id" in plan["group_columns"]
+        assert any(option["value"] == "group" for option in plan["split_options"])
+
+    def test_a_file_with_no_repeated_entity_offers_nothing_to_group_on(self):
+        """The option is still listed -- the form disables it and says why -- but proposing a
+        column to group on when none repeats would be an invitation to a meaningless split."""
+        assert client.get(f"/api/model/{_session()}/plan").json()["group_columns"] == []
+
+    def test_choosing_it_reaches_the_split(self):
+        session_id = _session(self._repeated_entities_csv())
+        result = client.post(
+            f"/api/model/{session_id}/train",
+            json={
+                "split_strategy": "group",
+                "group_column": "customer_id",
+                "model_names": ["logistic_regression"],
+                "include_deep_diagnostics": False,
+            },
+        ).json()
+        assert result["split"]["strategy"] == "group"
+        assert result["split"]["group_column"] == "customer_id"
+        assert result["split"]["train_groups"] + result["split"]["test_groups"] == 80
+
+    def test_grouping_on_a_column_with_too_few_values_fails_with_the_reason(self):
+        session_id = _session(self._repeated_entities_csv())
+        response = client.post(
+            f"/api/model/{session_id}/train",
+            json={
+                "split_strategy": "group",
+                "group_column": "outcome",
+                "include_deep_diagnostics": False,
+            },
+        )
+        assert response.status_code == 422
+        assert "too few" in response.text

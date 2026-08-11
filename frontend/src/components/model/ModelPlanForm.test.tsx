@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ModelPlanForm } from "./ModelPlanForm";
 import type { ModelPlan } from "@/api/types";
@@ -20,6 +20,7 @@ const PLAN: ModelPlan = {
   ],
   split_options: [{ value: "random", label: "Random split", description: "" }],
   date_columns: [],
+  group_columns: [],
   blockers: [],
   warnings: [],
   trained: false,
@@ -56,5 +57,57 @@ describe("ModelPlanForm", () => {
   it("still trains when nothing is blocking", () => {
     renderForm();
     expect(screen.getByRole("button", { name: /Train/ })).toBeEnabled();
+  });
+});
+
+describe("ModelPlanForm — grouped split", () => {
+  const GROUPED: Partial<ModelPlan> = {
+    group_columns: ["customer_id", "site"],
+    split_options: [
+      { value: "random", label: "Random split", description: "" },
+      { value: "group", label: "Keep related rows together", description: "" },
+    ],
+  };
+
+  it("disables grouping when nothing in the data repeats", () => {
+    renderForm({
+      split_options: [
+        { value: "random", label: "Random split", description: "" },
+        { value: "group", label: "Keep related rows together", description: "" },
+      ],
+      group_columns: [],
+    });
+    expect(screen.getByRole("radio", { name: /Keep related rows together/ })).toBeDisabled();
+    expect(screen.getByText(/No column in this data looks like one thing/)).toBeInTheDocument();
+  });
+
+  it("offers the repeating columns once grouping is chosen", () => {
+    renderForm(GROUPED);
+    fireEvent.click(screen.getByRole("radio", { name: /Keep related rows together/ }));
+    expect(screen.getByRole("option", { name: /Group by customer_id/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Group by site/ })).toBeInTheDocument();
+  });
+
+  it("warns that the grouping column stops being an input", () => {
+    renderForm(GROUPED);
+    fireEvent.click(screen.getByRole("radio", { name: /Keep related rows together/ }));
+    expect(screen.getByText(/won't be used as an input/)).toBeInTheDocument();
+  });
+
+  it("sends the chosen column with the training request", () => {
+    const onTrain = renderForm(GROUPED);
+    fireEvent.click(screen.getByRole("radio", { name: /Keep related rows together/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain).toHaveBeenCalledWith(
+      expect.objectContaining({ split_strategy: "group", group_column: "customer_id" })
+    );
+  });
+
+  it("does not send a group column on a random split", () => {
+    const onTrain = renderForm(GROUPED);
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain).toHaveBeenCalledWith(
+      expect.objectContaining({ split_strategy: "random", group_column: null })
+    );
   });
 });

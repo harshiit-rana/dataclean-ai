@@ -40,6 +40,14 @@ Severity = Literal["blocker", "warning"]
 # run rather than quietly making the readiness call slow.
 MAX_ROWS_FOR_CONTRADICTION_CHECK = 200_000
 
+# What "an entity repeating across rows" looks like: many distinct values, each appearing a
+# handful of times. A two-value flag repeats far more often and means nothing here; a
+# row-unique column repeats not at all. Named because the model plan offers exactly these
+# columns as candidates for a grouped split -- proposing a different set there than the panel
+# warns about would be two answers to one question.
+MIN_DISTINCT_FOR_ENTITY = 20
+MIN_REPETITION_FOR_ENTITY = 2.0
+
 
 @dataclass(frozen=True)
 class Check:
@@ -237,8 +245,8 @@ def check_repeated_entities(df: pd.DataFrame, target: str) -> Check:
 
     If the same customer, patient or machine appears in both the training and test sets, the
     model can memorise that entity rather than learn the pattern, and every score is
-    inflated. The fix is to split by group -- which this tool cannot yet do, so for now the
-    honest thing is to say the risk exists and name the column.
+    inflated. The fix is to split by group, which the model plan now offers on exactly the
+    columns named here -- this check used to be able to describe the problem and not solve it.
     """
     label = "Rows that belong together"
     rows = len(df)
@@ -263,12 +271,9 @@ def check_repeated_entities(df: pd.DataFrame, target: str) -> Check:
             continue
 
         distinct = int(series.nunique())
-        # Identifier-shaped repetition: many distinct values, each appearing a handful of
-        # times. A two-value flag repeats far more often and means nothing here; a row-unique
-        # column repeats not at all.
-        if distinct < 20 or distinct > rows / 2:
+        if distinct < MIN_DISTINCT_FOR_ENTITY or distinct > rows / 2:
             continue
-        if rows / distinct < 2.0:
+        if rows / distinct < MIN_REPETITION_FOR_ENTITY:
             continue
         candidates.append((column, distinct))
 
@@ -292,7 +297,9 @@ def check_repeated_entities(df: pd.DataFrame, target: str) -> Check:
         evidence="A random split can put the same entity in both training and test data, "
         "which lets the model recognise it rather than learn the pattern -- and every score "
         "comes out better than it should.",
-        remedy="If those rows really are repeated measurements of the same thing, treat the "
-        "scores as optimistic until the split can keep each entity on one side.",
+        remedy=f"If those rows really are repeated measurements of the same thing, choose "
+        f"\"Keep related rows together\" on the model plan and group on '{candidates[0][0]}'. "
+        f"A random split will otherwise report a score the model cannot repeat on an entity "
+        f"it has not seen.",
         severity="warning",
     )

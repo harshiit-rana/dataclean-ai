@@ -180,6 +180,35 @@ def _looks_like_an_identifier(series: pd.Series, rows: int) -> bool:
     return True
 
 
+def _group_columns(df: pd.DataFrame, target: str) -> list[str]:
+    """Columns that look like an entity repeating across rows, most repeated first.
+
+    Shares its shape test with `readiness_checks.check_repeated_entities`, which is what
+    detects the problem in the first place -- offering a different set of columns here than
+    the panel warns about would be two answers to one question.
+    """
+    from app.services import readiness_checks
+
+    found: list[tuple[str, float]] = []
+    rows = len(df)
+    for column in df.columns:
+        if column == target:
+            continue
+        series = df[column].dropna()
+        if series.empty or pd.api.types.is_numeric_dtype(series):
+            continue
+        distinct = int(series.nunique())
+        if distinct < readiness_checks.MIN_DISTINCT_FOR_ENTITY or distinct > rows / 2:
+            continue
+        repetition = rows / distinct
+        if repetition < readiness_checks.MIN_REPETITION_FOR_ENTITY:
+            continue
+        found.append((str(column), repetition))
+
+    found.sort(key=lambda pair: pair[1], reverse=True)
+    return [column for column, _ in found]
+
+
 def _date_columns(df: pd.DataFrame) -> list[str]:
     """Columns usable to order a time-based split."""
     found = []
@@ -252,8 +281,17 @@ async def get_model_plan(
                 "this if predictions will be made about the future -- a random split lets "
                 "the model learn from the future to predict the past, which flatters it.",
             },
+            {
+                "value": "group",
+                "label": "Keep related rows together",
+                "description": "Puts every row about the same customer, patient or machine "
+                "on one side of the split. Use this when one thing appears in many rows -- "
+                "otherwise the model can score well by recognising it rather than learning "
+                "the pattern, and the score won't survive meeting a new one.",
+            },
         ],
         date_columns=_date_columns(df),
+        group_columns=_group_columns(df, target),
         blockers=readiness.get("blockers", []),
         warnings=readiness.get("warnings", []),
         trained=stored is not None,
@@ -315,6 +353,7 @@ async def train_model(
             excluded_columns=request.excluded_columns,
             split_strategy=request.split_strategy,
             time_column=request.time_column,
+            group_column=request.group_column,
             include_deep_diagnostics=request.include_deep_diagnostics,
         )
 
@@ -365,6 +404,7 @@ async def improve_model(
             excluded_columns=request.excluded_columns,
             split_strategy=request.split_strategy,
             time_column=request.time_column,
+            group_column=request.group_column,
             goal=request.goal,
             budget=request.budget,
         )
@@ -378,6 +418,7 @@ async def improve_model(
             excluded_columns=request.excluded_columns,
             split_strategy=request.split_strategy,
             time_column=request.time_column,
+            group_column=request.group_column,
             include_deep_diagnostics=request.include_deep_diagnostics,
             model_params={best["model"]: params},
         )

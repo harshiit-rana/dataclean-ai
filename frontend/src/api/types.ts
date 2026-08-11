@@ -191,7 +191,7 @@ export interface CandidateModel {
 }
 
 export interface SplitOption {
-  value: "random" | "time";
+  value: "random" | "time" | "group";
   label: string;
   description: string;
 }
@@ -208,6 +208,8 @@ export interface ModelPlan {
   candidate_models: CandidateModel[];
   split_options: SplitOption[];
   date_columns: string[];
+  /** Candidates for a grouped split, most repeated first. */
+  group_columns: string[];
   blockers: string[];
   warnings: string[];
   trained: boolean;
@@ -216,8 +218,10 @@ export interface ModelPlan {
 export interface TrainRequest {
   excluded_columns: string[];
   model_names: string[];
-  split_strategy: "random" | "time";
+  split_strategy: "random" | "time" | "group";
   time_column: string | null;
+  /** The column saying which rows belong to the same entity, for a grouped split. */
+  group_column?: string | null;
   include_deep_diagnostics: boolean;
 }
 
@@ -341,10 +345,15 @@ export interface ModelResult {
   target_column: string;
   features: FeatureBreakdown;
   split: {
-    strategy: "random" | "time";
+    strategy: "random" | "time" | "group";
     time_column: string | null;
+    group_column: string | null;
     train_rows: number;
     test_rows: number;
+    /** Entities on each side. Row counts alone hide what matters about a grouped split:
+     * 800 training rows drawn from 4 customers is not 800 independent observations. */
+    train_groups: number | null;
+    test_groups: number | null;
   };
   baseline: Record<string, number | string>;
   primary_metric: string;

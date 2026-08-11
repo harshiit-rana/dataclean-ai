@@ -105,6 +105,14 @@ are both running locally, you're ready to make changes.
   as `useful` is, and neither can be made from twelve rows. Related: `_auc_noise_threshold` is
   deliberately uncapped. The `min(0.75, ...)` that used to be there fired only on the smallest
   test sets — the exact case the formula exists to be strict about — and lowered the bar.
+- **A grouped split has to be grouped all the way down.** Choosing `split_strategy="group"`
+  changes four things, not one: the train/test split uses `GroupShuffleSplit`, cross-validation
+  uses `GroupKFold`, the improvement loop's search folds are grouped, and the grouping column
+  is withheld from the features. Miss any of them and the leak simply moves — a grouped
+  train/test split with ungrouped CV reports an inflated cross-validated score sitting directly
+  beside the honest one, and nothing on the page says why they disagree. `readiness_checks`
+  owns the shape test (`MIN_DISTINCT_FOR_ENTITY`, `MIN_REPETITION_FOR_ENTITY`) and the model
+  plan offers exactly the columns it flags — two answers to one question is the bug to avoid.
 - **Nothing selects on the test set.** The improvement loop searches against cross-validated
   folds of the training data and opens the held-out set exactly once, at the end. If you add
   a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and

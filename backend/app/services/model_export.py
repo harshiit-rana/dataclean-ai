@@ -66,6 +66,18 @@ cut = int(len(ranked) * {1 - DEFAULT_TEST_SIZE})
 X_train, X_test = features.loc[ranked[:cut]], features.loc[ranked[cut:]]
 y_train, y_test = labels.loc[ranked[:cut]], labels.loc[ranked[cut:]]'''
 
+    if split.get("strategy") == "group" and split.get("group_column"):
+        column = split["group_column"]
+        return f'''# Grouped split: every row belonging to one entity stays on one side.
+# The same {column} appearing in both training and test lets the model score well by
+# recognising the entity rather than learning the pattern. That inflates every number
+# below and cannot help once it meets an entity it has never seen.
+groups = labelled[{_literal(column)}]
+splitter = GroupShuffleSplit(n_splits=1, test_size={DEFAULT_TEST_SIZE}, random_state={RANDOM_STATE})
+train_pos, test_pos = next(splitter.split(features, labels, groups=groups))
+X_train, X_test = features.iloc[train_pos], features.iloc[test_pos]
+y_train, y_test = labels.iloc[train_pos], labels.iloc[test_pos]'''
+
     stratify = (
         "\n# Stratified so a rare class isn't absent from one side of the split entirely.\n"
         "stratify = labels if labels.value_counts().min() >= 2 else None"
@@ -144,10 +156,16 @@ def build_training_script(result: dict, *, file_name: str = "cleaned.csv") -> st
         if categorical
         else "from sklearn.preprocessing import StandardScaler"
     )
-    # A time-based split orders the rows itself and never calls train_test_split. Importing
-    # it anyway would leave an unused import in a file people are meant to read and edit.
-    time_split = split.get("strategy") == "time" and split.get("time_column")
-    split_import = "" if time_split else "\nfrom sklearn.model_selection import train_test_split"
+    # Each strategy needs a different splitter, and only the one actually used is imported. A
+    # time-based split orders the rows itself and imports nothing. Leaving an unused import in
+    # a file people are meant to read and edit is a small lie about what the script does.
+    strategy = split.get("strategy")
+    if strategy == "time" and split.get("time_column"):
+        split_import = ""
+    elif strategy == "group" and split.get("group_column"):
+        split_import = "\nfrom sklearn.model_selection import GroupShuffleSplit"
+    else:
+        split_import = "\nfrom sklearn.model_selection import train_test_split"
 
     return f'''"""Reproduces the model DataClean AI trained on {file_name}.
 

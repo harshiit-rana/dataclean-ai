@@ -115,14 +115,23 @@ def scoring_for(task: str, y) -> str:
     return "roc_auc" if pd.Series(y).nunique() == 2 else "accuracy"
 
 
-def cv_splitter(task: str, y, folds: int = CV_FOLDS):
+def cv_splitter(task: str, y, folds: int = CV_FOLDS, groups=None):
     """Stratified for classification, so every fold keeps the class balance -- without it a
     rare class can be missing from a fold entirely and the score for that fold is undefined.
+
+    `groups` overrides that and keeps each entity whole instead. The two cannot both be had,
+    and splitting an entity across folds is the one that inflates the score -- so when a run
+    is grouped, every configuration in the search is compared on grouped folds. Otherwise the
+    loop would pick its winner on exactly the leakage the split was chosen to prevent.
 
     Returns None when the data can't support even two folds, which is the caller's signal
     that searching isn't possible here.
     """
-    from sklearn.model_selection import KFold, StratifiedKFold
+    from sklearn.model_selection import GroupKFold, KFold, StratifiedKFold
+
+    if groups is not None:
+        usable = min(folds, int(pd.Series(groups).nunique()))
+        return GroupKFold(n_splits=usable) if usable >= 2 else None
 
     if task != "classification":
         return KFold(n_splits=folds, shuffle=True, random_state=42)
@@ -147,6 +156,7 @@ def score_config(
     task: str,
     *,
     folds: int = CV_FOLDS,
+    groups=None,
 ) -> SearchResult | None:
     """Cross-validates one configuration. The unit of comparison everything else uses.
 
@@ -156,14 +166,16 @@ def score_config(
     """
     from sklearn.model_selection import cross_val_score
 
-    splitter = cv_splitter(task, y_train, folds)
+    splitter = cv_splitter(task, y_train, folds, groups)
     if splitter is None:
         return None
 
     metric = scoring_for(task, y_train)
     y_input = pd.Series(y_train).astype(str) if task == "classification" else y_train
     try:
-        scores = cross_val_score(build(), X_train, y_input, cv=splitter, scoring=metric, n_jobs=1)
+        scores = cross_val_score(
+            build(), X_train, y_input, cv=splitter, scoring=metric, n_jobs=1, groups=groups
+        )
     except Exception as exc:  # noqa: BLE001 -- a config that won't fit is a result, not a crash
         logger.warning("Configuration failed to score: %s", exc, exc_info=True)
         return None
@@ -186,6 +198,7 @@ def search(
     *,
     budget: int = DEFAULT_BUDGET,
     folds: int = CV_FOLDS,
+    groups=None,
 ) -> SearchResult | None:
     """Randomized search over this model's space, cross-validated on the training data.
 
@@ -198,7 +211,7 @@ def search(
     if not space:
         return None
 
-    splitter = cv_splitter(task, y_train, folds)
+    splitter = cv_splitter(task, y_train, folds, groups)
     if splitter is None:
         return None
 
@@ -226,7 +239,7 @@ def search(
         error_score=np.nan,
     )
     try:
-        searcher.fit(X_train, y_input)
+        searcher.fit(X_train, y_input, groups=groups)
     except Exception as exc:  # noqa: BLE001
         logger.warning("Search failed for %s: %s", model_name, exc, exc_info=True)
         return None

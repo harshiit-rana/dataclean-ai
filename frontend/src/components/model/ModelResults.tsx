@@ -84,8 +84,20 @@ export function ModelResults({ result }: { result: ModelResult }) {
             {result.split.test_rows.toLocaleString()} it had never seen
             {result.split.strategy === "time"
               ? `, split by ${result.split.time_column}.`
-              : ", split at random."}
+              : result.split.strategy === "group"
+                ? `, kept whole by ${result.split.group_column}.`
+                : ", split at random."}
           </p>
+          {/* The entity counts, not just the rows. 800 training rows drawn from 4 customers
+              is not 800 independent observations, and the row count alone hides that. */}
+          {result.split.strategy === "group" && result.split.test_groups != null && (
+            <p className="mt-1 text-muted-foreground">
+              That is {result.split.train_groups?.toLocaleString()} distinct{" "}
+              {result.split.group_column} values to learn from and{" "}
+              {result.split.test_groups.toLocaleString()} it has never met. No{" "}
+              {result.split.group_column} appears on both sides.
+            </p>
+          )}
         </CardContent>
       </Card>
 

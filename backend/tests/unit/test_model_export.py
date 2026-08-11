@@ -200,3 +200,60 @@ class TestScriptActuallyRuns:
         result = _train(classification_data.dropna(subset=["outcome"]), "outcome",
                         "classification", ["logistic_regression"])
         self._run(tmp_path, classification_data, result)  # must not raise
+
+
+class TestGroupedSplitIsExported:
+    """A grouped run whose script silently reverted to a random split would print a *higher*
+    accuracy than the app reported -- the leak reappearing in the one artifact the user takes
+    away to prove the number. Worse than an error, because it looks like success."""
+
+    @staticmethod
+    def _repeated_entities(customers: int = 80, per: int = 12) -> pd.DataFrame:
+        rng = np.random.default_rng(7)
+        return pd.DataFrame(
+            {
+                "customer_id": np.repeat([f"CUST-{i:03d}" for i in range(customers)], per),
+                "account_age_days": np.repeat(
+                    rng.integers(100, 9000, customers), per
+                ).astype(float),
+                "spend": rng.normal(50, 15, customers * per).round(2),
+                "outcome": np.repeat(rng.choice(["yes", "no"], customers), per),
+            }
+        )
+
+    def _result(self, df: pd.DataFrame) -> dict:
+        result = modeling.train_candidates(
+            df,
+            target_column="outcome",
+            task="classification",
+            model_names=["logistic_regression"],
+            split_strategy="group",
+            group_column="customer_id",
+            include_deep_diagnostics=False,
+        )
+        result["features"]["excluded"] = []
+        return result
+
+    def test_the_script_groups_rather_than_splitting_at_random(self):
+        script = model_export.build_training_script(self._result(self._repeated_entities()))
+        ast.parse(script)
+        assert "GroupShuffleSplit" in script
+        assert "train_test_split" not in script
+        assert "customer_id" in script
+
+    def test_it_says_why_in_the_script(self):
+        """Someone reading the exported file should learn the reason, not just the mechanism.
+        A grouped split is the kind of choice that gets 'simplified' away by the next person."""
+        script = model_export.build_training_script(self._result(self._repeated_entities()))
+        assert "recognising the entity" in script
+
+    def test_the_grouped_script_runs_and_reproduces_the_metrics(self, tmp_path):
+        df = self._repeated_entities()
+        result = self._result(df)
+        output = TestScriptActuallyRuns()._run(tmp_path, df, result)
+
+        match = re.search(r"Accuracy:\s+([0-9.]+)", output)
+        assert match, f"no accuracy line in the script's output:\n{output}"
+        assert float(match.group(1)) == pytest.approx(
+            result["results"][0]["metrics"]["accuracy"], abs=1e-4
+        )

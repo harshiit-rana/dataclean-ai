@@ -519,3 +519,129 @@ class TestTrainCandidates:
         assert len(modeling.models_for_task("classification")) >= 3
         assert len(modeling.models_for_task("regression")) >= 3
         assert all(s.task == "regression" for s in modeling.models_for_task("regression"))
+
+
+class TestGroupedSplit:
+    """When one thing appears in many rows, a random split puts some of its rows in training
+    and some in test. The model then scores well by recognising the entity rather than
+    learning the pattern -- and that score cannot survive meeting an entity it has never seen.
+
+    The app has detected this for a while and could only advise treating the numbers as
+    optimistic. These tests pin down the fix it was pointing at.
+    """
+
+    @staticmethod
+    def memorisable(customers: int = 80, per: int = 12) -> pd.DataFrame:
+        """No learnable pattern whatsoever: the label is a coin flip *per customer*, and one
+        column is a per-customer constant. Any score above chance here is memorisation."""
+        rng = np.random.default_rng(7)
+        return pd.DataFrame(
+            {
+                "customer_id": np.repeat([f"CUST-{i:03d}" for i in range(customers)], per),
+                "account_age_days": np.repeat(
+                    rng.integers(100, 9000, customers), per
+                ).astype(float),
+                "visit_number": list(range(per)) * customers,
+                "spend": rng.normal(50, 15, customers * per).round(2),
+                "churned": np.repeat(rng.choice(["yes", "no"], customers), per),
+            }
+        )
+
+    def test_no_entity_appears_on_both_sides(self):
+        df = self.memorisable()
+        X_train, X_test, _, _ = modeling.split_data(
+            df, "churned", "classification", strategy="group", group_column="customer_id"
+        )
+        train = set(df.loc[X_train.index, "customer_id"])
+        test = set(df.loc[X_test.index, "customer_id"])
+        assert train and test
+        assert not (train & test)
+
+    def test_a_random_split_invents_a_signal_that_a_grouped_split_does_not(self):
+        """The whole justification. There is nothing to learn in this data, and only one of
+        these two splits says so."""
+        df = self.memorisable()
+        common = dict(
+            target_column="churned",
+            task="classification",
+            model_names=["random_forest_classifier"],
+            include_deep_diagnostics=False,
+        )
+        random_run = modeling.train_candidates(df, split_strategy="random", **common)
+        grouped_run = modeling.train_candidates(
+            df, split_strategy="group", group_column="customer_id", **common
+        )
+
+        random_auc = random_run["results"][0]["metrics"]["roc_auc"]
+        grouped_auc = grouped_run["results"][0]["metrics"]["roc_auc"]
+        assert random_auc > grouped_auc + 0.08
+        assert grouped_run["assessment"]["verdict"] == "no_better_than_guessing"
+
+    def test_the_grouping_column_is_never_an_input(self):
+        """Every test group is unseen by construction, so as a feature it could only ever
+        contribute unknown categories -- and if it did carry signal, that signal is exactly
+        the memorisation the split exists to prevent."""
+        result = modeling.train_candidates(
+            self.memorisable(),
+            target_column="churned",
+            task="classification",
+            model_names=["logistic_regression"],
+            split_strategy="group",
+            group_column="customer_id",
+            include_deep_diagnostics=False,
+        )
+        used = result["features"]["numeric"] + result["features"]["categorical"]
+        assert "customer_id" not in used
+
+    def test_cross_validation_is_grouped_too(self):
+        """Otherwise a run that carefully grouped its train/test split still reports an
+        inflated cross-validated score directly beside the honest one."""
+        result = modeling.train_candidates(
+            self.memorisable(),
+            target_column="churned",
+            task="classification",
+            model_names=["logistic_regression"],
+            split_strategy="group",
+            group_column="customer_id",
+            include_deep_diagnostics=True,
+        )
+        assert result["deep_diagnostics"]["cross_validation"]["grouped"] is True
+
+    def test_the_split_reports_entities_not_just_rows(self):
+        result = modeling.train_candidates(
+            self.memorisable(),
+            target_column="churned",
+            task="classification",
+            model_names=["logistic_regression"],
+            split_strategy="group",
+            group_column="customer_id",
+            include_deep_diagnostics=False,
+        )
+        split = result["split"]
+        assert split["train_groups"] + split["test_groups"] == 80
+        assert split["group_column"] == "customer_id"
+
+    def test_too_few_groups_is_refused_with_the_reason(self):
+        df = pd.DataFrame(
+            {"team": ["a", "b"] * 60, "x": range(120), "outcome": ["yes", "no"] * 60}
+        )
+        with pytest.raises(modeling.ModelingError, match="too few"):
+            modeling.split_data(
+                df, "outcome", "classification", strategy="group", group_column="team"
+            )
+
+    def test_a_missing_group_column_is_refused(self):
+        with pytest.raises(modeling.ModelingError, match="which rows belong"):
+            modeling.split_data(
+                self.memorisable(), "churned", "classification", strategy="group"
+            )
+
+    def test_blank_groups_are_refused_rather_than_lumped_together(self):
+        """Treating every blank as one giant entity would silently put unrelated rows in the
+        same group, which is a different wrong answer rather than an error."""
+        df = self.memorisable()
+        df.loc[df.index[:5], "customer_id"] = None
+        with pytest.raises(modeling.ModelingError, match="blank"):
+            modeling.split_data(
+                df, "churned", "classification", strategy="group", group_column="customer_id"
+            )

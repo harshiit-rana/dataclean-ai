@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 7 August 2026 · 35 commits · 405 backend tests, 61 frontend tests
+Last updated: 7 August 2026 · 36 commits · 420 backend tests, 66 frontend tests
 
 ---
 
@@ -100,8 +100,19 @@ Naming a target column changes what the tool does, not just how it words things:
   currently stands, so it stays correct after an undo or a chat edit.
 - **Contradictory labels.** Rows with identical inputs and different answers. No statistical
   check finds these and no model survives them — they're a hard ceiling on accuracy.
-- **Repeated entities.** A column whose values recur across rows means a random split can put
-  the same customer in both training and test, which inflates every score.
+- **Repeated entities, and the split that fixes them.** A column whose values recur across
+  rows means a random split can put the same customer in both training and test, so the model
+  scores well by recognising the customer rather than learning the pattern. The app detected
+  this for a long time and could only advise treating the numbers as optimistic; it now offers
+  a grouped split on exactly the columns it flags. Grouping is applied all the way down --
+  `GroupShuffleSplit` for train/test, `GroupKFold` for cross-validation and for every fold the
+  improvement loop searches on, and the grouping column withheld from the inputs. Missing any
+  one of those just moves the leak.
+
+  On a test file with **no learnable pattern at all** -- the label a coin flip per customer,
+  one column a per-customer constant -- a random split reports AUC 0.63 and calls it
+  *"marginal"*. The grouped split reports 0.50 and says *no better than guessing*. The old
+  behaviour invented a signal out of nothing.
 
 ### Business rules
 
@@ -319,3 +330,8 @@ better than a paragraph of explanation next to a spinner.
   deliberate scope choice, not an oversight — but it means there's no "my past sessions" view.
 - **Single-process.** Fine for the intended use; a multi-worker deployment would need the
   retention sweep moved out of the app process.
+- **A grouped split can't also be stratified.** Keeping an entity whole and balancing the
+  classes across folds are competing demands, and splitting the entity is the one that
+  inflates the score — so grouping wins. On a lopsided target with few entities this can leave
+  a fold thin on the rare class; the fold spread shown next to the score is where that shows
+  up.

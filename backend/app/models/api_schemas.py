@@ -129,6 +129,7 @@ class ModelPlanResponse(BaseModel):
     candidate_models: list[dict]
     split_options: list[dict]
     date_columns: list[str]  # candidates for a time-based split
+    group_columns: list[str]  # candidates for a grouped split, most repeated first
     blockers: list[str]
     warnings: list[str]
     trained: bool
@@ -161,8 +162,10 @@ class RulesResponse(BaseModel):
 class TrainRequest(BaseModel):
     excluded_columns: list[str] = []
     model_names: list[str] = []  # empty means "every model that fits the task"
-    split_strategy: str = "random"  # "random" | "time"
+    split_strategy: str = "random"  # "random" | "time" | "group"
     time_column: Optional[str] = None
+    # The column identifying which rows belong to the same entity, for a grouped split.
+    group_column: Optional[str] = None
     include_deep_diagnostics: bool = True
 
 

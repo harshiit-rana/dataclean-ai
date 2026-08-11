@@ -363,18 +363,45 @@ def compute_diagnostics(pipeline, X_test, y_test, task: str, metrics: dict) -> d
         return {}
 
 
-def cross_validate_pipeline(build, X, y, task: str, folds: int = CV_FOLDS) -> dict:
+def cross_validate_pipeline(build, X, y, task: str, folds: int = CV_FOLDS, groups=None) -> dict:
     """Scores across k folds instead of one split.
 
     A single held-out set gives one number with no sense of how much it would move on a
     different split. Spread across folds is the honest answer to "how much should I trust
     this?", and a wide spread on small data is itself the finding.
+
+    `groups` makes the folds entity-aware. Without it, a run that carefully grouped its
+    train/test split would still report a cross-validated score built by scattering each
+    entity across folds -- an inflated number sitting directly beside the honest one, which is
+    worse than not showing it, because the two disagree and nothing says why.
     """
-    from sklearn.model_selection import KFold, StratifiedKFold, cross_val_score
+    from sklearn.model_selection import GroupKFold, KFold, StratifiedKFold, cross_val_score
 
     scoring = "r2" if task == "regression" else "roc_auc"
     if task == "classification" and pd.Series(y).nunique() > 2:
         scoring = "accuracy"
+
+    if groups is not None:
+        distinct = int(pd.Series(groups).nunique())
+        usable_folds = int(min(folds, distinct))
+        if usable_folds < 2:
+            return {}
+        # Not stratified: keeping an entity whole and balancing the classes are competing
+        # demands, and splitting the entity is the one that inflates the score.
+        splitter = GroupKFold(n_splits=usable_folds)
+        y_input = pd.Series(y).astype(str) if task == "classification" else y
+        scores = cross_val_score(
+            build(), X, y_input, cv=splitter, scoring=scoring, n_jobs=1, groups=groups
+        )
+        values = [round(float(s), 4) for s in scores]
+        return {
+            "metric": scoring,
+            "folds": values,
+            "mean": round(float(np.mean(values)), 4),
+            "std": round(float(np.std(values)), 4),
+            "spread": round(float(max(values) - min(values)), 4),
+            "grouped": True,
+        }
 
     if task == "classification":
         counts = pd.Series(y).value_counts()
@@ -465,7 +492,9 @@ def permutation_importance_scores(pipeline, X_test, y_test, task: str, top_n: in
     return rows[:top_n]
 
 
-def compute_deep_diagnostics(build, pipeline, X_train, X_test, y_train, y_test, task: str) -> dict:
+def compute_deep_diagnostics(
+    build, pipeline, X_train, X_test, y_train, y_test, task: str, groups=None
+) -> dict:
     """The expensive tier: refits the model many times. Run for the chosen model only, and
     skipped on data large enough for the cost to be felt.
 
@@ -487,7 +516,10 @@ def compute_deep_diagnostics(build, pipeline, X_train, X_test, y_train, y_test, 
 
     result: dict = {"skipped": None}
     for key, work in (
-        ("cross_validation", lambda: cross_validate_pipeline(build, X_all, y_all, task)),
+        (
+            "cross_validation",
+            lambda: cross_validate_pipeline(build, X_all, y_all, task, groups=groups),
+        ),
         ("learning_curve", lambda: learning_curve_points(build, X_all, y_all, task)),
         (
             "permutation_importance",

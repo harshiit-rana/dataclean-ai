@@ -102,6 +102,7 @@ def improve(
     excluded_columns: list[str] | None = None,
     split_strategy: str = "random",
     time_column: str | None = None,
+    group_column: str | None = None,
     goal: float | None = None,
     budget: int = tuning.DEFAULT_BUDGET,
     on_progress: Callable[[Round], None] | None = None,
@@ -118,7 +119,14 @@ def improve(
     if target_column not in df.columns:
         raise modeling.ModelingError(f"'{target_column}' is not in the data.")
 
-    features = modeling.classify_features(df, target_column, excluded_columns)
+    # Mirrors train_candidates: the column being grouped on cannot also be an input, or the
+    # loop would be searching for settings that exploit the very memorisation the grouped
+    # split exists to prevent.
+    withheld = list(excluded_columns or [])
+    if split_strategy == "group" and group_column and group_column not in withheld:
+        withheld.append(group_column)
+
+    features = modeling.classify_features(df, target_column, withheld)
     if not features["numeric"] and not features["categorical"]:
         raise modeling.ModelingError(
             "There are no usable columns left to predict from, so there is nothing to improve."
@@ -126,12 +134,24 @@ def improve(
 
     # Split once. Nothing below this line is allowed to look at X_test or y_test.
     X_train, X_test, y_train, y_test = modeling.split_data(
-        df, target_column, task, strategy=split_strategy, time_column=time_column
+        df,
+        target_column,
+        task,
+        strategy=split_strategy,
+        time_column=time_column,
+        group_column=group_column,
     )
     used = features["numeric"] + features["categorical"]
+    # Captured before the frame is narrowed to the model's inputs, and aligned to the training
+    # rows -- every round below compares configurations on these folds.
+    train_groups = (
+        df.loc[list(X_train.index), group_column]
+        if split_strategy == "group" and group_column
+        else None
+    )
     X_train, X_test = X_train[used], X_test[used]
 
-    if tuning.cv_splitter(task, y_train) is None:
+    if tuning.cv_splitter(task, y_train, groups=train_groups) is None:
         raise modeling.ModelingError(
             "There are too few rows in the smallest class to cross-validate, so there is no "
             "safe way to compare one configuration against another on this data."
@@ -171,7 +191,9 @@ def improve(
     family_scores: dict[str, float] = {}
     best_name, best_score, best_std = "", float("-inf"), 0.0
     for name in candidates:
-        result = tuning.score_config(build_for(name), X_train, y_train, task)
+        result = tuning.score_config(
+            build_for(name), X_train, y_train, task, groups=train_groups
+        )
         if result is None:
             continue
         family_scores[name] = result.score
@@ -205,7 +227,8 @@ def improve(
     # --- Round 2: settings for the leading family ----------------------------------------
     if not stopped_because:
         found = tuning.search(
-            build_for(best_name), best_name, X_train, y_train, task, budget=budget
+            build_for(best_name), best_name, X_train, y_train, task,
+            budget=budget, groups=train_groups,
         )
         if found is None:
             emit(
@@ -266,7 +289,10 @@ def improve(
         skipped = len(family_scores) - len(challengers) - 1
         improved_challenger = None
         for name in challengers:
-            found = tuning.search(build_for(name), name, X_train, y_train, task, budget=budget)
+            found = tuning.search(
+                build_for(name), name, X_train, y_train, task,
+                budget=budget, groups=train_groups,
+            )
             if found and _is_real_gain(found.score, best_score, found.std):
                 if improved_challenger is None or found.score > improved_challenger[1].score:
                     improved_challenger = (name, found)
@@ -347,6 +373,7 @@ def improve(
         "split": {
             "strategy": split_strategy,
             "time_column": time_column if split_strategy == "time" else None,
+            "group_column": group_column if split_strategy == "group" else None,
             "train_rows": int(len(X_train)),
             "test_rows": int(len(X_test)),
         },

@@ -18,8 +18,10 @@ interface ModelPlanFormProps {
 export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
   const [excluded, setExcluded] = useState<string[]>(plan.excluded_columns);
   const [models, setModels] = useState<string[]>(plan.candidate_models.map((m) => m.name));
-  const [splitStrategy, setSplitStrategy] = useState<"random" | "time">("random");
+  const [splitStrategy, setSplitStrategy] = useState<"random" | "time" | "group">("random");
   const [timeColumn, setTimeColumn] = useState<string>(plan.date_columns[0] ?? "");
+  // Defaults to the most-repeated column, which is the one the readiness panel names.
+  const [groupColumn, setGroupColumn] = useState<string>(plan.group_columns?.[0] ?? "");
 
   // The server refuses to train when readiness is blocked, so offering the button anyway
   // turns a verdict the app already reached into an error message the user has to provoke.
@@ -111,7 +113,9 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {plan.split_options.map((option) => {
-            const disabled = option.value === "time" && plan.date_columns.length === 0;
+            const disabled =
+              (option.value === "time" && plan.date_columns.length === 0) ||
+              (option.value === "group" && (plan.group_columns?.length ?? 0) === 0);
             return (
               <label
                 key={option.value}
@@ -131,9 +135,11 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
                 <span className="flex-1 text-sm">
                   <span className="font-medium">{option.label}</span>
                   <span className="mt-0.5 block text-xs text-muted-foreground">
-                    {disabled
-                      ? "No date column in this data to order the rows by."
-                      : option.description}
+                    {!disabled
+                      ? option.description
+                      : option.value === "time"
+                        ? "No date column in this data to order the rows by."
+                        : "No column in this data looks like one thing appearing in many rows."}
                   </span>
                 </span>
               </label>
@@ -148,6 +154,25 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
                 </option>
               ))}
             </Select>
+          )}
+
+          {splitStrategy === "group" && (plan.group_columns?.length ?? 0) > 0 && (
+            <div className="flex flex-col gap-1">
+              <Select value={groupColumn} onChange={(e) => setGroupColumn(e.target.value)}>
+                {plan.group_columns.map((column) => (
+                  <option key={column} value={column}>
+                    Group by {column}
+                  </option>
+                ))}
+              </Select>
+              {/* Said here because it is a consequence of the choice, not of the column
+                  picker above it -- and finding out afterwards that an input silently
+                  vanished is the kind of surprise this whole page exists to avoid. */}
+              <p className="text-xs text-muted-foreground">
+                {groupColumn} won&apos;t be used as an input. Every group in the test set is
+                one the model has never seen, so it could only ever memorise them.
+              </p>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -191,6 +216,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
               model_names: models,
               split_strategy: splitStrategy,
               time_column: splitStrategy === "time" ? timeColumn : null,
+              group_column: splitStrategy === "group" ? groupColumn : null,
               include_deep_diagnostics: true,
             })
           }
