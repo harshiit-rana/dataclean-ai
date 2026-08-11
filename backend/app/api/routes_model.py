@@ -370,7 +370,9 @@ async def train_model(
     # Recorded so the plan can show what was excluded last time and the model card can say
     # which columns were deliberately withheld.
     result["features"]["excluded"] = list(request.excluded_columns)
-    return model_store.save_result(directory, result)
+    return model_store.save_result(
+        directory, result, fingerprint=model_store.fingerprint_frame(df)
+    )
 
 
 @router.post("/api/model/{session_id}/improve")
@@ -442,7 +444,9 @@ async def improve_model(
         raise TrainingFailedError(f"Improving stopped unexpectedly: {exc}") from exc
 
     result["features"]["excluded"] = list(request.excluded_columns)
-    return model_store.save_result(directory, result)
+    return model_store.save_result(
+        directory, result, fingerprint=model_store.fingerprint_frame(df)
+    )
 
 
 @router.get("/api/model/{session_id}/result")
@@ -458,6 +462,43 @@ async def get_model_result(
     if stored is None:
         raise NoTrainedModelError()
     return stored
+
+
+@router.get("/api/model/{session_id}/history")
+async def get_model_history(
+    session_id: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Every run in this session, newest first.
+
+    `save_result` used to overwrite a single file, so retraining silently discarded the
+    previous run -- which made the one question people actually ask unanswerable: did the
+    thing I just changed help? The verdict on a single run says whether a model is worth
+    anything; only the sequence says whether a decision was.
+
+    Each entry carries the fingerprint of the data it was trained on. `current_fingerprint`
+    lets the client mark the runs that predate a cleaning change, because comparing across
+    one is often the most interesting comparison available -- it just cannot be silent.
+    """
+    meta = read_session_meta(settings.upload_dir, session_id)
+    if meta is None:
+        raise SessionNotFoundError(session_id)
+
+    directory = session_dir(settings.upload_dir, session_id)
+    cleaned = directory / "cleaned.csv"
+    path = cleaned if cleaned.exists() else directory / "original.csv"
+
+    current = ""
+    try:
+        current = model_store.fingerprint_frame(pd.read_csv(path))
+    except Exception:  # noqa: BLE001 -- history is still worth serving without it
+        logger.warning("Could not fingerprint the current data for session %s", session_id)
+
+    return {
+        "session_id": session_id,
+        "runs": model_store.load_history(directory),
+        "current_fingerprint": current,
+    }
 
 
 @router.get("/api/model/{session_id}/card")

@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 7 August 2026 · 36 commits · 420 backend tests, 66 frontend tests
+Last updated: 7 August 2026 · 37 commits · 440 backend tests, 75 frontend tests
 
 ---
 
@@ -206,6 +206,17 @@ data, and a round is only accepted if it beats the incumbent by more than the fo
 with each other. It stops on its own and says which of three reasons — target reached, target
 out of reach, or the rounds stopped paying for themselves — and it shows the rounds it
 *rejected*, because "tuning this data didn't help" means the ceiling is your columns.
+
+**A record of what you tried.** Results used to overwrite a single file, so retraining
+discarded the previous run — which made the question people actually ask unanswerable: *did the
+thing I just changed help?* Every run is now kept with its settings, its headline number and
+its verdict, and the table shows the change between consecutive runs, because the subtraction
+is the finding.
+
+Runs survive a cleaning change rather than being wiped by it. Comparing across one is often the
+most interesting comparison available — it just has to be labelled, so each run carries a
+fingerprint of the data it trained on and anything older is marked *trained before the data
+changed* and excluded from the arithmetic. It is a record, not a restore point.
 
 **Artifacts you can leave with.** `train_model.py` that rebuilds the model from scratch
 (tuned settings included), the fitted `model.joblib`, and a written model card that says what

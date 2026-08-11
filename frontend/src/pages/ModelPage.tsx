@@ -8,15 +8,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImprovementTrail } from "@/components/model/ImprovementTrail";
 import { ModelPlanForm } from "@/components/model/ModelPlanForm";
 import { ModelResults } from "@/components/model/ModelResults";
+import { RunHistory } from "@/components/model/RunHistory";
 import {
   ApiError,
   fetchModelCard,
+  fetchModelHistory,
   fetchModelPlan,
   fetchModelResult,
   improveModel,
   trainModel,
 } from "@/api/client";
-import type { ModelPlan, ModelResult, TrainRequest } from "@/api/types";
+import type { ModelHistory, ModelPlan, ModelResult, TrainRequest } from "@/api/types";
 
 /** Page 5: build a model from the cleaned data.
  *
@@ -38,16 +40,21 @@ export function ModelPage() {
   const [error, setError] = useState<string | null>(null);
   const [planError, setPlanError] = useState<string | null>(null);
   const [showPlan, setShowPlan] = useState(true);
+  const [history, setHistory] = useState<ModelHistory | null>(null);
 
   const load = useCallback(async () => {
     if (!sessionId) return;
     try {
-      const [nextPlan, existing] = await Promise.all([
+      const [nextPlan, existing, runs] = await Promise.all([
         fetchModelPlan(sessionId),
         fetchModelResult(sessionId).catch(() => null),
+        // A failure here must not take the page down: the history is a record of what was
+        // tried, not something the page needs in order to work.
+        fetchModelHistory(sessionId).catch(() => null),
       ]);
       setPlan(nextPlan);
       setResult(existing);
+      setHistory(runs);
       setShowPlan(existing === null);
       setPlanError(null);
     } catch (err) {
@@ -68,6 +75,7 @@ export function ModelPage() {
     try {
       const trained = await trainModel(sessionId, request);
       setResult(trained);
+      setHistory(await fetchModelHistory(sessionId).catch(() => history));
       setShowPlan(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
@@ -97,6 +105,7 @@ export function ModelPage() {
         goal: target,
       });
       setResult(improved);
+      setHistory(await fetchModelHistory(sessionId).catch(() => history));
       setShowPlan(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
@@ -275,6 +284,10 @@ export function ModelPage() {
       )}
 
       {result && !training && !improving && <ModelResults result={result} />}
+
+      {history && !training && !improving && (
+        <RunHistory runs={history.runs} currentFingerprint={history.current_fingerprint} />
+      )}
 
       {result && !training && !improving && (
         <Card>

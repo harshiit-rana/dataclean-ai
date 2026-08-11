@@ -215,6 +215,47 @@ export interface ModelPlan {
   trained: boolean;
 }
 
+/** One completed training run, small enough to keep twenty of.
+ *
+ * Not a stored result — there is no restoring an old run, and it deliberately holds only what
+ * answers "did the thing I changed help?": the settings, the headline number, the verdict. */
+export interface ModelRun {
+  run_id: string;
+  at: string;
+  /** Identifies the data this ran against, so runs from before a cleaning change are visible
+   * as such rather than compared as though nothing happened. */
+  data_fingerprint: string;
+  target_column: string | null;
+  task: string | null;
+  best_model: string | null;
+  model_label: string | null;
+  models_tried: string[];
+  primary_metric: string | null;
+  metrics: Record<string, number>;
+  baseline: Record<string, number | string>;
+  verdict: string | null;
+  headline: string | null;
+  split: {
+    strategy: string | null;
+    time_column: string | null;
+    group_column: string | null;
+    train_rows: number | null;
+    test_rows: number | null;
+  };
+  feature_count: number;
+  excluded_columns: string[];
+  tuned: boolean;
+  tuned_settings: Record<string, unknown>;
+  stopped_because: string | null;
+}
+
+export interface ModelHistory {
+  session_id: string;
+  /** Newest first. */
+  runs: ModelRun[];
+  current_fingerprint: string;
+}
+
 export interface TrainRequest {
   excluded_columns: string[];
   model_names: string[];

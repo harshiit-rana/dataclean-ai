@@ -9,8 +9,11 @@ report, which also means the retention sweep already cleans them up.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
+import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -25,8 +28,13 @@ RESULT_FILENAME = "model_result.json"
 PIPELINE_FILENAME = "model.joblib"
 CARD_FILENAME = "model_card.md"
 SCRIPT_FILENAME = "train_model.py"
+HISTORY_FILENAME = "model_history.json"
 
 ALL_ARTIFACTS = (RESULT_FILENAME, PIPELINE_FILENAME, CARD_FILENAME, SCRIPT_FILENAME)
+
+# Runs kept per session. Long enough that a working session of "try it, change something, try
+# again" stays entirely visible; short enough that the file remains small and readable.
+MAX_HISTORY_ENTRIES = 20
 
 
 def _jsonable(value: Any) -> Any:
@@ -56,7 +64,89 @@ def strip_pipelines(result: dict) -> dict:
     return _jsonable(cleaned)
 
 
-def save_result(directory: Path, result: dict) -> dict:
+def summarise(result: dict, *, fingerprint: str = "") -> dict:
+    """One run, small enough to keep twenty of.
+
+    Deliberately not the whole result. A full evaluation runs to tens of kilobytes of curve
+    data, and none of it answers the question this record exists for -- "did the thing I
+    changed help?" That needs the settings, the headline number and the verdict, and nothing
+    else.
+
+    `fingerprint` identifies the data the run was trained on, so a run from before a cleaning
+    change can be shown as what it is rather than compared as though the two were like for
+    like. Comparing across a cleaning change is often the most interesting comparison there
+    is -- it just has to be labelled.
+    """
+    best = next(
+        (r for r in result.get("results", []) if r.get("model") == result.get("best_model")),
+        None,
+    ) or {}
+    split = result.get("split", {}) or {}
+    improvement = result.get("improvement") or {}
+
+    return _jsonable(
+        {
+            "run_id": uuid.uuid4().hex[:12],
+            "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "data_fingerprint": fingerprint,
+            "target_column": result.get("target_column"),
+            "task": result.get("task"),
+            "best_model": result.get("best_model"),
+            "model_label": best.get("label"),
+            "models_tried": [r.get("model") for r in result.get("results", [])],
+            "primary_metric": result.get("primary_metric"),
+            "metrics": best.get("metrics", {}),
+            "baseline": result.get("baseline", {}),
+            "verdict": (result.get("assessment") or {}).get("verdict"),
+            "headline": (result.get("assessment") or {}).get("headline"),
+            "split": {
+                "strategy": split.get("strategy"),
+                "time_column": split.get("time_column"),
+                "group_column": split.get("group_column"),
+                "train_rows": split.get("train_rows"),
+                "test_rows": split.get("test_rows"),
+            },
+            "feature_count": len(result.get("features", {}).get("numeric", []))
+            + len(result.get("features", {}).get("categorical", [])),
+            "excluded_columns": result.get("features", {}).get("excluded", []),
+            # Whether the improvement loop produced this, and what it settled on. "Tuning did
+            # not help" is a finding, and it is only visible by comparing runs.
+            "tuned": bool(improvement),
+            "tuned_settings": improvement.get("settings") or {},
+            "stopped_because": improvement.get("stopped_because"),
+        }
+    )
+
+
+def load_history(directory: Path) -> list[dict]:
+    path = directory / HISTORY_FILENAME
+    if not path.exists():
+        return []
+    try:
+        entries = json.loads(path.read_text(encoding="utf-8"))
+        return entries if isinstance(entries, list) else []
+    except (OSError, ValueError):
+        logger.warning("Run history at %s could not be read", path, exc_info=True)
+        return []
+
+
+def append_history(directory: Path, entry: dict) -> list[dict]:
+    """Newest first, capped. Never allowed to fail a training run.
+
+    A training run that succeeded and then reported an error because its *bookkeeping* failed
+    would be the worst of both -- the user loses a result that exists.
+    """
+    try:
+        entries = [entry] + load_history(directory)
+        entries = entries[:MAX_HISTORY_ENTRIES]
+        (directory / HISTORY_FILENAME).write_text(json.dumps(entries), encoding="utf-8")
+        return entries
+    except OSError:
+        logger.warning("Run history could not be written", exc_info=True)
+        return load_history(directory)
+
+
+def save_result(directory: Path, result: dict, *, fingerprint: str = "") -> dict:
     """Writes the evaluation as JSON and the winning pipeline as a joblib blob.
 
     Returns the serializable form. A failure to persist the pipeline is logged and swallowed:
@@ -85,6 +175,7 @@ def save_result(directory: Path, result: dict) -> dict:
         except Exception:  # noqa: BLE001
             logger.exception("Fitted pipeline could not be saved; results were still written")
 
+    append_history(directory, summarise(payload, fingerprint=fingerprint))
     return payload
 
 
@@ -104,9 +195,39 @@ def pipeline_path(directory: Path) -> Optional[Path]:
     return path if path.exists() else None
 
 
+def fingerprint_frame(df) -> str:
+    """A short digest of the data a run was trained on.
+
+    Shape plus column names plus the target's own values. Not a full content hash: hashing
+    every cell of a large frame on every training run would cost more than the fact is worth,
+    and this catches what actually changes between runs -- rows dropped, columns removed, a
+    column's values rewritten by a fix.
+    """
+    try:
+        parts = [str(df.shape), "|".join(map(str, df.columns))]
+        digest = hashlib.sha256("::".join(parts).encode("utf-8"))
+        # Cheap sample of the contents, so an edit that keeps the shape still moves the hash.
+        digest.update(pd_head_bytes(df))
+        return digest.hexdigest()[:12]
+    except Exception:  # noqa: BLE001 -- a fingerprint is a nicety; never fail a run for it
+        logger.warning("Could not fingerprint the training data", exc_info=True)
+        return ""
+
+
+def pd_head_bytes(df, rows: int = 50) -> bytes:
+    return df.head(rows).to_csv(index=False).encode("utf-8", errors="replace")
+
+
 def clear(directory: Path) -> None:
     """Drops every model artifact. Used when the data changes underneath them -- an
-    evaluation, card or script describing rows that no longer exist is worse than none."""
+    evaluation, card or script describing rows that no longer exist is worse than none.
+
+    The run history deliberately survives. It is the record of what was tried, and the moment
+    it is most useful is exactly this one: the user has just changed the data and wants to
+    know whether the change helped. Each entry carries the fingerprint of the data it was
+    trained on, so a run from before the change is shown as such rather than compared as
+    though nothing had happened.
+    """
     for name in ALL_ARTIFACTS:
         try:
             (directory / name).unlink(missing_ok=True)

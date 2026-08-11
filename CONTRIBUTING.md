@@ -90,6 +90,13 @@ are both running locally, you're ready to make changes.
   `assess_readiness`, and rule findings reach the summary even on a `not_applicable` verdict.
   The audit report mirrors this with `_rules_section`, which exists only because the
   model-readiness section is skipped entirely when no target was named.
+- **Run history survives `model_store.clear`.** `clear` fires when the data changes underneath
+  a model, and drops the result, card, script and joblib — but not `model_history.json`. That
+  moment is exactly when the history is most useful: the user has just changed something and
+  wants to know whether it helped. Each entry carries a fingerprint of the data it trained on,
+  so a run from before the change is *labelled* rather than deleted or silently compared.
+  History bookkeeping must never fail a training run — losing a result that exists because its
+  record couldn't be written is the worst outcome available.
 - **A blocked verdict binds.** `/api/model/{id}/train` calls `assess_readiness` and refuses
   when the verdict is `blocked`. This was advisory until a dataset with 4,349 of 4,407 rows
   unlabelled went through: readiness said `blocked`, the training route never asked, and the

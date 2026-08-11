@@ -440,3 +440,51 @@ class TestGroupedSplitOverTheApi:
         )
         assert response.status_code == 422
         assert "too few" in response.text
+
+
+class TestRunHistoryOverTheApi:
+    def test_retraining_no_longer_discards_the_previous_run(self):
+        session_id = _session()
+        client.post(
+            f"/api/model/{session_id}/train",
+            json={"model_names": ["logistic_regression"], "include_deep_diagnostics": False},
+        )
+        client.post(
+            f"/api/model/{session_id}/train",
+            json={
+                "model_names": ["random_forest_classifier"],
+                "excluded_columns": ["employee_id", "noise"],
+                "include_deep_diagnostics": False,
+            },
+        )
+
+        body = client.get(f"/api/model/{session_id}/history").json()
+        assert len(body["runs"]) == 2
+        assert body["runs"][0]["best_model"] == "random_forest_classifier"
+        assert body["runs"][1]["best_model"] == "logistic_regression"
+        assert body["runs"][0]["excluded_columns"] == ["employee_id", "noise"]
+
+    def test_nothing_trained_yet_is_an_empty_list_not_an_error(self):
+        body = client.get(f"/api/model/{_session()}/history").json()
+        assert body["runs"] == []
+
+    def test_a_run_on_the_current_data_matches_the_current_fingerprint(self):
+        """This is what lets the client tell "worse than last time" from "different data"."""
+        session_id = _session()
+        client.post(
+            f"/api/model/{session_id}/train",
+            json={"model_names": ["logistic_regression"], "include_deep_diagnostics": False},
+        )
+        body = client.get(f"/api/model/{session_id}/history").json()
+        assert body["current_fingerprint"]
+        assert body["runs"][0]["data_fingerprint"] == body["current_fingerprint"]
+
+    def test_the_history_carries_the_verdict_not_just_the_score(self):
+        session_id = _session()
+        client.post(
+            f"/api/model/{session_id}/train",
+            json={"model_names": ["logistic_regression"], "include_deep_diagnostics": False},
+        )
+        run = client.get(f"/api/model/{session_id}/history").json()["runs"][0]
+        assert run["verdict"]
+        assert run["primary_metric"] in run["metrics"]

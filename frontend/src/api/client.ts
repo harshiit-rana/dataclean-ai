@@ -8,6 +8,7 @@ import type {
   GoalContext,
   GoalContextResponse,
   ImproveRequest,
+  ModelHistory,
   ModelPlan,
   ModelResult,
   PreviewResponse,
@@ -172,6 +173,11 @@ export async function fetchModelResult(sessionId: string): Promise<ModelResult |
   const response = await sessionFetch(sessionId, `/api/model/${sessionId}/result`);
   if (response.status === 404) return null;
   return handleResponse<ModelResult>(response);
+}
+
+export async function fetchModelHistory(sessionId: string): Promise<ModelHistory> {
+  const response = await sessionFetch(sessionId, `/api/model/${sessionId}/history`);
+  return handleResponse<ModelHistory>(response);
 }
 
 export async function fetchModelCard(sessionId: string): Promise<string> {
