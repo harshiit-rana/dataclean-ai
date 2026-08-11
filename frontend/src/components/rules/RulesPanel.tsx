@@ -158,9 +158,11 @@ export function RulesPanel({
         {offered.length > 0 && (
           <div>
             <p className="font-medium">Suggested</p>
+            {/* "Nothing here is in force" read as a claim about the whole panel once rules
+                started appearing in force directly above it. */}
             <p className="text-xs text-muted-foreground">
-              Nothing here is in force. These are guesses from the column names and the values
-              in the file — approve the ones that are actually true of your data.
+              None of these are in force yet. They are guesses from the column names and the
+              values in the file — approve the ones that are actually true of your data.
             </p>
             <ul className="mt-2 flex flex-col gap-2">
               {offered.map((rule) => (

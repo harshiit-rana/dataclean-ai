@@ -51,7 +51,7 @@ describe("RulesPanel", () => {
 
   it("says plainly that proposals are not in force", () => {
     renderPanel({ proposed: [rule()] });
-    expect(screen.getByText(/Nothing here is in force/)).toBeInTheDocument();
+    expect(screen.getByText(/None of these are in force yet/)).toBeInTheDocument();
   });
 
   it("does not apply a proposal until it is approved", () => {

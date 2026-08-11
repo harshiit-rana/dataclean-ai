@@ -97,6 +97,12 @@ are both running locally, you're ready to make changes.
   so a run from before the change is *labelled* rather than deleted or silently compared.
   History bookkeeping must never fail a training run — losing a result that exists because its
   record couldn't be written is the worst outcome available.
+- **A page that needs navigation state has to recover without it.** `CleanPage` takes the
+  approved decisions from router state, which a browser reload discards -- and it used to
+  answer that with "start from the review step", stranding anyone who pressed F5. It now
+  looks for a persisted action log first. This mattered more once the business rules panel
+  moved onto that page: a reload left approved rules with no route back to them at all.
+  Anything reachable only through router state is one refresh away from being unreachable.
 - **A blocked verdict binds.** `/api/model/{id}/train` calls `assess_readiness` and refuses
   when the verdict is `blocked`. This was advisory until a dataset with 4,349 of 4,407 rows
   unlabelled went through: readiness said `blocked`, the training route never asked, and the
