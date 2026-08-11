@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 7 August 2026 · 33 commits · 364 backend tests, 47 frontend tests
+Last updated: 7 August 2026 · 35 commits · 405 backend tests, 61 frontend tests
 
 ---
 
@@ -102,6 +102,41 @@ Naming a target column changes what the tool does, not just how it words things:
   check finds these and no model survives them — they're a hard ceiling on accuracy.
 - **Repeated entities.** A column whose values recur across rows means a random split can put
   the same customer in both training and test, which inflates every score.
+
+### Business rules
+
+Everything else in the app reasons from the distribution of the data, which makes it
+structurally blind to the largest category of real-world error. `age = -5` is not an outlier,
+it is impossible. A 150% discount sits comfortably inside the interquartile range of a column
+that runs 0 to 200 because half the rows are wrong. A delivery date before its order date is
+two perfectly ordinary dates. The IQR check will flag a legitimate premium salary and walk
+straight past all three.
+
+Four kinds of rule: a floor and/or ceiling on a column, one column ordered against another
+(dates or numbers), and `price * quantity == total` with a tolerance — relative *and* absolute,
+because money is rounded and an exact comparison fires on nearly every row of every real file.
+
+**A rule is data, never code.** A frozen dataclass and a match statement; no `eval`, no
+expression strings. Rules arrive from proposals, saved sessions and API requests — all
+untrusted input, and untrusted input that can express arbitrary computation is a hole no
+amount of validation closes. The same reasoning that keeps the cleaning path on a whitelist.
+
+**The app proposes; nothing applies itself.** Proposals are guesses from column names and
+values, each carrying the evidence behind it — not *"we think age can't be negative"* but
+*"age holds 3 negative values"*. They are also filtered to rules that would find something in
+this file, because a list padded with plausible rules that catch nothing is how people learn
+to approve without reading. On clean data it proposes nothing at all. `balance`, `profit` and
+`margin` are left alone, which is why the non-negative list is a list of known-safe words
+rather than a guess at what sounds quantity-like.
+
+Rule findings are `Check`s, so the provenance panel, the readiness summary and the audit report
+picked them up for free — that was the point of doing provenance first. They run outside the
+target-dependent block, because a broken rule is a fact about the data rather than about a
+model, and a session that never named a target still needs to hear it.
+
+A violation is a finding, never a fix. It doesn't block a model and nothing is dropped: which
+rows are wrong, and whether the rule itself is the error, is a decision. Past 30% of rows the
+app says so outright — a constraint a third of the data disagrees with was probably mis-stated.
 
 ### Decision provenance
 
@@ -221,17 +256,7 @@ wrong reason and discards the most informative column in the file.
 
 ## What's next
 
-### 1. Business rules — the validation stage's first real tenant
-
-The check framework now exists (see *Decision provenance* above), and business rules are what
-it was built to hold. The tool detects statistical problems but not semantic ones: `age = -5`
-isn't an outlier, it's impossible, and IQR bounds will miss it entirely while flagging
-legitimate premium salaries. Planned: a small rule language (`age >= 0`, `discount <= 100`,
-`order_date <= delivery_date`, `price * qty == total`), rules proposed by the AI but approved
-like every other suggestion, and cross-column arithmetic with a tolerance so floating point
-doesn't fire constantly.
-
-### 2. Feature engineering — the big one
+### 1. Feature engineering — the big one
 
 Tuning is the small lever, and the live run proved it: on the churn sample the settings search
 found nothing worth keeping, which means **the ceiling is the columns, not the settings.**
@@ -257,14 +282,14 @@ improvement loop, scored the same honest way:
 Same constraint as the tuned settings: each derived feature must be a declared recipe so
 `train_model.py` can reproduce it. A model the export can't rebuild is a model trapped in the app.
 
-### 3. Threshold selection
+### 2. Threshold selection
 
 The threshold sweep is already *shown* — "the default cut-off is 0.50, but nothing makes it the
 right one" — but you can't act on it. Letting you state the trade-off ("a missed churn costs
 more than a false alarm") and having the model adopt that operating point is a large, cheap win:
 recall can often be doubled without retraining anything.
 
-### 4. Two text-quality defects found live
+### 3. Two text-quality defects found live
 
 - **The LLM hallucinated an example from a different dataset.** A card about a `plan` column
   (values: basic/standard/premium) read *"For example, 'USA' and 'usa' are considered different
@@ -276,7 +301,7 @@ recall can often be doubled without retraining anything.
 
 Neither breaks anything, but both undermine trust in cards you're being asked to judge.
 
-### 5. Streaming the improvement loop
+### 4. Streaming the improvement loop
 
 It already reports progress round by round internally (`on_progress`), but the endpoint is a
 single blocking POST. A search takes tens of seconds to minutes; watching it work would be

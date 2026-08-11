@@ -134,6 +134,30 @@ class ModelPlanResponse(BaseModel):
     trained: bool
 
 
+class SetRulesRequest(BaseModel):
+    """The complete set of rules the user has approved.
+
+    A whole-list replace, not a patch: the client always holds the full set, and partial
+    updates would let the client's idea of the rules and the server's drift apart.
+    """
+
+    rules: list[dict] = []
+
+
+class RulesResponse(BaseModel):
+    """What is in force, what is suggested, and what the approved rules currently find.
+
+    `proposed` are guesses and have no effect until they appear in `rules`. `checks` are the
+    same Check shape the readiness panel already renders, so rule findings need no display of
+    their own.
+    """
+
+    session_id: str
+    rules: list[dict]
+    proposed: list[dict]
+    checks: list[dict]
+
+
 class TrainRequest(BaseModel):
     excluded_columns: list[str] = []
     model_names: list[str] = []  # empty means "every model that fits the task"

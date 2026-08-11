@@ -2,6 +2,7 @@
 // (POST /api/profile/{id}) is handled separately in api/sse.ts.
 
 import type {
+  BusinessRule,
   CorrelationResult,
   ErrorResponse,
   GoalContext,
@@ -11,6 +12,7 @@ import type {
   ModelResult,
   PreviewResponse,
   ReadinessResponse,
+  RulesResponse,
   TrainRequest,
   UploadResponse,
 } from "./types";
@@ -107,6 +109,26 @@ export async function fetchReadiness(sessionId: string): Promise<ReadinessRespon
   return handleResponse<ReadinessResponse>(
     await sessionFetch(sessionId, `/api/readiness/${sessionId}`)
   );
+}
+
+// --- Business rules ------------------------------------------------------------------
+
+export async function fetchRules(sessionId: string): Promise<RulesResponse> {
+  return handleResponse<RulesResponse>(await sessionFetch(sessionId, `/api/rules/${sessionId}`));
+}
+
+/** Replaces the session's rules with exactly this list. The caller always holds the full set,
+ * so there is no add/remove -- partial updates would let client and server drift apart. */
+export async function saveRules(
+  sessionId: string,
+  rules: BusinessRule[]
+): Promise<RulesResponse> {
+  const response = await sessionFetch(sessionId, `/api/rules/${sessionId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ rules }),
+  });
+  return handleResponse<RulesResponse>(response);
 }
 
 // --- Model building ------------------------------------------------------------------

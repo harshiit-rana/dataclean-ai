@@ -7,6 +7,7 @@ import { ActionLog } from "@/components/clean/ActionLog";
 import { AppliedActions } from "@/components/clean/AppliedActions";
 import { ChatPanel } from "@/components/clean/ChatPanel";
 import { ReadinessPanel } from "@/components/readiness/ReadinessPanel";
+import { RulesSection } from "@/components/rules/RulesSection";
 import { useCleaningRun } from "@/hooks/useCleaningRun";
 import { fetchActionLog, type ActionLogEntry } from "@/api/client";
 
@@ -105,6 +106,14 @@ export function CleanPage() {
           sessionId={sessionId!}
           actions={actionLog}
           onChange={handleActionsChanged}
+        />
+      )}
+
+      {run.status === "done" && sessionId && (
+        <RulesSection
+          sessionId={sessionId}
+          refreshKey={readinessKey}
+          onRulesChanged={() => setReadinessKey((key) => key + 1)}
         />
       )}
 

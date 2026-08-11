@@ -36,6 +36,15 @@ Try it with one of the messy datasets in `samples/` (`customers.csv`,
 `sales_transactions.csv`, `employee_records.csv`) -- each has a mix of missing values,
 duplicates, inconsistent formats, mixed types, and outliers baked in.
 
+Two larger ones go further:
+
+- `subscription_churn.csv` -- 1,200 rows with genuine signal in them, for the model path.
+  Name `churned` as the column to predict.
+- `retail_orders.csv` -- carries the errors no statistic can find, for the business-rules
+  path: negative ages, discounts over 100%, deliveries dated before their order, and line
+  totals that don't match price x quantity. None of those are outliers, and the IQR check
+  walks straight past all four.
+
 ## Getting started (without Docker)
 
 **Backend:**

@@ -74,10 +74,29 @@ _VERDICT_HEADLINES = {
 }
 
 
+def _rules_section(readiness: dict | None) -> list[str]:
+    """Business rules, for a session that never named a target.
+
+    The readiness section below covers these when there is a model in play, since a rule
+    check is just another check. But a rule is a fact about the data rather than about a
+    model, and someone cleaning a file for a report still needs "142 rows have a negative age"
+    to reach the document they hand over. Without this, approving a rule on a
+    no-target session produced findings that appeared on screen and nowhere else.
+    """
+    if not readiness or readiness.get("target_column"):
+        return []
+
+    rule_checks = [c for c in readiness.get("checks") or [] if c.get("name", "").startswith("rule_")]
+    if not rule_checks:
+        return []
+
+    return ["", "## Business rules", "", *_checks_table(rule_checks)]
+
+
 def _readiness_section(readiness: dict | None) -> list[str]:
     """Included only when the session named a column to predict -- for a reporting or
     analysis session there is no model to be ready for, and an empty section would just be
-    noise in the document."""
+    noise in the document. Rule checks from such a session are carried by `_rules_section`."""
     if not readiness or not readiness.get("target_column"):
         return []
 
@@ -195,6 +214,7 @@ def build_markdown_report(
             lines.append(f"| Column to be predicted | {goal_context['target_column']} |")
 
     lines += _readiness_section(readiness)
+    lines += _rules_section(readiness)
 
     lines += ["", "## Changes applied", ""]
     if not applied:

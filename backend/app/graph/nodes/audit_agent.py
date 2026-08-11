@@ -84,16 +84,35 @@ def clear_stale_marker(directory: Path) -> None:
 
 def _readiness_for_report(state: GraphState) -> dict | None:
     """Assessed against the cleaned file so the report describes the data being exported,
-    not the data that was uploaded. Never allowed to sink the report."""
-    if not state.goal_context or not (state.goal_context.target_column or "").strip():
-        return None
+    not the data that was uploaded. Never allowed to sink the report.
+
+    Runs without a target as well as with one. It used to return early when no column was
+    being predicted, which was right when this only produced model-readiness -- but business
+    rules are checked here too, and a rule is a fact about the data rather than about a model.
+    A rule broken in a session that never named a target still has to reach the document the
+    user hands to someone else. The report itself decides which sections to print.
+    """
+    has_target = bool(state.goal_context and (state.goal_context.target_column or "").strip())
     try:
         import pandas as pd
 
+        from app.services.business_rules import InvalidRule, Rule
         from app.services.ml_readiness import assess_readiness
 
         path = state.cleaned_file_path or state.file_path
-        return assess_readiness(pd.read_csv(path), state.goal_context)
+        rules = []
+        meta_path = Path(path).parent / "meta.json"
+        if meta_path.exists():
+            stored = json.loads(meta_path.read_text()).get("business_rules") or []
+            for payload in stored:
+                try:
+                    rules.append(Rule.from_dict(payload))
+                except (InvalidRule, TypeError):
+                    continue
+
+        if not has_target and not rules:
+            return None
+        return assess_readiness(pd.read_csv(path), state.goal_context, rules=rules)
     except Exception:  # noqa: BLE001
         logger.exception("Model-readiness assessment failed; report will omit that section")
         return None

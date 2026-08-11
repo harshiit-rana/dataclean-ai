@@ -39,6 +39,7 @@ from app.services import (
     model_store,
     modeling,
 )
+from app.api.routes_rules import stored_rules
 from app.services.session_store import read_session_meta, session_dir
 
 logger = logging.getLogger(__name__)
@@ -71,8 +72,15 @@ class NoTrainedModelError(AppError):
         super().__init__("No model yet", "Nothing has been trained for this session.")
 
 
-def _load_session(settings: Settings, session_id: str) -> tuple[pd.DataFrame, GoalContext, object]:
-    """Reads the cleaned file if cleaning has run, the upload otherwise, plus the goal."""
+def _load_session(
+    settings: Settings, session_id: str
+) -> tuple[pd.DataFrame, GoalContext, object, list]:
+    """Reads the cleaned file if cleaning has run, the upload otherwise, the goal, and the
+    business rules in force.
+
+    Rules come back from here rather than being re-read at each call site: every caller
+    that assesses readiness needs them, and reading the meta sidecar twice per request is
+    how the two copies start disagreeing."""
     meta = read_session_meta(settings.upload_dir, session_id)
     if meta is None:
         raise SessionNotFoundError(session_id)
@@ -91,7 +99,7 @@ def _load_session(settings: Settings, session_id: str) -> tuple[pd.DataFrame, Go
     if goal is None or not (goal.target_column or "").strip():
         raise NoTargetColumnError()
 
-    return df, goal, directory
+    return df, goal, directory, stored_rules(meta)
 
 
 def _suggested_exclusions(df: pd.DataFrame, goal: GoalContext, task: str) -> list[dict]:
@@ -193,7 +201,7 @@ async def get_model_plan(
     session_id: str,
     settings: Settings = Depends(get_settings),
 ) -> ModelPlanResponse:
-    df, goal, directory = _load_session(settings, session_id)
+    df, goal, directory, rules = _load_session(settings, session_id)
     target = (goal.target_column or "").strip()
 
     task = ml_readiness.infer_task_type(df[target], goal.task_type) if target in df.columns else None
@@ -202,7 +210,7 @@ async def get_model_plan(
             f"'{target}' has no usable values left, so there is nothing to predict."
         )
 
-    readiness = ml_readiness.assess_readiness(df, goal)
+    readiness = ml_readiness.assess_readiness(df, goal, rules=rules)
     suggestions = _suggested_exclusions(df, goal, task)
 
     stored = model_store.load_result(directory)
@@ -252,7 +260,7 @@ async def get_model_plan(
     )
 
 
-def _refuse_if_the_data_cannot_support_a_model(df, goal) -> str:
+def _refuse_if_the_data_cannot_support_a_model(df, goal, rules=None) -> str:
     """The checks every route that produces a model has to clear first.
 
     Shared rather than repeated because the first version of this guard lived inline in
@@ -276,7 +284,7 @@ def _refuse_if_the_data_cannot_support_a_model(df, goal) -> str:
     if task is None:
         raise TrainingFailedError(f"'{target}' has no usable values to learn from.")
 
-    readiness = ml_readiness.assess_readiness(df, goal)
+    readiness = ml_readiness.assess_readiness(df, goal, rules=rules)
     if readiness.get("verdict") == "blocked":
         blockers = readiness.get("blockers") or ["This data cannot support a model."]
         raise TrainingFailedError(
@@ -292,9 +300,9 @@ async def train_model(
     request: TrainRequest,
     settings: Settings = Depends(get_settings),
 ) -> dict:
-    df, goal, directory = _load_session(settings, session_id)
+    df, goal, directory, rules = _load_session(settings, session_id)
     target = (goal.target_column or "").strip()
-    task = _refuse_if_the_data_cannot_support_a_model(df, goal)
+    task = _refuse_if_the_data_cannot_support_a_model(df, goal, rules)
 
     model_names = request.model_names or [spec.name for spec in modeling.models_for_task(task)]
 
@@ -344,9 +352,9 @@ async def improve_model(
     The trail of rounds rides along on the result, including the rounds that were rejected.
     "We tried tuning it and tuning did not help" is a finding about the data.
     """
-    df, goal_context, directory = _load_session(settings, session_id)
+    df, goal_context, directory, rules = _load_session(settings, session_id)
     target = (goal_context.target_column or "").strip()
-    task = _refuse_if_the_data_cannot_support_a_model(df, goal_context)
+    task = _refuse_if_the_data_cannot_support_a_model(df, goal_context, rules)
 
     def run() -> dict:
         found = improvement.improve(
@@ -492,7 +500,7 @@ async def get_feature_correlations(
 ) -> dict:
     """The feature correlation heatmap, available before anything is trained -- it describes
     the data, not a model, and it's worth seeing while deciding what to exclude."""
-    df, goal, _directory = _load_session(settings, session_id)
+    df, goal, _directory, _rules = _load_session(settings, session_id)
     target = (goal.target_column or "").strip()
     numeric = [
         c for c in df.columns if c != target and pd.api.types.is_numeric_dtype(df[c])

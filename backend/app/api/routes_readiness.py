@@ -44,5 +44,9 @@ async def get_readiness(
     raw_goal = meta.get("goal_context")
     goal = GoalContext.model_validate(raw_goal) if raw_goal else None
 
-    report = assess_readiness(df, goal)
+    # Read fresh on every request, like the file itself. A rule approved a moment ago has to
+    # show up in the next verdict without anything being recomputed or invalidated.
+    from app.api.routes_rules import stored_rules
+
+    report = assess_readiness(df, goal, rules=stored_rules(meta))
     return ReadinessResponse(session_id=session_id, **report)

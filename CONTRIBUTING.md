@@ -74,6 +74,22 @@ are both running locally, you're ready to make changes.
   the report was indistinguishable from one where they had all passed. Never add an early
   return there — record a skip instead. `blockers` and `warnings` are derived views over the
   checks, so a new check gets into the summary, the panel and the audit report for free.
+- **A business rule is data, never code.** `business_rules.Rule` is a frozen dataclass with a
+  closed set of kinds, and evaluating one is a match over four cases — no `eval`, no expression
+  strings, no `df.query`. Rules arrive from proposals, saved sessions and API requests, all of
+  which are untrusted input, and untrusted input that can express arbitrary computation is a
+  hole no amount of validation closes reliably. Same reasoning as the operations whitelist. To
+  support a new kind of rule, add a kind and a branch — not an escape hatch.
+- **A proposed rule does nothing.** `propose()` guesses from column names and values; nothing
+  is evaluated until it appears in the session's approved list. Proposals are also filtered to
+  those that would find something *in this file*: a list padded with plausible rules that catch
+  nothing is how people learn to approve without reading, which would make the approval step —
+  the thing the whole app is built around — worthless.
+- **Rule checks run outside the target-dependent block.** `age = -5` is wrong whether or not
+  anyone is predicting anything, so `_add_rule_checks` runs before every early return in
+  `assess_readiness`, and rule findings reach the summary even on a `not_applicable` verdict.
+  The audit report mirrors this with `_rules_section`, which exists only because the
+  model-readiness section is skipped entirely when no target was named.
 - **A blocked verdict binds.** `/api/model/{id}/train` calls `assess_readiness` and refuses
   when the verdict is `blocked`. This was advisory until a dataset with 4,349 of 4,407 rows
   unlabelled went through: readiness said `blocked`, the training route never asked, and the

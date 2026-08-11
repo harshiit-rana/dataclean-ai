@@ -190,3 +190,67 @@ def test_no_undone_section_when_nothing_was_undone():
     report = _report()
     assert "## Changes applied then undone" not in report
     assert "| Changes applied then undone |" not in report
+
+
+class TestBusinessRulesReachTheDocument:
+    """A rule is a fact about the data, not about a model. A session cleaning a file for a
+    report still has to hand over "3 rows have a negative age" -- and the readiness section
+    that normally carries rule checks is omitted entirely when no target was named."""
+
+    RULE_CHECK = {
+        "name": "rule_range_age",
+        "label": "Rule: 'age' is never below 0",
+        "status": "failed",
+        "finding": "3 of 300 rows (1.0%) break age >= 0.",
+        "evidence": "These are impossible values, not unusual ones.",
+        "remedy": "",
+        "blocked_by": None,
+        "severity": "warning",
+    }
+    SKIPPED_CHECK = {
+        "name": "target_named",
+        "label": "A column to predict",
+        "status": "not_run",
+        "finding": "No prediction target was set for this session.",
+        "evidence": "",
+        "remedy": "",
+        "blocked_by": None,
+        "severity": None,
+    }
+
+    def _readiness(self, **overrides) -> dict:
+        base = {
+            "target_column": None,
+            "task_type": None,
+            "verdict": "not_applicable",
+            "blockers": [],
+            "warnings": ["3 of 300 rows (1.0%) break age >= 0."],
+            "notes": [],
+            "checks": [self.RULE_CHECK, self.SKIPPED_CHECK],
+        }
+        base.update(overrides)
+        return base
+
+    def test_a_broken_rule_appears_without_a_target(self):
+        report = _report(readiness=self._readiness())
+        assert "## Business rules" in report
+        assert "break age >= 0" in report
+
+    def test_the_section_carries_only_rules(self):
+        """The model-readiness checks are meaningless here -- there is no model."""
+        report = _report(readiness=self._readiness())
+        section = report[report.index("## Business rules") :]
+        section = section[: section.index("## Changes applied")]
+        assert "A column to predict" not in section
+
+    def test_nothing_is_printed_when_no_rules_were_set(self):
+        report = _report(readiness=self._readiness(checks=[self.SKIPPED_CHECK]))
+        assert "## Business rules" not in report
+
+    def test_a_session_with_a_target_uses_the_readiness_section_instead(self):
+        """Not duplicated -- with a target, a rule check is just another check in the table."""
+        report = _report(
+            readiness=self._readiness(target_column="churn", task_type="classification")
+        )
+        assert "## Business rules" not in report
+        assert "break age >= 0" in report

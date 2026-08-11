@@ -43,6 +43,20 @@ class UnparseableCSVError(AppError):
         super().__init__("File could not be read as CSV", "File could not be read as CSV.")
 
 
+class InvalidRuleError(AppError):
+    """A business rule that cannot be evaluated as written.
+
+    422 rather than 400: the request was well-formed JSON, but the rule it described is not
+    one the engine can check. The message is the engine's own -- it says which column and what
+    is wrong with it, which is what the user needs to fix it.
+    """
+
+    status_code = 422
+
+    def __init__(self, detail: str):
+        super().__init__("Rule could not be used", detail)
+
+
 class EmptyFileError(AppError):
     def __init__(self):
         super().__init__("Empty file", "File appears to be empty.")

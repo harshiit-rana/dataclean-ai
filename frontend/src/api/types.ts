@@ -103,6 +103,39 @@ export interface ReadinessCheck {
   severity: "blocker" | "warning" | null;
 }
 
+/** One statement about what the data is allowed to contain.
+ *
+ * A closed set of kinds rather than an expression, mirroring the backend: a rule is data, not
+ * code. `confidence` and `rationale` are present only on proposals -- once a rule is approved
+ * it is no longer a guess, it is something the user told us. */
+export interface BusinessRule {
+  kind: "range" | "comparison" | "arithmetic";
+  column: string;
+  label: string;
+  minimum: number | null;
+  maximum: number | null;
+  other_column: string | null;
+  comparison: "lte" | "lt" | "gte" | "gt" | null;
+  multiplier_column: string | null;
+  result_column: string | null;
+  confidence: number | null;
+  rationale: string;
+  /** Derived server-side so the client renders without recomputing. */
+  name: string;
+  sentence: string;
+  expression: string;
+}
+
+export interface RulesResponse {
+  session_id: string;
+  /** In force. These are checked on every readiness call. */
+  rules: BusinessRule[];
+  /** Guesses. These do nothing at all until the user approves them. */
+  proposed: BusinessRule[];
+  /** What the approved rules currently find, in the same shape as every other check. */
+  checks: ReadinessCheck[];
+}
+
 export interface ReadinessCheckCounts {
   passed: number;
   warning: number;

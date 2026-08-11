@@ -476,7 +476,25 @@ def enforce_target_safety(
     return operation, params, None
 
 
-def assess_readiness(df: pd.DataFrame, goal_context: GoalContext | None) -> dict:
+def _add_rule_checks(log: readiness_checks.CheckLog, df: pd.DataFrame, rules) -> None:
+    """Business rules the user has approved, as checks.
+
+    Run before anything target-related and outside every early return, because a rule
+    violation is a fact about the data rather than about the model: `age = -5` is wrong
+    whether or not anyone is predicting anything, and a session with no target still wants to
+    hear about it. This is also why they are not in `_TARGET_DEPENDENT_CHECKS`.
+    """
+    if not rules:
+        return
+    from app.services import business_rules  # local import: keeps the dependency one-way
+
+    for check in business_rules.check_all(df, list(rules)):
+        log.add(check)
+
+
+def assess_readiness(
+    df: pd.DataFrame, goal_context: GoalContext | None, rules=None
+) -> dict:
     """A verdict on whether this data can support the model the user asked for, with the
     working shown.
 
@@ -513,9 +531,11 @@ def assess_readiness(df: pd.DataFrame, goal_context: GoalContext | None) -> dict
         "check_counts": {},
     }
 
+    _add_rule_checks(log, df, rules)
+
     # --- is there a question to answer at all? -------------------------------------------
     if not target:
-        log.add(
+        no_target = log.add(
             readiness_checks.Check(
                 name="target_named",
                 label="A column to predict",
@@ -528,7 +548,12 @@ def assess_readiness(df: pd.DataFrame, goal_context: GoalContext | None) -> dict
             log.skip(name, label, "target_named", "No target column was named.")
         report["checks"] = log.as_dicts()
         report["check_counts"] = log.counts
-        report["notes"].append(log.checks[0].finding)
+        # Rule violations still reach the summary here. The verdict stays not_applicable --
+        # it is a statement about model readiness, and no model was asked for -- but a broken
+        # rule is worth saying regardless of why someone uploaded the file.
+        report["warnings"] = log.warnings
+        report["blockers"] = log.blockers
+        report["notes"].append(no_target.finding)
         return report
 
     log.add(
