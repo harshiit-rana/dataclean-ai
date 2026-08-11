@@ -497,6 +497,11 @@ def assess_readiness(df: pd.DataFrame, goal_context: GoalContext | None) -> dict
         "target_column": target or None,
         "task_type": None,
         "row_count": row_count,
+        # Rows carrying an answer. Equal to row_count until a target is named and some rows
+        # turn out not to have one -- and every surface that describes what will be modelled
+        # reads this rather than row_count, because three of them used to say "4,407 rows"
+        # about a file that could train on 58.
+        "trainable_row_count": row_count,
         "column_count": column_count,
         "verdict": "not_applicable",
         "blockers": [],
@@ -577,6 +582,7 @@ def assess_readiness(df: pd.DataFrame, goal_context: GoalContext | None) -> dict
     # the same frame and only one of them was describing what would be trained on.
     trainable_rows = int(df[target].notna().sum())
     unlabelled = row_count - trainable_rows
+    report["trainable_row_count"] = trainable_rows
     if trainable_rows < MIN_ROWS_FOR_MODELLING:
         shortfall = (
             f"Only {trainable_rows:,} of the {row_count:,} rows have a value for '{target}'."

@@ -21,6 +21,11 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
   const [splitStrategy, setSplitStrategy] = useState<"random" | "time">("random");
   const [timeColumn, setTimeColumn] = useState<string>(plan.date_columns[0] ?? "");
 
+  // The server refuses to train when readiness is blocked, so offering the button anyway
+  // turns a verdict the app already reached into an error message the user has to provoke.
+  const blocked = plan.blockers.length > 0;
+  const trainable = plan.trainable_row_count ?? plan.row_count;
+
   const usable = [...plan.features.numeric, ...plan.features.categorical];
   const candidates = [...usable, ...excluded].filter(
     (column, index, all) => all.indexOf(column) === index
@@ -189,13 +194,18 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
               include_deep_diagnostics: true,
             })
           }
-          disabled={training || models.length === 0}
+          disabled={training || models.length === 0 || blocked}
         >
           {training ? "Training..." : `Train ${models.length} model${models.length === 1 ? "" : "s"}`}
         </Button>
         <span className="text-sm text-muted-foreground">
           {usable.length - excluded.filter((c) => usable.includes(c)).length} columns in,{" "}
-          {plan.row_count.toLocaleString()} rows.
+          {/* Rows that can be trained on, not rows in the file. Printing the file size here
+              said "4,407 rows" under a button that would have fitted on 58. Where the two
+              differ, both are shown -- the gap is the point. */}
+          {trainable.toLocaleString()} rows
+          {trainable !== plan.row_count && ` of ${plan.row_count.toLocaleString()}`}.
+          {blocked && " Fix what's blocking this above before training."}
         </span>
       </div>
     </div>

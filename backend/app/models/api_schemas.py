@@ -97,7 +97,8 @@ class ReadinessResponse(BaseModel):
     session_id: str
     target_column: Optional[str]
     task_type: Optional[str]
-    row_count: int
+    row_count: int  # rows in the file
+    trainable_row_count: int  # rows carrying an answer -- what would actually be modelled
     column_count: int
     verdict: str  # ready | warnings | blocked | not_applicable
     blockers: list[str]
@@ -120,7 +121,8 @@ class ModelPlanResponse(BaseModel):
     session_id: str
     target_column: str
     task_type: str
-    row_count: int
+    row_count: int  # rows in the file
+    trainable_row_count: int  # rows carrying an answer -- what will actually be fitted on
     features: dict  # numeric / categorical / dropped-with-reasons
     suggested_exclusions: list[dict]  # column + why the app thinks it should be left out
     excluded_columns: list[str]  # what was excluded on the last run, if any

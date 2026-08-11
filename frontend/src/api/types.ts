@@ -72,7 +72,8 @@ export interface ReadinessResponse {
   session_id: string;
   target_column: string | null;
   task_type: string | null;
-  row_count: number;
+  row_count: number; // rows in the file
+  trainable_row_count: number; // rows carrying an answer -- what would be modelled
   column_count: number;
   verdict: "ready" | "warnings" | "blocked" | "not_applicable";
   blockers: string[];
@@ -166,7 +167,8 @@ export interface ModelPlan {
   session_id: string;
   target_column: string;
   task_type: "classification" | "regression";
-  row_count: number;
+  row_count: number; // rows in the file
+  trainable_row_count: number; // rows carrying an answer -- what will be fitted on
   features: FeatureBreakdown;
   suggested_exclusions: SuggestedExclusion[];
   excluded_columns: string[];

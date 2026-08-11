@@ -215,6 +215,10 @@ async def get_model_plan(
         target_column=target,
         task_type=task,
         row_count=int(len(df)),
+        # Rows carrying an answer, which is what will actually be fitted on. The form prints
+        # this next to the Train button, and printing len(df) there repeated the readiness
+        # bug on a second surface: "4,407 rows" under a button that would train on 58.
+        trainable_row_count=int(df[target].notna().sum()) if target in df.columns else 0,
         features=modeling.classify_features(df, target, previously_excluded),
         suggested_exclusions=suggestions,
         excluded_columns=previously_excluded,
@@ -248,13 +252,19 @@ async def get_model_plan(
     )
 
 
-@router.post("/api/model/{session_id}/train")
-async def train_model(
-    session_id: str,
-    request: TrainRequest,
-    settings: Settings = Depends(get_settings),
-) -> dict:
-    df, goal, directory = _load_session(settings, session_id)
+def _refuse_if_the_data_cannot_support_a_model(df, goal) -> str:
+    """The checks every route that produces a model has to clear first.
+
+    Shared rather than repeated because the first version of this guard lived inline in
+    `train_model` only, which left `/improve` -- a route that ends by calling
+    `train_candidates` itself -- as an unguarded way to reach the same result. A guard that
+    one of two doors enforces is not a guard. Any future route that fits a model calls this.
+
+    The readiness verdict has to bind or it is decoration. It was advisory until the RSNA knee
+    dataset went through: readiness returned "blocked" because 4,349 of 4,407 rows had no
+    label, no route asked, and the app trained on the 58 that remained and reported the result
+    as useful. A tool whose whole claim is that it will say no cannot say no and then proceed.
+    """
     target = (goal.target_column or "").strip()
 
     if target not in df.columns:
@@ -266,11 +276,6 @@ async def train_model(
     if task is None:
         raise TrainingFailedError(f"'{target}' has no usable values to learn from.")
 
-    # The readiness verdict has to bind, or it is decoration. It was advisory until the RSNA
-    # knee dataset went through: readiness returned "blocked" because 4,349 of 4,407 rows had
-    # no label, the Model page never asked, and the app trained on the 58 that remained and
-    # reported the result as useful. A tool whose whole claim is that it will say no cannot
-    # have a route that says no and then proceeds anyway.
     readiness = ml_readiness.assess_readiness(df, goal)
     if readiness.get("verdict") == "blocked":
         blockers = readiness.get("blockers") or ["This data cannot support a model."]
@@ -278,6 +283,18 @@ async def train_model(
             "This data cannot support a model that would mean anything, so nothing was "
             "trained. " + " ".join(blockers)
         )
+    return task
+
+
+@router.post("/api/model/{session_id}/train")
+async def train_model(
+    session_id: str,
+    request: TrainRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    df, goal, directory = _load_session(settings, session_id)
+    target = (goal.target_column or "").strip()
+    task = _refuse_if_the_data_cannot_support_a_model(df, goal)
 
     model_names = request.model_names or [spec.name for spec in modeling.models_for_task(task)]
 
@@ -329,15 +346,7 @@ async def improve_model(
     """
     df, goal_context, directory = _load_session(settings, session_id)
     target = (goal_context.target_column or "").strip()
-
-    if target not in df.columns:
-        raise TrainingFailedError(
-            f"'{target}' is no longer in the data -- it was renamed or removed during cleaning."
-        )
-
-    task = ml_readiness.infer_task_type(df[target], goal_context.task_type)
-    if task is None:
-        raise TrainingFailedError(f"'{target}' has no usable values to learn from.")
+    task = _refuse_if_the_data_cannot_support_a_model(df, goal_context)
 
     def run() -> dict:
         found = improvement.improve(

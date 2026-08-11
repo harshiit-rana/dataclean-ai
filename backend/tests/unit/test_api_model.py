@@ -232,6 +232,15 @@ class TestABlockedVerdictBinds:
         )
         assert "outcome" in response.text
 
+    def test_the_improvement_loop_is_refused_too(self):
+        """The first version of this guard sat inline in `/train` only, which left `/improve`
+        -- a route that ends by calling `train_candidates` itself -- as an unguarded way to
+        reach the same result. A guard one of two doors enforces is not a guard."""
+        session_id = _session(self._mostly_unlabelled_csv())
+        response = client.post(f"/api/model/{session_id}/improve", json={})
+        assert response.status_code >= 400
+        assert "nothing was trained" in response.text
+
     def test_a_clean_dataset_is_still_trained(self):
         """The guard has to be narrow, or it becomes the thing that stops the app working."""
         response = client.post(

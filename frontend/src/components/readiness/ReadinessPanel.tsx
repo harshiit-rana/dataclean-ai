@@ -85,8 +85,14 @@ export function ReadinessPanel({
         <p className="text-muted-foreground">
           Predicting <span className="font-medium text-foreground">{readiness.target_column}</span>
           {readiness.task_type && ` (${readiness.task_type})`} from{" "}
-          {readiness.row_count.toLocaleString()} rows and {Math.max(0, readiness.column_count - 1)}{" "}
-          other columns.
+          {/* The rows that carry an answer, not the rows in the file. Where they differ the
+              gap is stated rather than hidden -- it is usually the most important fact on
+              this panel. */}
+          {(readiness.trainable_row_count ?? readiness.row_count).toLocaleString()} rows
+          {readiness.trainable_row_count != null &&
+            readiness.trainable_row_count !== readiness.row_count &&
+            ` of ${readiness.row_count.toLocaleString()}`}{" "}
+          and {Math.max(0, readiness.column_count - 1)} other columns.
         </p>
 
         {readiness.blockers.length > 0 && (
