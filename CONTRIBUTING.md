@@ -103,6 +103,12 @@ are both running locally, you're ready to make changes.
   looks for a persisted action log first. This mattered more once the business rules panel
   moved onto that page: a reload left approved rules with no route back to them at all.
   Anything reachable only through router state is one refresh away from being unreachable.
+- **An issue description is quoted, so it has to be true of this column.** The LLM writes the
+  card from `ColumnIssue.description` and `stats`, and it repeats what it is told. A canned
+  example (`'USA' vs 'usa'`) in every casing description turned up verbatim on a card about
+  plan tiers, and quoting the IQR fences as "the expected range" put a negative lower bound on
+  monthly spend. Describe what was found in the data -- real values from the column, the
+  observed range of the ordinary rows -- never the device used to find it.
 - **A blocked verdict binds.** `/api/model/{id}/train` calls `assess_readiness` and refuses
   when the verdict is `blocked`. This was advisory until a dataset with 4,349 of 4,407 rows
   unlabelled went through: readiness said `blocked`, the training route never asked, and the

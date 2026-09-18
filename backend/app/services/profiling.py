@@ -205,18 +205,47 @@ def _detect_inconsistent_casing(df: pd.DataFrame) -> list[ColumnIssue]:
         distinct_lower = non_null.str.lower().nunique()
         if distinct_lower < distinct_exact:
             collapsed = distinct_exact - distinct_lower
+            example = _case_collision_example(non_null)
             issues.append(
                 ColumnIssue(
                     issue_id=generate_issue_id(),
                     column_name=col,
                     issue_type="inconsistent_format",
                     severity="low",
-                    description=f"Column '{col}' has {collapsed} value(s) that only differ by letter case (e.g. 'USA' vs 'usa').",
-                    stats={"distinct_values": int(distinct_exact), "distinct_case_insensitive": int(distinct_lower)},
+                    description=(
+                        f"Column '{col}' has {collapsed} value(s) that only differ by letter case "
+                        f"(e.g. {example})."
+                    ),
+                    stats={
+                        "distinct_values": int(distinct_exact),
+                        "distinct_case_insensitive": int(distinct_lower),
+                        "example_variants": _case_collision_variants(non_null),
+                    },
                     priority_score=0.3,
                 )
             )
     return issues
+
+
+def _case_collision_variants(non_null: pd.Series) -> list[str]:
+    """The spellings of the most common value that appears under more than one casing,
+    most frequent first. Real values from this column -- the description used to say
+    "e.g. 'USA' vs 'usa'" for every column, and the LLM quoted it verbatim on a card
+    about plan tiers."""
+    counts = non_null.value_counts()
+    by_lower: dict[str, list[str]] = {}
+    for value in counts.index:
+        by_lower.setdefault(value.lower(), []).append(value)
+    colliding = [variants for variants in by_lower.values() if len(variants) > 1]
+    if not colliding:
+        return []
+    # value_counts is sorted by frequency, so the first group encountered is the most common.
+    return colliding[0][:3]
+
+
+def _case_collision_example(non_null: pd.Series) -> str:
+    variants = _case_collision_variants(non_null)
+    return " vs ".join(repr(v) for v in variants)
 
 
 def _detect_outliers(df: pd.DataFrame) -> list[ColumnIssue]:
@@ -233,10 +262,13 @@ def _detect_outliers(df: pd.DataFrame) -> list[ColumnIssue]:
             continue
         lower = q1 - _OUTLIER_IQR_MULTIPLIER * iqr
         upper = q3 + _OUTLIER_IQR_MULTIPLIER * iqr
-        outliers = series[(series < lower) | (series > upper)]
-        if len(outliers) == 0:
+        low = series[series < lower]
+        high = series[series > upper]
+        n_outliers = len(low) + len(high)
+        if n_outliers == 0:
             continue
-        rate = len(outliers) / len(series)
+        inliers = series[(series >= lower) & (series <= upper)]
+        rate = n_outliers / len(series)
         severity, score = _severity_and_score(rate, high_cut=0.1, medium_cut=0.02)
         issues.append(
             ColumnIssue(
@@ -244,12 +276,16 @@ def _detect_outliers(df: pd.DataFrame) -> list[ColumnIssue]:
                 column_name=col,
                 issue_type="outliers",
                 severity=severity,
-                description=f"Column '{col}' has {len(outliers)} outlier values outside the expected range ({lower:.2f} to {upper:.2f}).",
+                description=_describe_outliers(col, low, high, inliers),
                 stats={
-                    "outlier_count": int(len(outliers)),
+                    "outlier_count": int(n_outliers),
                     "outlier_rate": round(float(rate), 4),
-                    "lower_bound": float(lower),
-                    "upper_bound": float(upper),
+                    "low_outlier_count": int(len(low)),
+                    "high_outlier_count": int(len(high)),
+                    "lowest_outlier": float(low.min()) if len(low) else None,
+                    "highest_outlier": float(high.max()) if len(high) else None,
+                    "typical_min": float(inliers.min()),
+                    "typical_max": float(inliers.max()),
                     "q1": float(q1),
                     "q3": float(q3),
                 },
@@ -257,6 +293,32 @@ def _detect_outliers(df: pd.DataFrame) -> list[ColumnIssue]:
             )
         )
     return issues
+
+
+def _describe_outliers(col: str, low: pd.Series, high: pd.Series, inliers: pd.Series) -> str:
+    """Describes the outliers that were found, never the fences used to find them.
+
+    The description used to quote the IQR fences as "the expected range", which on a
+    strictly positive column reads "-19.32 to 63.15" -- a negative bound on monthly spend
+    is nonsense to the person being asked to judge the card. The fences are a detection
+    device; what the card needs is where the ordinary values sit and how far outside them
+    the flagged ones fall, and both of those are real numbers from the column."""
+    parts = []
+    if len(high):
+        parts.append(
+            f"{len(high)} unusually high value{'s' if len(high) != 1 else ''} "
+            f"(the largest is {high.max():.2f})"
+        )
+    if len(low):
+        parts.append(
+            f"{len(low)} unusually low value{'s' if len(low) != 1 else ''} "
+            f"(the smallest is {low.min():.2f})"
+        )
+    found = " and ".join(parts)
+    return (
+        f"Column '{col}' has {found}, while the other {len(inliers)} values sit between "
+        f"{inliers.min():.2f} and {inliers.max():.2f}."
+    )
 
 
 def _detect_high_cardinality(df: pd.DataFrame) -> list[ColumnIssue]:

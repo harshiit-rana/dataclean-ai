@@ -24,7 +24,7 @@ Respond in exactly this format, five sections, each starting on its own line wit
 literal marker shown:
 
 FOUND:
-One or two plain-English sentences describing what was found.
+One or two plain-English sentences describing what was found. Quote only values and numbers that appear in the issue you are given -- never invent an example value, and never describe a detection threshold as if it were the data.
 
 PROPOSED_ACTION:
 The specific operation to perform, phrased concretely, e.g. "Drop the 340 rows where \

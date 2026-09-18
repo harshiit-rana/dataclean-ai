@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 7 August 2026 · 38 commits · 440 backend tests, 80 frontend tests
+Last updated: 19 September 2026 · 39 commits · 444 backend tests, 80 frontend tests
 
 ---
 
@@ -70,6 +70,14 @@ goal.
 **Suggestion cards.** One per issue, written by the LLM and streamed token by token. Found /
 Proposed action / Reasoning / Tradeoff. Goal-aware — a card for a churn model reads differently
 from the same issue in a reporting dataset.
+
+Two things the cards used to get wrong, both the profiler's fault rather than the model's: every
+casing issue was described with the same canned pair (*"e.g. 'USA' vs 'usa'"*), which the LLM
+dutifully quoted on a card about plan tiers; and outlier cards quoted the detection fences as if
+they were the data — *"between -19.32 and 63.15"* for monthly spend. The issue description now
+carries the real colliding spellings from the column, and outliers are described by the values
+found (*"1 unusually high value (the largest is 250.00), while the other 8 sit between 10.00 and
+13.00"*), never by the threshold that found them.
 
 **Approval, then execution.** The graph pauses at `human_approval` and checkpoints to Redis.
 Your decisions resume it. Eighteen whitelisted operations do the work. Your original file is
@@ -311,19 +319,7 @@ right one" — but you can't act on it. Letting you state the trade-off ("a miss
 more than a false alarm") and having the model adopt that operating point is a large, cheap win:
 recall can often be doubled without retraining anything.
 
-### 3. Two text-quality defects found live
-
-- **The LLM hallucinated an example from a different dataset.** A card about a `plan` column
-  (values: basic/standard/premium) read *"For example, 'USA' and 'usa' are considered different
-  values."* That's the few-shot example in the prompt bleeding into the output. Seen twice
-  across two runs, so it isn't a one-off.
-- **Outlier cards quote the IQR fences as if they were the data.** *"These extreme values are
-  between -19.32 and 63.15"* for monthly spend; *"-4.50 to 7.50"* for ticket counts. Negative
-  bounds on strictly positive columns read as nonsense. This one is ours, not the model's.
-
-Neither breaks anything, but both undermine trust in cards you're being asked to judge.
-
-### 4. Streaming the improvement loop
+### 3. Streaming the improvement loop
 
 It already reports progress round by round internally (`on_progress`), but the endpoint is a
 single blocking POST. A search takes tens of seconds to minutes; watching it work would be
