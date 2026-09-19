@@ -137,6 +137,14 @@ are both running locally, you're ready to make changes.
   a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and
   checking `X_test`. A round also has to clear `_is_real_gain`, which refuses anything smaller
   than the fold-to-fold spread; without that the loop "improves" forever on noise.
+- **The cut-off is chosen on the training folds, never on the test set.** `operating_point`
+  takes a trade-off (costs, a recall floor, a precision floor, F1) and picks the threshold on
+  `cross_val_predict` over the training rows -- the test set is opened afterwards to report
+  what the line delivered. The API deliberately has no field for a threshold: letting the
+  client send one invites reading it off the test-set sweep, which is selecting on the test
+  set in miniature. `expected` (folds) and `observed` (test) are both kept so the gap is
+  visible. There is a test that flips every test-set label and asserts the chosen line does
+  not move.
 - **Charts read the app's surface, never the OS.** `useChartTheme` looks only at the `dark`
   class on `<html>` — the same signal Tailwind's `darkMode: ["class"]` uses. Falling back to
   `prefers-color-scheme` is how the correlation heatmap ended up painting near-zero cells

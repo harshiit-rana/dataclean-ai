@@ -111,3 +111,65 @@ describe("ModelPlanForm — grouped split", () => {
     );
   });
 });
+
+describe("ModelPlanForm — where the cut-off sits", () => {
+  const TWO_CLASS: Partial<ModelPlan> = { class_labels: ["no", "yes"] };
+
+  it("only asks about the cut-off for a two-class target", () => {
+    renderForm({ class_labels: ["a", "b", "c"] });
+    expect(screen.queryByText(/What matters more/)).not.toBeInTheDocument();
+    renderForm({ task_type: "regression", class_labels: [] });
+    expect(screen.queryByText(/What matters more/)).not.toBeInTheDocument();
+  });
+
+  it("sends the default when nothing was chosen", () => {
+    const onTrain = renderForm(TWO_CLASS);
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain).toHaveBeenCalledWith(
+      expect.objectContaining({
+        operating_point: expect.objectContaining({ objective: "default", positive_label: "yes" }),
+      })
+    );
+  });
+
+  it("never sends a threshold -- only the trade-off", () => {
+    const onTrain = renderForm(TWO_CLASS);
+    fireEvent.click(screen.getByRole("radio", { name: /One kind of mistake costs more/ }));
+    fireEvent.change(screen.getByLabelText("Cost of missing a case"), { target: { value: "5" } });
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    const sent = onTrain.mock.calls[0][0].operating_point;
+    expect(sent).toMatchObject({ objective: "cost", cost_of_missing: 5, cost_of_false_alarm: 1 });
+    expect(sent).not.toHaveProperty("threshold");
+  });
+
+  it("will not train on a floor with no number in it", () => {
+    renderForm(TWO_CLASS);
+    fireEvent.click(screen.getByRole("radio", { name: /Catch at least a set share/ }));
+    expect(screen.getByRole("button", { name: /Train/ })).toBeDisabled();
+    expect(screen.getByText(/Give the cut-off trade-off a number first/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Target rate"), { target: { value: "80" } });
+    expect(screen.getByRole("button", { name: /Train/ })).toBeEnabled();
+  });
+
+  it("sends the floor as a rate, not a percentage", () => {
+    const onTrain = renderForm(TWO_CLASS);
+    fireEvent.click(screen.getByRole("radio", { name: /Be right at least/ }));
+    fireEvent.change(screen.getByLabelText("Target rate"), { target: { value: "70" } });
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].operating_point).toMatchObject({
+      objective: "min_precision",
+      target_rate: 0.7,
+    });
+  });
+
+  it("lets the user say which answer is a case", () => {
+    const onTrain = renderForm({ class_labels: ["churned", "retained"] });
+    // Sorted last is "retained", which is the wrong thing to be catching.
+    fireEvent.change(screen.getByLabelText(/A .case. is a row where the answer is/), {
+      target: { value: "churned" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].operating_point.positive_label).toBe("churned");
+  });
+});

@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 19 September 2026 · 39 commits · 444 backend tests, 80 frontend tests
+Last updated: 19 September 2026 · 40 commits · 477 backend tests, 92 frontend tests
 
 ---
 
@@ -201,6 +201,25 @@ not work", which is just as much a claim about the test set as "this model works
 distinction matters because the two failures look identical from the outside and call for
 opposite responses: a bad model needs different columns, an unjudgeable one needs more rows.
 
+**Where the cut-off sits.** A two-class model produces a probability, and somewhere a line is
+drawn; every precision and recall figure is measured at that line, and by default it sits at
+0.50 because that is scikit-learn's number. The threshold sweep showed the trade for a long
+time without letting anyone act on it. Now the user states what matters — *a missed case
+costs 5× a false alarm*, *catch at least 80%*, *be right at least 70% of the time when
+flagging*, or just *balance the two* — and which answer counts as "a case", and the app moves
+the line.
+
+The user never picks the number, and that is the design. Choosing a cut-off by eye from the
+sweep, which is drawn over the test rows, is selecting on the test set in miniature — on a
+small test set it is enough to manufacture a recall figure that will not survive new data. So
+the line is chosen on out-of-fold predictions over the *training* rows (grouped folds when
+the split is grouped, the same folds the improvement loop searches on) and the test set is
+opened afterwards to report what that line actually did. Both numbers are kept: what the
+folds promised and what the test set delivered, next to the default at 0.50. A floor that no
+cut-off can clear is said outright rather than quietly approximated. The line reaches the run
+history, the model card and `train_model.py` as a declared constant — and the card explains
+that `model.joblib` doesn't know about it, because `predict()` answers at 0.50.
+
 **Thirteen diagnostics**, as interactive charts with a table view behind every one: ROC,
 precision-recall, confusion matrix, per-class breakdown, calibration, threshold trade-off,
 class balance, feature importance, permutation importance, cross-validation spread, learning
@@ -312,14 +331,7 @@ improvement loop, scored the same honest way:
 Same constraint as the tuned settings: each derived feature must be a declared recipe so
 `train_model.py` can reproduce it. A model the export can't rebuild is a model trapped in the app.
 
-### 2. Threshold selection
-
-The threshold sweep is already *shown* — "the default cut-off is 0.50, but nothing makes it the
-right one" — but you can't act on it. Letting you state the trade-off ("a missed churn costs
-more than a false alarm") and having the model adopt that operating point is a large, cheap win:
-recall can often be doubled without retraining anything.
-
-### 3. Streaming the improvement loop
+### 2. Streaming the improvement loop
 
 It already reports progress round by round internally (`on_progress`), but the endpoint is a
 single blocking POST. A search takes tens of seconds to minutes; watching it work would be

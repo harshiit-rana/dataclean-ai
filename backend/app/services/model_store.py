@@ -114,6 +114,19 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
             "tuned": bool(improvement),
             "tuned_settings": improvement.get("settings") or {},
             "stopped_because": improvement.get("stopped_because"),
+            # Where the cut-off sat and why. Two runs with the same AUC and different recall
+            # are the same model at different lines, and the table has to be able to say so.
+            "operating_point": (
+                {
+                    "objective": point.get("objective"),
+                    "description": point.get("description"),
+                    "threshold": point.get("threshold"),
+                    "positive_label": point.get("positive_label"),
+                    "observed": point.get("observed"),
+                }
+                if (point := result.get("operating_point"))
+                else None
+            ),
         }
     )
 

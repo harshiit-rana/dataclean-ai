@@ -224,6 +224,13 @@ threshold trade-off table, cross-validation spread, learning curve, permutation 
 a feature correlation matrix. For regression: predicted-vs-actual, residuals, residual
 distribution and error by range.
 
+**You say what a mistake costs, and it moves the line.** Where a classifier's cut-off sits is
+a business call — *a missed case costs five times a false alarm*, *catch at least 80%* — so
+you state the trade-off and the app chooses the threshold. It chooses it on out-of-fold
+predictions over the training rows, never on the test set, then reports what the line actually
+delivered on the held-out rows next to what the folds promised. The threshold reaches the
+exported script as a declared constant.
+
 **Every verdict shows its working.** "Ready" is a claim about what *isn't* wrong, and a reader
 can't confirm that by looking at the data. So the readiness panel opens onto the checks behind
 it — what each one concluded, the numbers, and what would change the answer — including the

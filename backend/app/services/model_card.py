@@ -42,6 +42,15 @@ _METRIC_LABELS = {
 }
 
 
+def _split_description(split: dict) -> str:
+    strategy = split.get("strategy")
+    if strategy == "time":
+        return f"by date, on {split.get('time_column')}"
+    if strategy == "group":
+        return f"keeping every {split.get('group_column')} on one side"
+    return "at random"
+
+
 def _fmt(value) -> str:
     if value is None:
         return "—"
@@ -177,6 +186,58 @@ def _error_by_range_table(diagnostics: dict) -> list[str]:
     return lines
 
 
+def _operating_point_section(result: dict) -> list[str]:
+    """Where the cut-off sits, what it was chosen for, and how the test set answered.
+
+    Only written when the user chose a trade-off. At the default there is nothing to
+    explain, and a section saying "0.50, because that is the default" would be padding."""
+    point = result.get("operating_point")
+    if not point or point.get("objective") in (None, "default"):
+        return []
+
+    observed = point.get("observed") or {}
+    expected = point.get("expected") or {}
+    default = point.get("at_default") or {}
+    label = point.get("positive_label")
+
+    lines = [
+        "",
+        "## Where the cut-off sits",
+        "",
+        f"The model flags a row as **{label}** when its probability is at or above "
+        f"**{point.get('threshold')}**, not the usual 0.50. That line was chosen so that "
+        f"{point.get('description')}.",
+        "",
+        f"It was chosen on {point.get('chosen_on')}. The held-out figures below are "
+        f"therefore measured at a line the test set had no say in, and the gap between the "
+        f"two columns is how much the training folds over- or under-promised.",
+        "",
+        "| At this cut-off | Expected (training folds) | Held-out test set | Test set at 0.50 |",
+        "| --- | --- | --- | --- |",
+        f"| Share of real cases caught (recall) | {_fmt(expected.get('recall'))} | "
+        f"{_fmt(observed.get('recall'))} | {_fmt(default.get('recall'))} |",
+        f"| Correct when flagged (precision) | {_fmt(expected.get('precision'))} | "
+        f"{_fmt(observed.get('precision'))} | {_fmt(default.get('precision'))} |",
+        f"| Rows flagged | {_fmt(expected.get('flagged'))} of {_fmt(expected.get('rows'))} | "
+        f"{_fmt(observed.get('flagged'))} of {_fmt(observed.get('rows'))} | "
+        f"{_fmt(default.get('flagged'))} of {_fmt(default.get('rows'))} |",
+        f"| Real cases missed | {_fmt(expected.get('missed'))} | "
+        f"{_fmt(observed.get('missed'))} | {_fmt(default.get('missed'))} |",
+        f"| False alarms | {_fmt(expected.get('false_alarms'))} | "
+        f"{_fmt(observed.get('false_alarms'))} | {_fmt(default.get('false_alarms'))} |",
+    ]
+    if point.get("note"):
+        lines += ["", point["note"]]
+    lines += [
+        "",
+        "The precision and recall in the comparison table above are at 0.50, so every model "
+        "is measured the same way. The line only applies to the chosen model, and "
+        "`model.joblib` does not know about it -- `predict()` will answer at 0.50. The "
+        "snippet at the end of this card shows how to apply it.",
+    ]
+    return lines
+
+
 def _importance_table(best: dict) -> list[str]:
     rows = best.get("column_importance") or []
     if not rows:
@@ -305,6 +366,14 @@ def _deterministic_cautions(result: dict, best: dict) -> list[str]:
             f"understate what is achievable."
         )
 
+    point = result.get("operating_point") or {}
+    if point.get("objective") not in (None, "default") and not point.get("reachable", True):
+        cautions.append(
+            f"A cut-off was asked for so that {point.get('description')}, and no cut-off "
+            f"achieves that on the training folds. The nearest one was set instead; the "
+            f"table under 'Where the cut-off sits' shows what it actually delivers."
+        )
+
     # Anyone reading a model card is entitled to know how many configurations were tried
     # before this one was chosen -- it is the difference between "this is what a model does
     # on your data" and "this is the best of forty attempts".
@@ -381,8 +450,7 @@ def build_model_card(
         f"| Columns used | {len(features.get('numeric', [])) + len(features.get('categorical', []))} |",
         f"| Rows trained on | {_fmt(split.get('train_rows'))} |",
         f"| Rows held back for testing | {_fmt(split.get('test_rows'))} |",
-        f"| How the data was split | "
-        f"{'by date, on ' + str(split.get('time_column')) if split.get('strategy') == 'time' else 'at random'} |",
+        f"| How the data was split | {_split_description(split)} |",
     ]
 
     lines += ["", "## Results", ""]
@@ -390,6 +458,7 @@ def build_model_card(
     lines += _metric_glossary(result)
     lines += _per_class_table(diagnostics)
     lines += _confusion_table(diagnostics)
+    lines += _operating_point_section(result)
     lines += _error_by_range_table(diagnostics)
     lines += _importance_table(best)
     lines += _excluded_section(result)

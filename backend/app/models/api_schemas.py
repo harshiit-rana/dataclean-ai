@@ -133,6 +133,9 @@ class ModelPlanResponse(BaseModel):
     blockers: list[str]
     warnings: list[str]
     trained: bool
+    # The distinct answers, for a classification target. The form uses them to let the user
+    # say which one counts as "a case" when stating a cut-off trade-off.
+    class_labels: list[str] = []
 
 
 class SetRulesRequest(BaseModel):
@@ -159,6 +162,21 @@ class RulesResponse(BaseModel):
     checks: list[dict]
 
 
+class OperatingPointRequest(BaseModel):
+    """Where the cut-off should sit, stated as a trade-off rather than a number.
+
+    The number is chosen by the app on the training folds (operating_point.py). Letting the
+    client send a threshold directly would invite picking one off the test-set sweep, which
+    is selecting on the test set in miniature.
+    """
+
+    objective: str = "default"  # "default" | "cost" | "min_recall" | "min_precision" | "f1"
+    cost_of_missing: float = Field(default=1.0, ge=0.0)
+    cost_of_false_alarm: float = Field(default=1.0, ge=0.0)
+    target_rate: Optional[float] = Field(default=None, gt=0.0, le=1.0)
+    positive_label: Optional[str] = None
+
+
 class TrainRequest(BaseModel):
     excluded_columns: list[str] = []
     model_names: list[str] = []  # empty means "every model that fits the task"
@@ -167,6 +185,8 @@ class TrainRequest(BaseModel):
     # The column identifying which rows belong to the same entity, for a grouped split.
     group_column: Optional[str] = None
     include_deep_diagnostics: bool = True
+    # Two-class targets only; ignored otherwise.
+    operating_point: Optional[OperatingPointRequest] = None
 
 
 class ImproveRequest(TrainRequest):

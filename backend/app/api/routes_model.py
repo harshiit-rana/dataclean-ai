@@ -38,6 +38,7 @@ from app.services import (
     model_export,
     model_store,
     modeling,
+    operating_point,
 )
 from app.api.routes_rules import stored_rules
 from app.services.session_store import read_session_meta, session_dir
@@ -70,6 +71,22 @@ class NoTrainedModelError(AppError):
 
     def __init__(self):
         super().__init__("No model yet", "Nothing has been trained for this session.")
+
+
+class BadOperatingPointError(AppError):
+    status_code = 422
+
+    def __init__(self, detail: str):
+        super().__init__("Cut-off trade-off not understood", detail)
+
+
+def _operating_point(request: TrainRequest) -> operating_point.OperatingPoint:
+    try:
+        return operating_point.parse(
+            request.operating_point.model_dump() if request.operating_point else None
+        )
+    except ValueError as exc:
+        raise BadOperatingPointError(str(exc)) from exc
 
 
 def _load_session(
@@ -295,6 +312,11 @@ async def get_model_plan(
         blockers=readiness.get("blockers", []),
         warnings=readiness.get("warnings", []),
         trained=stored is not None,
+        class_labels=(
+            sorted(df[target].dropna().astype(str).unique().tolist())
+            if task == "classification"
+            else []
+        ),
     )
 
 
@@ -343,6 +365,7 @@ async def train_model(
     task = _refuse_if_the_data_cannot_support_a_model(df, goal, rules)
 
     model_names = request.model_names or [spec.name for spec in modeling.models_for_task(task)]
+    point = _operating_point(request)
 
     def run() -> dict:
         return modeling.train_candidates(
@@ -355,6 +378,7 @@ async def train_model(
             time_column=request.time_column,
             group_column=request.group_column,
             include_deep_diagnostics=request.include_deep_diagnostics,
+            point=point,
         )
 
     try:
@@ -396,6 +420,7 @@ async def improve_model(
     df, goal_context, directory, rules = _load_session(settings, session_id)
     target = (goal_context.target_column or "").strip()
     task = _refuse_if_the_data_cannot_support_a_model(df, goal_context, rules)
+    point = _operating_point(request)
 
     def run() -> dict:
         found = improvement.improve(
@@ -423,6 +448,7 @@ async def improve_model(
             group_column=request.group_column,
             include_deep_diagnostics=request.include_deep_diagnostics,
             model_params={best["model"]: params},
+            point=point,
         )
         rebuilt["improvement"] = {
             "rounds": found["rounds"],

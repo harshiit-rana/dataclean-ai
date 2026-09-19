@@ -257,14 +257,18 @@ export function CalibrationChart({ points }: { points: CalibrationPoint[] }) {
   );
 }
 
-export function ThresholdChart({ rows }: { rows: ThresholdRow[] }) {
+export function ThresholdChart({ rows, chosen }: { rows: ThresholdRow[]; chosen?: number }) {
   const theme = useChartTheme();
   if (!rows?.length) return null;
 
   return (
     <ChartCard
-      title="Where should the cut-off sit?"
-      description="Flag more cases and you catch more but are wrong more often. This is a business call, not a modelling one."
+      title={chosen != null ? "Where the cut-off sits" : "Where should the cut-off sit?"}
+      description={
+        chosen != null
+          ? `The line you asked for sits at ${chosen.toFixed(2)}; the faint one is the default 0.50. This sweep is over the test rows -- the line itself was not chosen from it.`
+          : "Flag more cases and you catch more but are wrong more often. This is a business call, not a modelling one."
+      }
       tableColumns={[
         { key: "threshold", label: "Cut-off", numeric: true, format: (v) => Number(v).toFixed(2) },
         { key: "flagged", label: "Flagged", numeric: true },
@@ -274,7 +278,11 @@ export function ThresholdChart({ rows }: { rows: ThresholdRow[] }) {
         { key: "recall", label: "Share caught", numeric: true, format: ratio },
       ]}
       tableRows={rows as unknown as Record<string, unknown>[]}
-      footnote="The default cut-off is 0.50, but nothing makes it the right one. If a missed case costs more than a false alarm, move it left."
+      footnote={
+        chosen != null
+          ? "To move it, change the trade-off under \"Change columns or retrain\" and train again."
+          : "The default cut-off is 0.50, but nothing makes it the right one. If a missed case costs more than a false alarm, say so under \"Change columns or retrain\" and the app will move it."
+      }
     >
       <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
         <LineChart data={rows} margin={CHART_MARGIN}>
@@ -298,7 +306,15 @@ export function ThresholdChart({ rows }: { rows: ThresholdRow[] }) {
             tick={{ ...AXIS_TICK_STYLE, fill: theme.mutedText }}
             width={44}
           />
-          <ReferenceLine x={0.5} stroke={theme.axis} />
+          <ReferenceLine x={0.5} stroke={theme.axis} strokeDasharray={chosen != null ? "3 3" : undefined} />
+          {chosen != null && (
+            <ReferenceLine
+              x={chosen}
+              stroke={theme.series[2] ?? theme.axis}
+              strokeWidth={2}
+              label={{ value: "your line", position: "top", fill: theme.mutedText, fontSize: 11 }}
+            />
+          )}
           <Tooltip
             content={
               <ChartTooltip

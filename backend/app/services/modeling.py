@@ -23,7 +23,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from app.services import diagnostics
+from app.services import diagnostics, operating_point
 
 logger = logging.getLogger(__name__)
 
@@ -406,9 +406,13 @@ def build_pipeline(
 # --- evaluation ---------------------------------------------------------------------------
 
 
-def evaluate(pipeline, X_test, y_test, task: str) -> dict:
+def evaluate(pipeline, X_test, y_test, task: str, positive_label: str | None = None) -> dict:
     """Metrics appropriate to the task. For classification the imbalance-aware ones are
-    included alongside accuracy, because accuracy alone flatters a lopsided target."""
+    included alongside accuracy, because accuracy alone flatters a lopsided target.
+
+    `positive_label` says which of two answers counts as "a case" for precision and recall.
+    It defaults to the last label in sorted order -- right for yes/no and 0/1, wrong for
+    churned/retained -- so the user can name it."""
     from sklearn import metrics as sk
 
     predictions = pipeline.predict(X_test)
@@ -423,7 +427,7 @@ def evaluate(pipeline, X_test, y_test, task: str) -> dict:
     labels = sorted(pd.Series(y_test).astype(str).unique())
     binary = len(labels) == 2
     average = "binary" if binary else "macro"
-    pos_label = labels[-1] if binary else None
+    pos_label = resolve_positive_label(labels, positive_label) if binary else None
 
     y_true = pd.Series(y_test).astype(str)
     y_pred = pd.Series(predictions).astype(str)
@@ -444,8 +448,9 @@ def evaluate(pipeline, X_test, y_test, task: str) -> dict:
     # ROC AUC needs probabilities and only makes sense for two classes.
     if binary and hasattr(pipeline, "predict_proba"):
         try:
-            probabilities = pipeline.predict_proba(X_test)[:, 1]
-            scores["roc_auc"] = round(float(sk.roc_auc_score(y_true == labels[-1], probabilities)), 4)
+            classes = [str(c) for c in pipeline.classes_]
+            probabilities = pipeline.predict_proba(X_test)[:, classes.index(pos_label)]
+            scores["roc_auc"] = round(float(sk.roc_auc_score(y_true == pos_label, probabilities)), 4)
         except Exception:  # noqa: BLE001 -- a missing AUC must not sink the whole evaluation
             logger.debug("ROC AUC could not be computed", exc_info=True)
 
@@ -453,6 +458,15 @@ def evaluate(pipeline, X_test, y_test, task: str) -> dict:
     scores["labels"] = labels
     scores["positive_label"] = pos_label
     return scores
+
+
+def resolve_positive_label(labels: list[str], requested: str | None) -> str:
+    """The requested label if it is one of the two, else the conventional last-in-sorted-order.
+    A label that isn't in the data is ignored rather than raised: it usually means the target
+    was recoded during cleaning after the plan was drawn up."""
+    if requested is not None and str(requested) in labels:
+        return str(requested)
+    return labels[-1]
 
 
 def baseline_score(y_train, y_test, task: str) -> dict:
@@ -733,6 +747,7 @@ def train_candidates(
     group_column: str | None = None,
     include_deep_diagnostics: bool = True,
     model_params: dict[str, dict] | None = None,
+    point: operating_point.OperatingPoint | None = None,
 ) -> dict:
     """Trains each requested model on the same split and returns everything needed to compare
     them. A model that fails to fit is reported rather than aborting the others.
@@ -740,7 +755,11 @@ def train_candidates(
     `model_params` carries settings the improvement loop found, keyed by model name. Running
     the tuned model back through this function rather than reporting the loop's own numbers
     is deliberate: the result then has the same shape as any other, so the charts, the model
-    card, the joblib and the exported script all work on it without knowing it was tuned."""
+    card, the joblib and the exported script all work on it without knowing it was tuned.
+
+    `point` is the trade-off the user stated for where the cut-off should sit. It is applied
+    to the chosen model only, and chosen on the training folds -- see operating_point.py."""
+    point = point or operating_point.OperatingPoint()
     if target_column not in df.columns:
         raise ModelingError(f"'{target_column}' is not in the data.")
 
@@ -779,7 +798,7 @@ def train_candidates(
         try:
             pipeline = build_pipeline(name, features["numeric"], features["categorical"], tuned)
             pipeline.fit(X_train, y_train)
-            scores = evaluate(pipeline, X_test, y_test, task)
+            scores = evaluate(pipeline, X_test, y_test, task, point.positive_label)
             importances = feature_importance(pipeline)
             results.append(
                 {
@@ -854,10 +873,38 @@ def train_candidates(
             groups=cv_groups,
         )
 
+    # Where the cut-off sits, for a two-class model. Chosen on the training folds against
+    # what the user said matters, then reported against the test set. The default is still
+    # recorded, so the card and the script can say plainly that nothing was chosen.
+    chosen_point = None
+    if task == "classification" and best["metrics"].get("positive_label") is not None:
+        train_groups = (
+            df.loc[list(X_train.index), group_column]
+            if split_strategy == "group" and group_column
+            else None
+        )
+        chosen_point = operating_point.apply(
+            build=lambda: build_pipeline(
+                best["model"],
+                features["numeric"],
+                features["categorical"],
+                (model_params or {}).get(best["model"]),
+            ),
+            pipeline=best["pipeline"],
+            X_train=X_train,
+            y_train=y_train,
+            X_test=X_test,
+            y_test=y_test,
+            point=point,
+            positive_label=best["metrics"]["positive_label"],
+            groups=train_groups,
+        )
+
     return {
         "task": task,
         "target_column": target_column,
         "features": features,
+        "operating_point": chosen_point,
         "split": {
             "strategy": split_strategy,
             "time_column": time_column if split_strategy == "time" else None,

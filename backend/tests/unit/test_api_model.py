@@ -488,3 +488,63 @@ class TestRunHistoryOverTheApi:
         run = client.get(f"/api/model/{session_id}/history").json()["runs"][0]
         assert run["verdict"]
         assert run["primary_metric"] in run["metrics"]
+
+
+class TestOperatingPointOverTheApi:
+    def test_the_plan_names_the_answers(self):
+        plan = client.get(f"/api/model/{_session()}/plan").json()
+        assert plan["class_labels"] == ["no", "yes"]
+
+    def test_a_stated_trade_off_moves_the_line(self):
+        session_id = _session()
+        response = client.post(
+            f"/api/model/{session_id}/train",
+            json={
+                "model_names": ["logistic_regression"],
+                "include_deep_diagnostics": False,
+                "operating_point": {"objective": "cost", "cost_of_missing": 8, "cost_of_false_alarm": 1},
+            },
+        )
+        assert response.status_code == 200, response.text
+        point = response.json()["operating_point"]
+        assert point["objective"] == "cost"
+        assert point["threshold"] < 0.5
+        assert point["observed"]["recall"] >= point["at_default"]["recall"]
+
+    def test_a_trade_off_the_app_cannot_read_is_a_422(self):
+        response = client.post(
+            f"/api/model/{_session()}/train",
+            json={"operating_point": {"objective": "min_recall"}},  # no rate
+        )
+        assert response.status_code == 422
+        assert "target rate" in response.json()["detail"]
+
+    def test_the_line_survives_the_improvement_loop(self):
+        """Improve rebuilds the result through train_candidates; the cut-off has to ride
+        along or improving a model silently resets the trade-off."""
+        session_id = _session()
+        response = client.post(
+            f"/api/model/{session_id}/improve",
+            json={
+                "model_names": ["logistic_regression"],
+                "include_deep_diagnostics": False,
+                "budget": 4,
+                "operating_point": {"objective": "min_recall", "target_rate": 0.85},
+            },
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["operating_point"]["objective"] == "min_recall"
+
+    def test_the_history_records_where_the_line_sat(self):
+        session_id = _session()
+        client.post(
+            f"/api/model/{session_id}/train",
+            json={
+                "model_names": ["logistic_regression"],
+                "include_deep_diagnostics": False,
+                "operating_point": {"objective": "f1"},
+            },
+        )
+        runs = client.get(f"/api/model/{session_id}/history").json()["runs"]
+        assert runs[0]["operating_point"]["objective"] == "f1"
+        assert "observed" in runs[0]["operating_point"]

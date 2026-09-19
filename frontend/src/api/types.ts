@@ -213,6 +213,9 @@ export interface ModelPlan {
   blockers: string[];
   warnings: string[];
   trained: boolean;
+  /** The distinct answers, for a classification target -- so the user can say which one
+   * counts as "a case" when stating a cut-off trade-off. */
+  class_labels?: string[];
 }
 
 /** One completed training run, small enough to keep twenty of.
@@ -247,6 +250,15 @@ export interface ModelRun {
   tuned: boolean;
   tuned_settings: Record<string, unknown>;
   stopped_because: string | null;
+  /** Where the cut-off sat. Two runs with the same AUC and different recall are the same
+   * model at different lines, and the table has to be able to say so. */
+  operating_point?: {
+    objective: string | null;
+    description: string | null;
+    threshold: number | null;
+    positive_label: string | null;
+    observed: CutoffMetrics | null;
+  } | null;
 }
 
 export interface ModelHistory {
@@ -254,6 +266,21 @@ export interface ModelHistory {
   /** Newest first. */
   runs: ModelRun[];
   current_fingerprint: string;
+}
+
+/** Where the cut-off should sit, stated as a trade-off rather than a number.
+ *
+ * The number is chosen server-side on out-of-fold predictions over the training rows. The
+ * client never sends a threshold: picking one off the test-set sweep would be selecting on
+ * the test set in miniature. */
+export type OperatingObjective = "default" | "cost" | "min_recall" | "min_precision" | "f1";
+
+export interface OperatingPointRequest {
+  objective: OperatingObjective;
+  cost_of_missing?: number;
+  cost_of_false_alarm?: number;
+  target_rate?: number | null;
+  positive_label?: string | null;
 }
 
 export interface TrainRequest {
@@ -264,6 +291,44 @@ export interface TrainRequest {
   /** The column saying which rows belong to the same entity, for a grouped split. */
   group_column?: string | null;
   include_deep_diagnostics: boolean;
+  /** Two-class targets only; ignored otherwise. */
+  operating_point?: OperatingPointRequest | null;
+}
+
+/** The confusion matrix at one cut-off, as counts and rates. */
+export interface CutoffMetrics {
+  threshold: number;
+  precision: number;
+  recall: number;
+  f1: number;
+  accuracy: number;
+  flagged: number;
+  caught: number;
+  missed: number;
+  false_alarms: number;
+  rows: number;
+}
+
+/** The cut-off the chosen model was reported at, and how it was arrived at. */
+export interface OperatingPointResult {
+  objective: OperatingObjective;
+  description: string;
+  cost_of_missing: number;
+  cost_of_false_alarm: number;
+  target_rate: number | null;
+  positive_label: string;
+  threshold: number;
+  chosen_on: string;
+  folds: number;
+  /** False when a floor was asked for that no cut-off clears; `note` says what was set. */
+  reachable: boolean;
+  note: string | null;
+  /** What the training folds promised at this line. Null at the default. */
+  expected: CutoffMetrics | null;
+  /** What the sealed test set delivered at this line. */
+  observed: CutoffMetrics;
+  /** The test set at 0.50, for comparison. */
+  at_default: CutoffMetrics;
 }
 
 export interface RocPoint {
@@ -413,6 +478,8 @@ export interface ModelResult {
   feature_correlations: CorrelationResult;
   /** Present only when the result came from the improvement loop rather than a single train. */
   improvement?: ImprovementTrail | null;
+  /** Where the cut-off sits, for a two-class model. Null for regression and multi-class. */
+  operating_point?: OperatingPointResult | null;
 }
 
 /** One attempt at making the model better, kept whether or not it worked.

@@ -257,3 +257,53 @@ class TestGroupedSplitIsExported:
         assert float(match.group(1)) == pytest.approx(
             result["results"][0]["metrics"]["accuracy"], abs=1e-4
         )
+
+
+class TestTheCutoffReachesTheScript:
+    """A model reported at a cut-off of 0.35 that exports as a script answering at 0.50 is a
+    model the export cannot reproduce."""
+
+    def _train_at(self, df, point):
+        from app.services.operating_point import OperatingPoint
+
+        result = modeling.train_candidates(
+            df, target_column="outcome", task="classification",
+            model_names=["logistic_regression"], include_deep_diagnostics=False,
+            point=OperatingPoint(*point),
+        )
+        result["features"]["excluded"] = []
+        return result
+
+    def test_the_default_leaves_the_script_alone(self, classification_data):
+        result = self._train_at(classification_data, ("default",))
+        script = model_export.build_training_script(result)
+        assert "THRESHOLD" not in script
+
+    def test_the_chosen_line_is_a_declared_constant(self, classification_data):
+        result = self._train_at(classification_data, ("cost", 5, 1))
+        script = model_export.build_training_script(result)
+        ast.parse(script)
+        assert f"THRESHOLD = {result['operating_point']['threshold']}" in script
+        assert "POSITIVE_LABEL = 'yes'" in script
+        assert "a missed case costs 5x a false alarm" in script
+
+    def test_the_script_reproduces_the_recall_at_the_cutoff(self, tmp_path, classification_data):
+        result = self._train_at(classification_data, ("min_recall", 1, 1, 0.9))
+        runner = TestScriptActuallyRuns()
+        output = runner._run(tmp_path, classification_data, result)
+
+        match = re.search(r"recall ([0-9.]+)", output)
+        assert match, f"no recall-at-cutoff line in the script's output:\n{output}"
+        assert float(match.group(1)) == pytest.approx(
+            result["operating_point"]["observed"]["recall"], abs=1e-4
+        )
+
+    def test_the_prediction_snippet_thresholds_the_probability(self, classification_data):
+        """The joblib file holds the model, not the line. A snippet calling predict() would
+        quietly answer at 0.50 and discard the trade-off the model was reported against."""
+        result = self._train_at(classification_data, ("cost", 5, 1))
+        snippet = model_export.build_prediction_snippet(result)
+        ast.parse(snippet)
+        assert "predict_proba" in snippet
+        assert str(result["operating_point"]["threshold"]) in snippet
+        assert "pipeline.predict(" not in snippet

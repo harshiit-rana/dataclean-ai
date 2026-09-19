@@ -3,7 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import type { ModelPlan, TrainRequest } from "@/api/types";
+import {
+  OperatingPointForm,
+  operatingPointIsComplete,
+} from "@/components/model/OperatingPointForm";
+import type { ModelPlan, OperatingPointRequest, TrainRequest } from "@/api/types";
 
 interface ModelPlanFormProps {
   plan: ModelPlan;
@@ -22,6 +26,17 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
   const [timeColumn, setTimeColumn] = useState<string>(plan.date_columns[0] ?? "");
   // Defaults to the most-repeated column, which is the one the readiness panel names.
   const [groupColumn, setGroupColumn] = useState<string>(plan.group_columns?.[0] ?? "");
+  // Only a two-class target has a line to draw. Regression has no cut-off, and with three
+  // or more answers "flag it or don't" stops being the question.
+  const twoClass = plan.task_type === "classification" && (plan.class_labels?.length ?? 0) === 2;
+  const [operatingPoint, setOperatingPoint] = useState<OperatingPointRequest>({
+    objective: "default",
+    cost_of_missing: 1,
+    cost_of_false_alarm: 1,
+    target_rate: null,
+    positive_label: plan.class_labels?.[plan.class_labels.length - 1] ?? null,
+  });
+  const tradeOffReady = !twoClass || operatingPointIsComplete(operatingPoint);
 
   // The server refuses to train when readiness is blocked, so offering the button anyway
   // turns a verdict the app already reached into an error message the user has to provoke.
@@ -208,6 +223,14 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
         </CardContent>
       </Card>
 
+      {twoClass && (
+        <OperatingPointForm
+          classLabels={plan.class_labels ?? []}
+          value={operatingPoint}
+          onChange={setOperatingPoint}
+        />
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
         <Button
           onClick={() =>
@@ -218,9 +241,10 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
               time_column: splitStrategy === "time" ? timeColumn : null,
               group_column: splitStrategy === "group" ? groupColumn : null,
               include_deep_diagnostics: true,
+              operating_point: twoClass ? operatingPoint : null,
             })
           }
-          disabled={training || models.length === 0 || blocked}
+          disabled={training || models.length === 0 || blocked || !tradeOffReady}
         >
           {training ? "Training..." : `Train ${models.length} model${models.length === 1 ? "" : "s"}`}
         </Button>
@@ -232,6 +256,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
           {trainable.toLocaleString()} rows
           {trainable !== plan.row_count && ` of ${plan.row_count.toLocaleString()}`}.
           {blocked && " Fix what's blocking this above before training."}
+          {!blocked && !tradeOffReady && " Give the cut-off trade-off a number first."}
         </span>
       </div>
     </div>

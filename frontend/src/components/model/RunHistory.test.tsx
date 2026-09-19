@@ -101,3 +101,21 @@ describe("RunHistory", () => {
     expect(screen.getByText(/a record, not a restore point/)).toBeInTheDocument();
   });
 });
+
+describe("RunHistory — the cut-off is part of the setup", () => {
+  it("names the line when one was chosen", () => {
+    render(
+      <RunHistory
+        runs={[
+          run({
+            operating_point: { objective: "cost", description: "", threshold: 0.31, positive_label: "yes", observed: null },
+          }),
+          run({ operating_point: { objective: "default", description: "", threshold: 0.5, positive_label: "yes", observed: null } }),
+        ]}
+        currentFingerprint="aaa"
+      />
+    );
+    expect(screen.getByText(/cut-off 0.31/)).toBeInTheDocument();
+    expect(screen.queryByText(/cut-off 0.50/)).not.toBeInTheDocument();
+  });
+});

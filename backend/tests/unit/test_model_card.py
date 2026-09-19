@@ -277,3 +277,37 @@ def test_a_card_is_still_produced_without_any_llm_prose():
     assert "No summary was generated" in card
     assert "0.82" in card  # the metrics survived
     assert "## Before you rely on this" in card
+
+
+class TestTheCutoffSection:
+    POINT = {
+        "objective": "cost",
+        "description": "a missed case costs 5x a false alarm",
+        "positive_label": "yes",
+        "threshold": 0.31,
+        "chosen_on": "out-of-fold predictions over the 640 training rows (5 folds); the test set was not consulted",
+        "folds": 5,
+        "reachable": True,
+        "note": None,
+        "expected": {"precision": 0.55, "recall": 0.91, "flagged": 200, "rows": 640, "missed": 12, "false_alarms": 90},
+        "observed": {"precision": 0.52, "recall": 0.88, "flagged": 52, "rows": 160, "missed": 4, "false_alarms": 25},
+        "at_default": {"precision": 0.70, "recall": 0.60, "flagged": 30, "rows": 160, "missed": 14, "false_alarms": 9},
+    }
+
+    def test_the_default_writes_nothing(self):
+        assert "Where the cut-off sits" not in _card(operating_point=None)
+        assert "Where the cut-off sits" not in _card(operating_point={**self.POINT, "objective": "default"})
+
+    def test_a_chosen_line_is_explained_with_both_columns(self):
+        card = _card(operating_point=self.POINT)
+        assert "## Where the cut-off sits" in card
+        assert "**0.31**" in card
+        assert "a missed case costs 5x a false alarm" in card
+        assert "test set was not consulted" in card
+        # expected, observed and the default, on one row
+        assert "| Share of real cases caught (recall) | 0.91 | 0.88 | 0.6 |" in card
+
+    def test_an_unreachable_floor_is_a_caution(self):
+        card = _card(operating_point={**self.POINT, "reachable": False, "note": "No cut-off catches 99%."})
+        assert "No cut-off catches 99%." in card
+        assert "no cut-off achieves that" in card

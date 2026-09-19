@@ -94,7 +94,7 @@ X_train, X_test, y_train, y_test = train_test_split(
 )"""
 
 
-def _evaluation_block(task: str) -> str:
+def _evaluation_block(task: str, point: dict | None = None) -> str:
     if task == "regression":
         return '''predictions = pipeline.predict(X_test)
 print(f"R2:   {r2_score(y_test, predictions):.4f}")
@@ -103,12 +103,36 @@ print(f"RMSE: {mean_squared_error(y_test, predictions) ** 0.5:.4f}")'''
 
     # classification_report rounds to two decimals, which is fine to read and useless for
     # checking the numbers against what the app reported. Print the exact value too.
-    return '''predictions = pipeline.predict(X_test)
+    default = '''predictions = pipeline.predict(X_test)
 print(f"Accuracy: {accuracy_score(y_test, predictions):.4f}")
 print()
 print(classification_report(y_test, predictions, zero_division=0))
 print("Confusion matrix (rows = actual, columns = predicted):")
 print(confusion_matrix(y_test, predictions))'''
+
+    if not point or point.get("objective") in (None, "default"):
+        return default
+
+    # The cut-off is a declared constant, not re-derived here. The app chose it on
+    # out-of-fold predictions over the training rows; this script's job is to reproduce the
+    # model that was reported, and the number it was reported at is part of that.
+    return default + '''
+
+# --- At the chosen cut-off -------------------------------------------------------------
+# The figures above use scikit-learn's default line of 0.50. The app chose THRESHOLD
+# against the stated trade-off, on cross-validated predictions over the training rows only,
+# so the numbers below are measured at a line the test set had no say in.
+positive_index = [str(c) for c in pipeline.classes_].index(POSITIVE_LABEL)
+scores = pipeline.predict_proba(X_test)[:, positive_index]
+flagged = scores >= THRESHOLD
+is_case = y_test.astype(str).to_numpy() == POSITIVE_LABEL
+caught = int((flagged & is_case).sum())
+print()
+print(f"At cut-off {THRESHOLD} (flag as {POSITIVE_LABEL!r} when P >= THRESHOLD):")
+print(f"  flagged {int(flagged.sum())} of {len(y_test)} rows")
+print(f"  caught  {caught} of {int(is_case.sum())} real cases"
+      f" (recall {caught / max(int(is_case.sum()), 1):.4f})")
+print(f"  correct when flagged: {caught / max(int(flagged.sum()), 1):.4f} (precision)")'''
 
 
 def _metric_imports(task: str) -> str:
@@ -138,6 +162,8 @@ def build_training_script(result: dict, *, file_name: str = "cleaned.csv") -> st
         (r for r in result.get("results", []) if r.get("model") == model_name), {}
     )
     metrics = best.get("metrics", {})
+    point = result.get("operating_point")
+    has_point = bool(point and point.get("objective") not in (None, "default"))
     scored = ", ".join(
         f"{k} {v}" for k, v in metrics.items() if isinstance(v, (int, float))
     ) or "not recorded"
@@ -203,7 +229,7 @@ TARGET = {_literal(target)}
 NUMERIC_FEATURES = {_literal(numeric)}
 CATEGORICAL_FEATURES = {_literal(categorical)}
 EXCLUDED_BY_CHOICE = {_literal(excluded)}
-
+{_threshold_constants(point) if has_point else ""}
 path = sys.argv[1] if len(sys.argv) > 1 else {_literal(file_name)}
 df = pd.read_csv(path)
 
@@ -224,7 +250,7 @@ pipeline = Pipeline([
 
 pipeline.fit(X_train, y_train)
 
-{_evaluation_block(task)}
+{_evaluation_block(task, point if has_point else None)}
 
 joblib.dump(pipeline, "model.joblib")
 print("\\nSaved the fitted pipeline to model.joblib")
@@ -232,11 +258,34 @@ print("Load it later with: pipeline = joblib.load('model.joblib')")
 '''
 
 
+def _threshold_constants(point: dict) -> str:
+    return (
+        f"\n# Where the cut-off sits. Chosen by the app so that {point.get('description')},\n"
+        f"# on out-of-fold predictions over the training rows -- never on the test set.\n"
+        f"THRESHOLD = {_literal(point.get('threshold'))}\n"
+        f"POSITIVE_LABEL = {_literal(str(point.get('positive_label')))}\n"
+    )
+
+
 def build_prediction_snippet(result: dict) -> str:
     """A short example of using the saved model, for the model card. Loading a pickle and
     getting the column order wrong is the usual first stumble."""
     features = result.get("features", {})
     columns = features.get("numeric", []) + features.get("categorical", [])
+    point = result.get("operating_point")
+    has_point = bool(point and point.get("objective") not in (None, "default"))
+
+    predict = f"print(pipeline.predict(new_rows[{columns!r}]))"
+    if has_point:
+        # The joblib file holds the model, not the line. predict() would answer at 0.50 and
+        # quietly discard the trade-off the model was reported against.
+        predict = (
+            f"# The model was reported at a cut-off of {point['threshold']}, not the default 0.50.\n"
+            f"# predict() uses 0.50, so threshold the probability yourself:\n"
+            f"positive = [str(c) for c in pipeline.classes_].index({str(point['positive_label'])!r})\n"
+            f"scores = pipeline.predict_proba(new_rows[{columns!r}])[:, positive]\n"
+            f"print(scores >= {point['threshold']})"
+        )
     return f'''import joblib
 import pandas as pd
 
@@ -245,4 +294,4 @@ pipeline = joblib.load("model.joblib")
 # Column names and order must match training. The pipeline handles the rest -- missing
 # values, scaling and encoding are all inside it.
 new_rows = pd.DataFrame([{{{", ".join(f"{c!r}: ..." for c in columns[:4])}}}])
-print(pipeline.predict(new_rows[{columns!r}]))'''
+{predict}'''

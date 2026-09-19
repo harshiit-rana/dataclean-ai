@@ -22,6 +22,7 @@ import {
   LearningCurveChart,
   PermutationImportanceChart,
 } from "@/components/charts/ModelCharts";
+import { OperatingPointCard } from "@/components/model/OperatingPointCard";
 import type { ModelResult } from "@/api/types";
 
 const METRIC_LABELS: Record<string, string> = {
@@ -160,6 +161,8 @@ export function ModelResults({ result }: { result: ModelResult }) {
         </CardContent>
       </Card>
 
+      {result.operating_point && <OperatingPointCard point={result.operating_point} />}
+
       {result.task === "classification" ? (
         <>
           {diagnostics.confusion_cells && <ConfusionMatrix cells={diagnostics.confusion_cells} />}
@@ -173,7 +176,16 @@ export function ModelResults({ result }: { result: ModelResult }) {
           {diagnostics.precision_recall_curve && (
             <PrecisionRecallChart points={diagnostics.precision_recall_curve} />
           )}
-          {diagnostics.thresholds && <ThresholdChart rows={diagnostics.thresholds} />}
+          {diagnostics.thresholds && (
+            <ThresholdChart
+              rows={diagnostics.thresholds}
+              chosen={
+                result.operating_point && result.operating_point.objective !== "default"
+                  ? result.operating_point.threshold
+                  : undefined
+              }
+            />
+          )}
           {diagnostics.calibration && <CalibrationChart points={diagnostics.calibration} />}
           {diagnostics.class_distribution && (
             <ClassDistributionChart counts={diagnostics.class_distribution} />

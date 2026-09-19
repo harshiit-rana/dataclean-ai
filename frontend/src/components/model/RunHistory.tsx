@@ -26,6 +26,10 @@ function describeSetup(run: ModelRun): string {
     parts.push(`split by ${run.split.time_column}`);
   }
   if (run.tuned) parts.push("tuned");
+  // Two runs with the same AUC and different recall are the same model at different lines.
+  if (run.operating_point && run.operating_point.objective !== "default" && run.operating_point.threshold != null) {
+    parts.push(`cut-off ${run.operating_point.threshold.toFixed(2)}`);
+  }
   if (run.excluded_columns.length > 0) {
     parts.push(`without ${run.excluded_columns.join(", ")}`);
   }

@@ -101,6 +101,10 @@ export function ModelPage() {
         model_names: lastRequest?.model_names ?? [],
         split_strategy: lastRequest?.split_strategy ?? "random",
         time_column: lastRequest?.time_column ?? null,
+        // Without this, "improve" after a grouped train fell back to a grouped split with
+        // no column to group on, and the server refused it.
+        group_column: lastRequest?.group_column ?? null,
+        operating_point: lastRequest?.operating_point ?? null,
         include_deep_diagnostics: true,
         goal: target,
       });
