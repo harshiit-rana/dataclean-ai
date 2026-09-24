@@ -213,3 +213,95 @@ class TestSearchSpaces:
         for space in tuning.SEARCH_SPACES.values():
             for key in space:
                 assert key.startswith("model__"), key
+
+
+class TestTheFourthRound:
+    """Tuning is the small lever. On the churn sample the settings search found nothing
+    worth keeping, which is the evidence that the ceiling is the columns -- so the loop also
+    tries the columns."""
+
+    @pytest.fixture
+    def derivable(self) -> pd.DataFrame:
+        """The outcome depends on the weekday of a date column and nothing else, so no
+        amount of tuning can reach it and one derived input reaches it completely."""
+        n = 600
+        dates = pd.date_range("2020-01-01", periods=n, freq="D")
+        rng = np.random.default_rng(7)
+        flip = rng.random(n) < 0.1  # a little noise, so nothing scores 1.0
+        return pd.DataFrame(
+            {
+                "noise": rng.normal(0, 1, n),
+                "when": dates.astype(str),
+                "outcome": np.where((dates.weekday >= 5) ^ flip, "yes", "no"),
+            }
+        )
+
+    def test_it_tries_the_derived_inputs_when_the_run_started_without_them(self, derivable):
+        found = improvement.improve(
+            derivable, target_column="outcome", task="classification",
+            model_names=["random_forest_classifier"], budget=4,
+        )
+        round_4 = next(r for r in found["rounds"] if r["name"] == "derived_features")
+        assert round_4["accepted"]
+        assert "date_parts:when" in round_4["detail"]["recipes"]
+        assert found["best"]["feature_recipes"] == ["date_parts:when"]
+        # The signal was unreachable without them, so this is a large gain, not a nudge.
+        assert round_4["gain"] > 0.2
+
+    def test_it_checks_that_derived_inputs_are_earning_their_place(self, learnable):
+        """Started with them on, so the round tries removing them. On data where they carry
+        nothing, removing them must not be reported as an improvement either."""
+        learnable["joined"] = pd.date_range("2021-01-01", periods=len(learnable), freq="D").astype(str)
+        found = improvement.improve(
+            learnable, target_column="outcome", task="classification",
+            model_names=["logistic_regression"], budget=4,
+            feature_recipes_wanted=["date_parts:joined"],
+        )
+        round_4 = next(r for r in found["rounds"] if r["name"] == "derived_features")
+        assert "Removed" in round_4["what_it_tried"]
+        assert not round_4["accepted"]  # a random date adds nothing, and removing it adds nothing
+
+    def test_it_says_so_when_there_is_nothing_to_derive(self, pure_noise):
+        found = improvement.improve(
+            pure_noise, target_column="outcome", task="classification",
+            model_names=["logistic_regression"], budget=4,
+        )
+        round_4 = next(r for r in found["rounds"] if r["name"] == "derived_features")
+        assert not round_4["accepted"]
+        assert "can be derived" in round_4["outcome"]
+
+    def test_a_derived_round_is_still_judged_on_the_folds(self, derivable):
+        """Same rule as every other round: the test set is scored once, at the end, and the
+        reported number is not the number anything was selected against."""
+        found = improvement.improve(
+            derivable, target_column="outcome", task="classification",
+            model_names=["random_forest_classifier"], budget=4,
+        )
+        round_4 = next(r for r in found["rounds"] if r["name"] == "derived_features")
+        assert "training folds" in round_4["what_it_tried"]
+        assert found["test_metrics"]["roc_auc"] != round_4["score"]
+
+    def test_the_winning_recipes_ride_along_for_the_rebuild(self, derivable):
+        """The route rebuilds the result through train_candidates using best["feature_recipes"].
+        If the loop's choice did not survive that handoff, the reported model would be the one
+        the loop rejected."""
+        found = improvement.improve(
+            derivable, target_column="outcome", task="classification",
+            model_names=["random_forest_classifier"], budget=4,
+        )
+        rebuilt = modeling.train_candidates(
+            derivable, target_column="outcome", task="classification",
+            model_names=[found["best"]["model"]], include_deep_diagnostics=False,
+            feature_recipes_wanted=found["best"]["feature_recipes"],
+        )
+        bare = modeling.train_candidates(
+            derivable, target_column="outcome", task="classification",
+            model_names=[found["best"]["model"]], include_deep_diagnostics=False,
+        )
+        assert "when__weekday" in rebuilt["features"]["numeric"]
+        # Compared against the same model on the same rows without them, rather than against
+        # an absolute bar: one row in ten carries a flipped label here, which caps the
+        # reachable AUC well below 1 no matter what the model does.
+        assert rebuilt["results"][0]["metrics"]["roc_auc"] > bare["results"][0]["metrics"]["roc_auc"] + 0.25
+        assert rebuilt["assessment"]["verdict"] == "useful"
+        assert bare["assessment"]["verdict"] == "no_better_than_guessing"

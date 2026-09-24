@@ -107,8 +107,14 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
                 "test_rows": split.get("test_rows"),
             },
             "feature_count": len(result.get("features", {}).get("numeric", []))
-            + len(result.get("features", {}).get("categorical", [])),
+            + len(result.get("features", {}).get("categorical", []))
+            + len(result.get("features", {}).get("frequent", [])),
             "excluded_columns": result.get("features", {}).get("excluded", []),
+            # Which derived inputs this run used. Two runs on the same columns with different
+            # derived inputs are the comparison the fourth round of the loop exists to make.
+            "feature_recipes": [
+                r.get("id") for r in result.get("features", {}).get("derived", []) or []
+            ],
             # Whether the improvement loop produced this, and what it settled on. "Tuning did
             # not help" is a finding, and it is only visible by comparing runs.
             "tuned": bool(improvement),

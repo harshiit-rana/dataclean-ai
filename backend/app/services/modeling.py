@@ -23,7 +23,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from app.services import diagnostics, operating_point
+from app.services import diagnostics, features as feature_recipes, operating_point
 
 logger = logging.getLogger(__name__)
 
@@ -181,16 +181,34 @@ def models_for_task(task: str) -> list[ModelSpec]:
 
 
 def classify_features(
-    df: pd.DataFrame, target_column: str, excluded: list[str] | None = None
+    df: pd.DataFrame,
+    target_column: str,
+    excluded: list[str] | None = None,
+    recipes: list[feature_recipes.Recipe] | None = None,
 ) -> dict:
     """Splits the columns into what the model can actually use.
 
-    Returns numeric/categorical feature lists plus the columns being left out and why, so the
-    UI can show its reasoning instead of silently dropping things.
+    Returns numeric/categorical/frequent feature lists plus the columns being left out and
+    why, so the UI can show its reasoning instead of silently dropping things.
+
+    The reason is the product. A column of radiology reports used to be dropped as an
+    "identifier" because nearly every value was distinct -- the right action for the wrong
+    reason, and the wrong reason is the defect. Free text and dates are now named as what
+    they are, with what to do about them, whether or not a recipe was chosen.
+
+    `recipes` are the derived inputs in force (see features.py). A date or text column that
+    one of them replaces is dropped with that as the reason; a `frequent_categories` column
+    goes into its own bucket for the pipeline to encode.
     """
     excluded = set(excluded or [])
+    recipes = list(recipes or [])
+    replaced = feature_recipes.derived_from(recipes)
+    frequent_set = set(feature_recipes.frequent_columns(recipes))
+    derived_outputs = {o for r in recipes for o in r.outputs}
+
     numeric: list[str] = []
     categorical: list[str] = []
+    frequent: list[str] = []
     dropped: list[dict] = []
     limit = category_limit(len(df))
 
@@ -205,9 +223,20 @@ def classify_features(
         if series.notna().sum() == 0:
             dropped.append({"column": column, "reason": "Every value is empty."})
             continue
-        if series.nunique(dropna=True) <= 1:
+        if series.nunique(dropna=True) <= 1 and column not in derived_outputs:
             dropped.append(
                 {"column": column, "reason": "Every row has the same value, so it explains nothing."}
+            )
+            continue
+
+        if column in replaced:
+            recipe = replaced[column]
+            dropped.append(
+                {
+                    "column": column,
+                    "reason": f"Used through its derived inputs instead "
+                    f"({', '.join(recipe.outputs)}).",
+                }
             )
             continue
 
@@ -215,20 +244,59 @@ def classify_features(
             numeric.append(column)
             continue
 
+        if column in frequent_set:
+            frequent.append(column)
+            continue
+
+        if feature_recipes.looks_like_dates(series):
+            dropped.append(
+                {
+                    "column": column,
+                    "reason": "Dates. A model can't use a date as a category -- nearly every "
+                    "row is a different day. Turned into parts (year, month, weekday, days "
+                    "since) it becomes usable; that is offered under derived inputs.",
+                }
+            )
+            continue
+
+        if feature_recipes.looks_like_free_text(series):
+            dropped.append(
+                {
+                    "column": column,
+                    "reason": "Free text. A model can't read prose as a category -- nearly "
+                    "every row is different -- but how much was written often carries "
+                    "signal, and its length is offered under derived inputs.",
+                }
+            )
+            continue
+
         distinct = int(series.nunique(dropna=True))
         if distinct > limit:
+            keepable = feature_recipes.frequent_categories_recipe(column, series, limit)
             dropped.append(
                 {
                     "column": column,
                     "reason": f"{distinct} different values -- too many for {len(df)} rows to "
                     f"turn into model inputs without the model simply memorizing rows. "
-                    f"Usually an ID, a name, or free text.",
+                    + (
+                        f"Its {keepable.evidence['top_values']} most common values cover "
+                        f"{keepable.evidence['coverage']:.0%} of rows, though; keeping just "
+                        f"those is offered under derived inputs."
+                        if keepable
+                        else "Usually an ID or a name."
+                    ),
                 }
             )
             continue
         categorical.append(column)
 
-    return {"numeric": numeric, "categorical": categorical, "dropped": dropped}
+    return {
+        "numeric": numeric,
+        "categorical": categorical,
+        "frequent": frequent,
+        "dropped": dropped,
+        "derived": [r.as_dict() for r in recipes],
+    }
 
 
 # --- splitting ----------------------------------------------------------------------------
@@ -337,6 +405,7 @@ def build_pipeline(
     numeric: list[str],
     categorical: list[str],
     model_params: dict | None = None,
+    frequent: list[str] | None = None,
 ):
     """Assembles preprocessing + model into one Pipeline.
 
@@ -344,6 +413,10 @@ def build_pipeline(
     encoder's category list -- lives inside this object, so `fit(X_train)` never sees the
     test rows. That is the whole point; doing any of it to the dataframe beforehand would
     leak.
+
+    `frequent` are high-cardinality columns kept under a `frequent_categories` recipe: the
+    most common values get an input each and the rest are pooled. Which values are common is
+    learned, so it is learned here, on the training fold.
     """
     from sklearn.compose import ColumnTransformer
     from sklearn.impute import SimpleImputer
@@ -392,6 +465,27 @@ def build_pipeline(
                     ]
                 ),
                 categorical,
+            )
+        )
+
+    if frequent:
+        transformers.append(
+            (
+                "frequent",
+                Pipeline(
+                    [
+                        ("impute", SimpleImputer(strategy="most_frequent")),
+                        (
+                            "encode",
+                            OneHotEncoder(
+                                handle_unknown="infrequent_if_exist",
+                                max_categories=feature_recipes.MAX_FREQUENT_CATEGORIES,
+                                sparse_output=False,
+                            ),
+                        ),
+                    ]
+                ),
+                frequent,
             )
         )
 
@@ -748,6 +842,7 @@ def train_candidates(
     include_deep_diagnostics: bool = True,
     model_params: dict[str, dict] | None = None,
     point: operating_point.OperatingPoint | None = None,
+    feature_recipes_wanted: list[str] | None = None,
 ) -> dict:
     """Trains each requested model on the same split and returns everything needed to compare
     them. A model that fails to fit is reported rather than aborting the others.
@@ -758,7 +853,12 @@ def train_candidates(
     card, the joblib and the exported script all work on it without knowing it was tuned.
 
     `point` is the trade-off the user stated for where the cut-off should sit. It is applied
-    to the chosen model only, and chosen on the training folds -- see operating_point.py."""
+    to the chosen model only, and chosen on the training folds -- see operating_point.py.
+
+    `feature_recipes_wanted` are the ids of the derived inputs the user ticked. They are
+    re-proposed from the data rather than trusted, and the stateless ones are added to the
+    frame before the split -- a row's weekday does not depend on any other row, so nothing
+    leaks. See features.py."""
     point = point or operating_point.OperatingPoint()
     if target_column not in df.columns:
         raise ModelingError(f"'{target_column}' is not in the data.")
@@ -771,8 +871,11 @@ def train_candidates(
     if split_strategy == "group" and group_column and group_column not in withheld:
         withheld.append(group_column)
 
-    features = classify_features(df, target_column, withheld)
-    if not features["numeric"] and not features["categorical"]:
+    recipes = feature_recipes.select(df, target_column, withheld, feature_recipes_wanted)
+    df = feature_recipes.apply(df, recipes)
+
+    features = classify_features(df, target_column, withheld, recipes)
+    if not features["numeric"] and not features["categorical"] and not features["frequent"]:
         raise ModelingError(
             "There are no usable columns left to predict from. Every other column was "
             "excluded, empty, constant, or too unique to learn from."
@@ -786,7 +889,7 @@ def train_candidates(
         time_column=time_column,
         group_column=group_column,
     )
-    used = features["numeric"] + features["categorical"]
+    used = features["numeric"] + features["categorical"] + features["frequent"]
     X_train, X_test = X_train[used], X_test[used]
 
     results = []
@@ -796,7 +899,9 @@ def train_candidates(
             continue
         tuned = (model_params or {}).get(name)
         try:
-            pipeline = build_pipeline(name, features["numeric"], features["categorical"], tuned)
+            pipeline = build_pipeline(
+                name, features["numeric"], features["categorical"], tuned, features["frequent"]
+            )
             pipeline.fit(X_train, y_train)
             scores = evaluate(pipeline, X_test, y_test, task, point.positive_label)
             importances = feature_importance(pipeline)
@@ -863,6 +968,7 @@ def train_candidates(
                 features["numeric"],
                 features["categorical"],
                 (model_params or {}).get(best["model"]),
+                features["frequent"],
             ),
             best["pipeline"],
             X_train,
@@ -889,6 +995,7 @@ def train_candidates(
                 features["numeric"],
                 features["categorical"],
                 (model_params or {}).get(best["model"]),
+                features["frequent"],
             ),
             pipeline=best["pipeline"],
             X_train=X_train,

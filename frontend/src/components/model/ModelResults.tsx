@@ -161,6 +161,32 @@ export function ModelResults({ result }: { result: ModelResult }) {
         </CardContent>
       </Card>
 
+      {(result.features.derived?.length ?? 0) > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Inputs built from your columns</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              These aren&apos;t in your file — they were computed from columns a model
+              couldn&apos;t otherwise use. <code>train_model.py</code> rebuilds every one.
+            </p>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2 text-sm">
+            {result.features.derived!.map((recipe) => (
+              <div key={recipe.id} className="rounded-md border border-border p-3">
+                <span className="font-medium">{recipe.column}</span>
+                <span className="text-muted-foreground"> → </span>
+                <span className="text-muted-foreground">
+                  {recipe.outputs.length > 0
+                    ? recipe.outputs.join(", ")
+                    : "its most common values, the rest pooled"}
+                </span>
+                <p className="mt-1 text-xs text-muted-foreground">{recipe.reason}</p>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
       {result.operating_point && <OperatingPointCard point={result.operating_point} />}
 
       {result.task === "classification" ? (

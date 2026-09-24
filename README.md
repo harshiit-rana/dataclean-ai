@@ -224,6 +224,14 @@ threshold trade-off table, cross-validation spread, learning curve, permutation 
 a feature correlation matrix. For regression: predicted-vs-actual, residuals, residual
 distribution and error by range.
 
+**It builds inputs, not just picks them.** A `signup_date` used to be thrown away for having
+too many values, when how long ago someone signed up is exactly what predicts churn. Dates
+become their parts, free text becomes its length, blanks become a flag you can learn from, and
+a column with hundreds of values keeps its common ones instead of being discarded. Each is a
+recipe you tick, with the evidence attached, and each is rebuilt by the exported script — a
+derived input the export can't reproduce would be a model trapped in this app. The improvement
+loop tries them for you and tells you whether they helped.
+
 **You say what a mistake costs, and it moves the line.** Where a classifier's cut-off sits is
 a business call — *a missed case costs five times a false alarm*, *catch at least 80%* — so
 you state the trade-off and the app chooses the threshold. It chooses it on out-of-fold

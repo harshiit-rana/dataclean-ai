@@ -548,3 +548,128 @@ class TestOperatingPointOverTheApi:
         runs = client.get(f"/api/model/{session_id}/history").json()["runs"]
         assert runs[0]["operating_point"]["objective"] == "f1"
         assert "observed" in runs[0]["operating_point"]
+
+
+def _derivable_csv(n: int = 300) -> bytes:
+    """A file whose date column is worth deriving from and whose text column is not an id."""
+    rng = np.random.default_rng(23)
+    words = ["the", "customer", "called", "about", "a", "billing", "issue", "again"]
+    dates = pd.date_range("2020-01-01", periods=n, freq="D")
+    buffer = io.StringIO()
+    pd.DataFrame(
+        {
+            "signal": rng.normal(0, 1, n).round(4),
+            "signup_date": dates.astype(str),
+            "notes": [" ".join(rng.choice(words, size=int(rng.integers(6, 18)))) for _ in range(n)],
+            "spend": np.where(rng.random(n) < 0.2, np.nan, rng.normal(50, 10, n).round(2)),
+            "outcome": np.where(dates.weekday >= 5, "yes", "no"),
+        }
+    ).to_csv(buffer, index=False)
+    return buffer.getvalue().encode()
+
+
+class TestDerivedInputsOverTheApi:
+    def test_the_plan_offers_them_with_the_evidence(self):
+        session_id = _session(_derivable_csv())
+        plan = client.get(f"/api/model/{session_id}/plan").json()
+        offered = {f["id"]: f for f in plan["suggested_features"]}
+        assert "date_parts:signup_date" in offered
+        assert "text_length:notes" in offered
+        assert "missing_flag:spend" in offered
+        assert offered["date_parts:signup_date"]["evidence"]["span_days"] > 0
+        assert "signup_date" in offered["date_parts:signup_date"]["reason"]
+
+    def test_they_are_ticked_but_the_user_decides(self):
+        """Pre-ticked with the reason attached, like the suggested exclusions -- but sending
+        none must train without them."""
+        session_id = _session(_derivable_csv())
+        plan = client.get(f"/api/model/{session_id}/plan").json()
+        assert set(plan["feature_recipes"]) == {f["id"] for f in plan["suggested_features"]}
+
+        response = client.post(
+            f"/api/model/{session_id}/train",
+            json={"model_names": ["logistic_regression"], "include_deep_diagnostics": False,
+                  "feature_recipes": []},
+        )
+        assert response.status_code == 200, response.text
+        assert response.json()["features"]["derived"] == []
+        assert not any("__" in c for c in response.json()["features"]["numeric"])
+
+    def test_choosing_them_puts_them_in_the_model(self):
+        session_id = _session(_derivable_csv())
+        response = client.post(
+            f"/api/model/{session_id}/train",
+            json={"model_names": ["random_forest_classifier"], "include_deep_diagnostics": False,
+                  "feature_recipes": ["date_parts:signup_date"]},
+        )
+        assert response.status_code == 200, response.text
+        result = response.json()
+        assert "signup_date__weekday" in result["features"]["numeric"]
+        assert [r["id"] for r in result["features"]["derived"]] == ["date_parts:signup_date"]
+        # The target is the weekday, so this is the difference between a model and nothing.
+        assert result["assessment"]["verdict"] == "useful"
+
+    def test_the_plan_comes_back_showing_what_the_last_run_used(self):
+        session_id = _session(_derivable_csv())
+        client.post(
+            f"/api/model/{session_id}/train",
+            json={"model_names": ["logistic_regression"], "include_deep_diagnostics": False,
+                  "feature_recipes": ["missing_flag:spend"]},
+        )
+        plan = client.get(f"/api/model/{session_id}/plan").json()
+        assert plan["feature_recipes"] == ["missing_flag:spend"]
+
+    def test_an_unknown_recipe_id_is_ignored_rather_than_fatal(self):
+        """Ids are re-proposed from the data, not trusted. A stale id from an older plan is
+        a reason to drop the recipe, not to fail a training run."""
+        session_id = _session(_derivable_csv())
+        response = client.post(
+            f"/api/model/{session_id}/train",
+            json={"model_names": ["logistic_regression"], "include_deep_diagnostics": False,
+                  "feature_recipes": ["date_parts:a_column_that_does_not_exist"]},
+        )
+        assert response.status_code == 200
+        assert response.json()["features"]["derived"] == []
+
+    def test_the_history_records_which_derived_inputs_a_run_used(self):
+        session_id = _session(_derivable_csv())
+        client.post(
+            f"/api/model/{session_id}/train",
+            json={"model_names": ["logistic_regression"], "include_deep_diagnostics": False,
+                  "feature_recipes": ["date_parts:signup_date"]},
+        )
+        runs = client.get(f"/api/model/{session_id}/history").json()["runs"]
+        assert runs[0]["feature_recipes"] == ["date_parts:signup_date"]
+
+    def test_a_date_column_is_not_pre_excluded_as_an_identifier(self):
+        """The bug this whole feature exists to fix, caught at the plan. A date column is
+        row-unique, so the identifier rule claimed it and pre-ticked it for removal -- which
+        meant the recipe that would turn it into four usable inputs was never even offered.
+        The RSNA run did the same to a column of radiology reports."""
+        session_id = _session(_derivable_csv())
+        plan = client.get(f"/api/model/{session_id}/plan").json()
+        identified = {s["column"] for s in plan["suggested_exclusions"] if s["kind"] == "identifier"}
+        assert "signup_date" not in identified
+        assert "notes" not in identified
+        assert "signup_date" not in plan["excluded_columns"]
+        assert "notes" not in plan["excluded_columns"]
+
+    def test_a_real_identifier_is_still_pre_excluded(self):
+        """The rule still has to do its job -- this is a narrowing, not a removal."""
+        plan = client.get(f"/api/model/{_session()}/plan").json()
+        identified = {s["column"] for s in plan["suggested_exclusions"] if s["kind"] == "identifier"}
+        assert "employee_id" in identified
+
+    def test_the_improvement_loop_can_add_them_and_the_result_reflects_it(self):
+        session_id = _session(_derivable_csv())
+        response = client.post(
+            f"/api/model/{session_id}/improve",
+            json={"model_names": ["random_forest_classifier"], "include_deep_diagnostics": False,
+                  "budget": 4, "feature_recipes": []},
+        )
+        assert response.status_code == 200, response.text
+        result = response.json()
+        round_4 = next(r for r in result["improvement"]["rounds"] if r["name"] == "derived_features")
+        assert round_4["accepted"]
+        # The rebuild has to be the configuration that won, not the one that was sent in.
+        assert "signup_date__weekday" in result["features"]["numeric"]

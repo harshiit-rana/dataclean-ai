@@ -172,8 +172,27 @@ export interface PreviewResponse {
 export interface FeatureBreakdown {
   numeric: string[];
   categorical: string[];
+  /** High-cardinality columns kept under a frequent_categories recipe: the most common
+   * values get an input each and the rest are pooled, encoded inside the pipeline. */
+  frequent?: string[];
   dropped: { column: string; reason: string }[];
   excluded?: string[];
+  /** The derived inputs this run used. */
+  derived?: FeatureRecipe[];
+}
+
+/** One derived input: a column the model could not use, turned into one it can.
+ *
+ * A proposal until its id is sent back with a train request -- same shape as a suggestion
+ * card or a business rule, and for the same reason. `outputs` is empty for
+ * frequent_categories, which changes how a column is encoded rather than adding one. */
+export interface FeatureRecipe {
+  id: string;
+  kind: "date_parts" | "text_length" | "missing_flag" | "frequent_categories";
+  column: string;
+  outputs: string[];
+  reason: string;
+  evidence: Record<string, unknown>;
 }
 
 export interface SuggestedExclusion {
@@ -216,6 +235,10 @@ export interface ModelPlan {
   /** The distinct answers, for a classification target -- so the user can say which one
    * counts as "a case" when stating a cut-off trade-off. */
   class_labels?: string[];
+  /** Derived inputs this file could support, each with its evidence. Proposals only. */
+  suggested_features?: FeatureRecipe[];
+  /** The recipe ids the last run used, so the form reopens showing what was chosen. */
+  feature_recipes?: string[];
 }
 
 /** One completed training run, small enough to keep twenty of.
@@ -250,6 +273,9 @@ export interface ModelRun {
   tuned: boolean;
   tuned_settings: Record<string, unknown>;
   stopped_because: string | null;
+  /** Which derived inputs this run used -- two runs on the same columns with different
+   * derived inputs are the comparison the loop's fourth round exists to make. */
+  feature_recipes?: string[];
   /** Where the cut-off sat. Two runs with the same AUC and different recall are the same
    * model at different lines, and the table has to be able to say so. */
   operating_point?: {
@@ -293,6 +319,8 @@ export interface TrainRequest {
   include_deep_diagnostics: boolean;
   /** Two-class targets only; ignored otherwise. */
   operating_point?: OperatingPointRequest | null;
+  /** Ids from the plan's suggested_features. Re-proposed server-side rather than trusted. */
+  feature_recipes?: string[];
 }
 
 /** The confusion matrix at one cut-off, as counts and rates. */

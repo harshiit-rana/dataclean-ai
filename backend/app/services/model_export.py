@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from app.services import features as feature_recipes
 from app.services.modeling import (
     DEFAULT_TEST_SIZE,
     MODELS,
@@ -26,7 +27,9 @@ def _literal(value) -> str:
     return repr(value)
 
 
-def _preprocessing_block(numeric: list[str], categorical: list[str]) -> tuple[list[str], list[str]]:
+def _preprocessing_block(
+    numeric: list[str], categorical: list[str], frequent: list[str] | None = None
+) -> tuple[list[str], list[str]]:
     """Returns (transformer entries, notes). Mirrors modeling.build_pipeline exactly."""
     entries: list[str] = []
     if numeric:
@@ -50,6 +53,19 @@ def _preprocessing_block(numeric: list[str], categorical: list[str]) -> tuple[li
             "                                         sparse_output=False)),\n"
             "            ]),\n"
             "            CATEGORICAL_FEATURES,\n"
+            "        ),"
+        )
+    if frequent:
+        entries.append(
+            "        (\n"
+            '            "frequent",\n'
+            "            Pipeline([\n"
+            '                ("impute", SimpleImputer(strategy="most_frequent")),\n'
+            '                ("encode", OneHotEncoder(handle_unknown="infrequent_if_exist",\n'
+            f"                                         max_categories={feature_recipes.MAX_FREQUENT_CATEGORIES},\n"
+            "                                         sparse_output=False)),\n"
+            "            ]),\n"
+            "            FREQUENT_FEATURES,\n"
             "        ),"
         )
     return entries, []
@@ -153,7 +169,11 @@ def build_training_script(result: dict, *, file_name: str = "cleaned.csv") -> st
     features = result.get("features", {})
     numeric = features.get("numeric", [])
     categorical = features.get("categorical", [])
+    frequent = features.get("frequent", [])
     excluded = features.get("excluded", [])
+    recipes = [
+        feature_recipes.Recipe(**r) for r in features.get("derived", []) if isinstance(r, dict)
+    ]
     split = result.get("split", {})
     task = result.get("task", "classification")
     target = result.get("target_column", "target")
@@ -168,18 +188,19 @@ def build_training_script(result: dict, *, file_name: str = "cleaned.csv") -> st
         f"{k} {v}" for k, v in metrics.items() if isinstance(v, (int, float))
     ) or "not recorded"
 
-    entries, _notes = _preprocessing_block(numeric, categorical)
+    entries, _notes = _preprocessing_block(numeric, categorical, frequent)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     dropped_note = "\n".join(
         f"#   - {d['column']}: {d['reason']}" for d in features.get("dropped", [])
     ) or "#   (none)"
 
+    encodes = bool(categorical or frequent)
     encoder_import = (
         "from sklearn.preprocessing import OneHotEncoder, StandardScaler"
-        if numeric and categorical
+        if numeric and encodes
         else "from sklearn.preprocessing import OneHotEncoder"
-        if categorical
+        if encodes
         else "from sklearn.preprocessing import StandardScaler"
     )
     # Each strategy needs a different splitter, and only the one actually used is imported. A
@@ -228,15 +249,16 @@ from sklearn.pipeline import Pipeline
 TARGET = {_literal(target)}
 NUMERIC_FEATURES = {_literal(numeric)}
 CATEGORICAL_FEATURES = {_literal(categorical)}
+FREQUENT_FEATURES = {_literal(frequent)}
 EXCLUDED_BY_CHOICE = {_literal(excluded)}
 {_threshold_constants(point) if has_point else ""}
 path = sys.argv[1] if len(sys.argv) > 1 else {_literal(file_name)}
 df = pd.read_csv(path)
-
+{_derived_block(recipes)}
 # Rows with no answer cannot be trained on, and the gap must never be filled in -- a guessed
 # label is indistinguishable from a real one once it is in the file.
 labelled = df[df[TARGET].notna()]
-features = labelled[NUMERIC_FEATURES + CATEGORICAL_FEATURES]
+features = labelled[NUMERIC_FEATURES + CATEGORICAL_FEATURES + FREQUENT_FEATURES]
 labels = labelled[TARGET]
 
 {_split_block(split, task)}
@@ -258,6 +280,27 @@ print("Load it later with: pipeline = joblib.load('model.joblib')")
 '''
 
 
+def _derived_block(recipes: list) -> str:
+    """The derived inputs, as the pandas lines that produce them.
+
+    Every one is row-wise -- a row's weekday and its text length depend on nothing but that
+    row -- so running them before the split cannot leak. The column-level recipe
+    (frequent_categories) is not here: it learns which values are common, so it lives inside
+    the pipeline where it only ever sees the training fold.
+    """
+    if not recipes:
+        return ""
+    lines = feature_recipes.as_pandas(recipes)
+    reasons = "\n".join(f"#   - {r.column}: {r.reason}" for r in recipes)
+    return (
+        "\n# --- Derived inputs -------------------------------------------------------------\n"
+        "# Columns the raw file could not offer a model, turned into ones it can. Each is\n"
+        "# row-wise, so deriving before the split leaks nothing.\n"
+        f"{reasons}\n"
+        f"{lines}\n"
+    )
+
+
 def _threshold_constants(point: dict) -> str:
     return (
         f"\n# Where the cut-off sits. Chosen by the app so that {point.get('description')},\n"
@@ -271,7 +314,11 @@ def build_prediction_snippet(result: dict) -> str:
     """A short example of using the saved model, for the model card. Loading a pickle and
     getting the column order wrong is the usual first stumble."""
     features = result.get("features", {})
-    columns = features.get("numeric", []) + features.get("categorical", [])
+    columns = (
+        features.get("numeric", [])
+        + features.get("categorical", [])
+        + features.get("frequent", [])
+    )
     point = result.get("operating_point")
     has_point = bool(point and point.get("objective") not in (None, "default"))
 
@@ -286,11 +333,18 @@ def build_prediction_snippet(result: dict) -> str:
             f"scores = pipeline.predict_proba(new_rows[{columns!r}])[:, positive]\n"
             f"print(scores >= {point['threshold']})"
         )
+    derived_note = (
+        "\n# Some inputs are derived (see train_model.py): "
+        + ", ".join(sorted({o for r in features.get("derived", []) for o in r.get("outputs", [])}))
+        + ".\n# Build them the same way on a new row before predicting.\n"
+        if any(r.get("outputs") for r in features.get("derived", []))
+        else ""
+    )
     return f'''import joblib
 import pandas as pd
 
 pipeline = joblib.load("model.joblib")
-
+{derived_note}
 # Column names and order must match training. The pipeline handles the rest -- missing
 # values, scaling and encoding are all inside it.
 new_rows = pd.DataFrame([{{{", ".join(f"{c!r}: ..." for c in columns[:4])}}}])

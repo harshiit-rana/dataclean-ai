@@ -18,7 +18,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from app.services import model_export, modeling
+from app.services import features as feature_recipes, model_export, modeling
 
 
 @pytest.fixture
@@ -307,3 +307,77 @@ class TestTheCutoffReachesTheScript:
         assert "predict_proba" in snippet
         assert str(result["operating_point"]["threshold"]) in snippet
         assert "pipeline.predict(" not in snippet
+
+
+class TestDerivedInputsReachTheScript:
+    """A recipe the export cannot rebuild is a model trapped in the app."""
+
+    @pytest.fixture
+    def derivable(self) -> pd.DataFrame:
+        rng = np.random.default_rng(41)
+        n = 400
+        dates = pd.date_range("2020-01-01", periods=n, freq="D")
+        words = ["the", "customer", "called", "about", "billing", "again", "today"]
+        return pd.DataFrame(
+            {
+                "signal": rng.normal(0, 1, n).round(4),
+                "when": dates.astype(str),
+                "notes": [" ".join(rng.choice(words, size=int(rng.integers(6, 16)))) for _ in range(n)],
+                "spend": np.where(rng.random(n) < 0.2, np.nan, rng.normal(50, 10, n).round(2)),
+                "outcome": np.where(dates.weekday >= 5, "yes", "no"),
+            }
+        )
+
+    def _train(self, df, recipes):
+        result = modeling.train_candidates(
+            df, target_column="outcome", task="classification",
+            model_names=["random_forest_classifier"], include_deep_diagnostics=False,
+            feature_recipes_wanted=recipes,
+        )
+        result["features"]["excluded"] = []
+        return result
+
+    def test_the_derived_lines_are_in_the_script_with_their_reasons(self, derivable):
+        result = self._train(derivable, ["date_parts:when", "text_length:notes", "missing_flag:spend"])
+        script = model_export.build_training_script(result)
+        ast.parse(script)
+        assert "when__weekday" in script
+        assert "notes__length" in script
+        assert "spend__missing" in script
+        assert "Derived inputs" in script
+        assert "how long ago" in script  # the reason, not just the mechanics
+
+    def test_the_script_runs_and_reproduces_the_score_with_them(self, tmp_path, derivable):
+        result = self._train(derivable, ["date_parts:when"])
+        output = TestScriptActuallyRuns()._run(tmp_path, derivable, result)
+        match = re.search(r"Accuracy:\s+([0-9.]+)", output)
+        assert match, f"no accuracy line in the script's output:\n{output}"
+        assert float(match.group(1)) == pytest.approx(
+            result["results"][0]["metrics"]["accuracy"], abs=1e-4
+        )
+
+    def test_a_pooled_column_is_encoded_the_same_way_in_the_script(self, derivable):
+        derivable["city"] = np.random.default_rng(3).choice(
+            [f"c{i}" for i in range(60)], len(derivable),
+            p=np.r_[np.full(10, 0.06), np.full(50, 0.4 / 50)],
+        )
+        result = self._train(derivable, ["frequent_categories:city"])
+        assert result["features"]["frequent"] == ["city"]
+        script = model_export.build_training_script(result)
+        ast.parse(script)
+        assert "FREQUENT_FEATURES = ['city']" in script
+        assert "infrequent_if_exist" in script
+        assert f"max_categories={feature_recipes.MAX_FREQUENT_CATEGORIES}" in script
+
+    def test_nothing_derived_leaves_the_script_as_it_was(self, derivable):
+        script = model_export.build_training_script(self._train(derivable, []))
+        assert "Derived inputs" not in script
+        assert "FREQUENT_FEATURES = []" in script
+
+    def test_the_snippet_says_the_inputs_have_to_be_rebuilt(self, derivable):
+        """A caller handed raw rows would be missing half the columns the model expects."""
+        result = self._train(derivable, ["date_parts:when"])
+        snippet = model_export.build_prediction_snippet(result)
+        ast.parse(snippet)
+        assert "derived" in snippet
+        assert "when__weekday" in snippet

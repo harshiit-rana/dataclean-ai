@@ -105,6 +105,9 @@ export function ModelPage() {
         // no column to group on, and the server refused it.
         group_column: lastRequest?.group_column ?? null,
         operating_point: lastRequest?.operating_point ?? null,
+        // The loop's fourth round may add these or drop them; what it is handed is where it
+        // starts from, not what it has to end with.
+        feature_recipes: lastRequest?.feature_recipes ?? plan?.feature_recipes ?? [],
         include_deep_diagnostics: true,
         goal: target,
       });

@@ -136,6 +136,11 @@ class ModelPlanResponse(BaseModel):
     # The distinct answers, for a classification target. The form uses them to let the user
     # say which one counts as "a case" when stating a cut-off trade-off.
     class_labels: list[str] = []
+    # Derived inputs this file could support, each with the evidence behind it. Proposals --
+    # nothing is applied until the user sends the ids back with a train request.
+    suggested_features: list[dict] = []
+    # The recipe ids the last run used, so the form comes back showing what was chosen.
+    feature_recipes: list[str] = []
 
 
 class SetRulesRequest(BaseModel):
@@ -187,6 +192,10 @@ class TrainRequest(BaseModel):
     include_deep_diagnostics: bool = True
     # Two-class targets only; ignored otherwise.
     operating_point: Optional[OperatingPointRequest] = None
+    # Ids of the derived inputs to use, from the plan's suggested_features. Re-proposed from
+    # the data server-side rather than trusted, so an id for a column that no longer supports
+    # the recipe is dropped instead of failing the run.
+    feature_recipes: list[str] = []
 
 
 class ImproveRequest(TrainRequest):

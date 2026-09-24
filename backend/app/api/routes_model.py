@@ -32,6 +32,7 @@ from app.models.api_schemas import ImproveRequest, ModelPlanResponse, TrainReque
 from app.models.graph_state import GoalContext
 from app.services import (
     diagnostics,
+    features as feature_recipes,
     improvement,
     ml_readiness,
     model_card,
@@ -168,12 +169,21 @@ def _looks_like_an_identifier(series: pd.Series, rows: int) -> bool:
     """Row-unique columns are usually identifiers: they can't generalize, because every future
     row carries a value the model has never seen, yet they look highly predictive in training.
 
-    Uniqueness alone isn't the test, though. A continuous measurement is *naturally* near-
-    unique -- 809 employees have 809 different salaries -- and calling salary an identifier
-    would strip out the most informative column in the file. So a float is never an
-    identifier on these grounds, and an integer has to look like a key as well as be unique:
-    a dense run of values, the shape an auto-increment column has. That leaves the case this
-    is really for -- text ids, order numbers, emails -- caught as before.
+    Uniqueness alone isn't the test, though, and getting that wrong is expensive in both
+    directions.
+
+    A continuous measurement is *naturally* near-unique -- 809 employees have 809 different
+    salaries -- and calling salary an identifier would strip out the most informative column
+    in the file. So a float is never an identifier on these grounds, and an integer has to
+    look like a key as well as be unique: a dense run of values, the shape an auto-increment
+    column has.
+
+    Dates and free text are near-unique too, and they are the other half of the mistake. The
+    RSNA run dropped a column of radiology reports because "nearly every row has a different
+    value, so this identifies rows rather than describing them" -- the right action for the
+    wrong reason, and the wrong reason is the defect. Both now have recipes that turn them
+    into usable inputs (features.py), so calling them identifiers would hide the offer as
+    well as misdescribe the column. `classify_features` names them for what they are.
     """
     if rows < MIN_ROWS_TO_JUDGE_UNIQUENESS:
         return False
@@ -183,6 +193,9 @@ def _looks_like_an_identifier(series: pd.Series, rows: int) -> bool:
         return False
 
     if pd.api.types.is_float_dtype(series):
+        return False
+
+    if feature_recipes.looks_like_dates(series) or feature_recipes.looks_like_free_text(series):
         return False
 
     if pd.api.types.is_integer_dtype(series):
@@ -264,6 +277,18 @@ async def get_model_plan(
         stored.get("features", {}).get("excluded", []) if stored else [s["column"] for s in suggestions]
     )
 
+    # Proposed against the columns that will actually be inputs: a missing flag on a column
+    # withheld for leaking the answer would leak it straight back in.
+    proposed_features = feature_recipes.propose(df, target, previously_excluded)
+    chosen_features = (
+        [r["id"] for r in stored.get("features", {}).get("derived", [])]
+        if stored
+        # Ticked by default on a first run. Each one is a column the app would otherwise
+        # throw away, and the reason is attached -- an untickable list of things we quietly
+        # decided not to use would be the same defect the dropped-columns list already fixed.
+        else [r.id for r in proposed_features]
+    )
+
     return ModelPlanResponse(
         session_id=session_id,
         target_column=target,
@@ -273,7 +298,12 @@ async def get_model_plan(
         # this next to the Train button, and printing len(df) there repeated the readiness
         # bug on a second surface: "4,407 rows" under a button that would train on 58.
         trainable_row_count=int(df[target].notna().sum()) if target in df.columns else 0,
-        features=modeling.classify_features(df, target, previously_excluded),
+        features=modeling.classify_features(
+            df,
+            target,
+            previously_excluded,
+            [r for r in proposed_features if r.id in set(chosen_features)],
+        ),
         suggested_exclusions=suggestions,
         excluded_columns=previously_excluded,
         candidate_models=[
@@ -317,6 +347,8 @@ async def get_model_plan(
             if task == "classification"
             else []
         ),
+        suggested_features=[r.as_dict() for r in proposed_features],
+        feature_recipes=chosen_features,
     )
 
 
@@ -379,6 +411,7 @@ async def train_model(
             group_column=request.group_column,
             include_deep_diagnostics=request.include_deep_diagnostics,
             point=point,
+            feature_recipes_wanted=request.feature_recipes,
         )
 
     try:
@@ -434,6 +467,7 @@ async def improve_model(
             group_column=request.group_column,
             goal=request.goal,
             budget=request.budget,
+            feature_recipes_wanted=request.feature_recipes,
         )
         best = found["best"]
         params = {f"model__{k}": v for k, v in best["params"].items()}
@@ -449,6 +483,10 @@ async def improve_model(
             include_deep_diagnostics=request.include_deep_diagnostics,
             model_params={best["model"]: params},
             point=point,
+            # Whatever the fourth round settled on, which may not be what was sent in -- the
+            # loop is allowed to add the derived inputs or drop them, and the rebuild has to
+            # be the configuration that won rather than the one that started.
+            feature_recipes_wanted=best.get("feature_recipes", []),
         )
         rebuilt["improvement"] = {
             "rounds": found["rounds"],

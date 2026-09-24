@@ -137,6 +137,27 @@ are both running locally, you're ready to make changes.
   a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and
   checking `X_test`. A round also has to clear `_is_real_gain`, which refuses anything smaller
   than the fold-to-fold spread; without that the loop "improves" forever on noise.
+- **A derived input is a declared recipe, and the export rebuilds it.** `features.Recipe` is
+  a frozen dataclass with a closed set of four kinds; `apply` and `as_pandas` are two
+  renderings of the same recipe and a test applies both to one frame and compares them. If
+  they drift, `train_model.py` silently builds different inputs from the ones that were
+  scored and every number in the app becomes unreproducible. To add a kind, add a branch to
+  both -- never an escape hatch that computes an expression.
+- **Derive before the split only when the recipe is row-wise.** Date parts, text length and a
+  missingness flag depend on nothing but the row they are on, so computing them on the whole
+  frame leaks nothing. Anything that learns from the column -- which values are common, a
+  target encoding, a mean -- goes inside the pipeline where `fit` sees the training fold
+  only. `frequent_categories` is in the pipeline for exactly this reason.
+- **Recipe ids are re-proposed, never trusted.** `features.select` re-runs `propose` and keeps
+  the ids that come back, so a stale id for a column that no longer supports the recipe is
+  dropped quietly rather than failing a run, and a recipe naming an excluded column cannot be
+  smuggled in -- a missing flag on a column withheld for leaking the answer would leak it
+  straight back.
+- **Row-unique is not the same as an identifier.** Dates and free text are near-unique too,
+  and `_looks_like_an_identifier` used to claim both. That pre-ticked them for removal, which
+  hid the recipes that would have made them usable; the RSNA run dropped a column of
+  radiology reports on those grounds. Uniqueness excludes floats, dates and free text before
+  it means anything. `classify_features` owns the wording for all three.
 - **The cut-off is chosen on the training folds, never on the test set.** `operating_point`
   takes a trade-off (costs, a recall floor, a precision floor, F1) and picks the threshold on
   `cross_val_predict` over the training rows -- the test set is opened afterwards to report

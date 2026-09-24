@@ -173,3 +173,65 @@ describe("ModelPlanForm — where the cut-off sits", () => {
     expect(onTrain.mock.calls[0][0].operating_point.positive_label).toBe("churned");
   });
 });
+
+describe("ModelPlanForm — derived inputs", () => {
+  const DERIVABLE: Partial<ModelPlan> = {
+    suggested_features: [
+      {
+        id: "date_parts:signup_date",
+        kind: "date_parts",
+        column: "signup_date",
+        outputs: ["signup_date__weekday"],
+        reason: "Dates spanning 897 days.",
+        evidence: {},
+      },
+      {
+        id: "missing_flag:spend",
+        kind: "missing_flag",
+        column: "spend",
+        outputs: ["spend__missing"],
+        reason: "Blank in 18% of rows.",
+        evidence: {},
+      },
+    ],
+    feature_recipes: ["date_parts:signup_date", "missing_flag:spend"],
+  };
+
+  it("sends the ticked recipes with the train request", () => {
+    const onTrain = renderForm(DERIVABLE);
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].feature_recipes).toEqual([
+      "date_parts:signup_date",
+      "missing_flag:spend",
+    ]);
+  });
+
+  it("lets one be turned off without touching the others", () => {
+    const onTrain = renderForm(DERIVABLE);
+    fireEvent.click(screen.getByRole("checkbox", { name: /signup_date/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].feature_recipes).toEqual(["missing_flag:spend"]);
+  });
+
+  it("drops a recipe when its source column is excluded", () => {
+    /* Otherwise a column withheld for giving away the answer walks straight back in as a
+       missing flag. The server refuses it too; this keeps the form from asking. */
+    const onTrain = renderForm({
+      ...DERIVABLE,
+      features: { numeric: ["spend"], categorical: [], dropped: [] },
+    });
+    fireEvent.click(screen.getByRole("checkbox", { name: /^spend$/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].feature_recipes).toEqual(["date_parts:signup_date"]);
+  });
+
+  it("counts the derived inputs alongside the columns", () => {
+    renderForm(DERIVABLE);
+    expect(screen.getByText(/plus 2 derived/)).toBeInTheDocument();
+  });
+
+  it("says nothing at all when there is nothing to derive", () => {
+    renderForm();
+    expect(screen.queryByText(/Inputs we can build/)).not.toBeInTheDocument();
+  });
+});

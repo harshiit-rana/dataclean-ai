@@ -26,6 +26,9 @@ function describeSetup(run: ModelRun): string {
     parts.push(`split by ${run.split.time_column}`);
   }
   if (run.tuned) parts.push("tuned");
+  if (run.feature_recipes?.length) {
+    parts.push(`${run.feature_recipes.length} derived`);
+  }
   // Two runs with the same AUC and different recall are the same model at different lines.
   if (run.operating_point && run.operating_point.objective !== "default" && run.operating_point.threshold != null) {
     parts.push(`cut-off ${run.operating_point.threshold.toFixed(2)}`);

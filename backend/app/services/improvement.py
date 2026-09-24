@@ -26,7 +26,7 @@ from typing import Callable
 
 import pandas as pd
 
-from app.services import modeling, tuning
+from app.services import features as feature_recipes, modeling, tuning
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,7 @@ def improve(
     goal: float | None = None,
     budget: int = tuning.DEFAULT_BUDGET,
     on_progress: Callable[[Round], None] | None = None,
+    feature_recipes_wanted: list[str] | None = None,
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
 
@@ -115,6 +116,11 @@ def improve(
 
     `on_progress` is called after each round so the caller can stream them; the loop is slow
     enough that watching it work matters.
+
+    `feature_recipes_wanted` are the derived inputs the run started with. The fourth round
+    tries the opposite -- all of them if none were on, none if some were -- and keeps whichever
+    the folds prefer. Tuning is the small lever; on the churn sample it found nothing, which
+    is how we know the ceiling is the columns.
     """
     if target_column not in df.columns:
         raise modeling.ModelingError(f"'{target_column}' is not in the data.")
@@ -126,8 +132,26 @@ def improve(
     if split_strategy == "group" and group_column and group_column not in withheld:
         withheld.append(group_column)
 
-    features = modeling.classify_features(df, target_column, withheld)
-    if not features["numeric"] and not features["categorical"]:
+    # The derived inputs in force, and the alternative the fourth round will try. Both frames
+    # are built up front because the split is by index and the recipes only ever add columns,
+    # so the same rows land on the same side of the split whichever frame is in use.
+    proposed = feature_recipes.propose(df, target_column, withheld)
+    wanted_ids = set(feature_recipes_wanted or [])
+    recipes = [r for r in proposed if r.id in wanted_ids]
+    alternative = [] if recipes else proposed
+    frames = {
+        "current": (recipes, feature_recipes.apply(df, recipes)),
+        "alternative": (alternative, feature_recipes.apply(df, alternative)),
+    }
+    df = frames["current"][1]
+
+    def inputs_for(which: str) -> tuple[dict, list[str]]:
+        chosen, frame = frames[which]
+        classified = modeling.classify_features(frame, target_column, withheld, chosen)
+        return classified, classified["numeric"] + classified["categorical"] + classified["frequent"]
+
+    features, used = inputs_for("current")
+    if not used:
         raise modeling.ModelingError(
             "There are no usable columns left to predict from, so there is nothing to improve."
         )
@@ -141,7 +165,6 @@ def improve(
         time_column=time_column,
         group_column=group_column,
     )
-    used = features["numeric"] + features["categorical"]
     # Captured before the frame is narrowed to the model's inputs, and aligned to the training
     # rows -- every round below compares configurations on these folds.
     train_groups = (
@@ -149,6 +172,7 @@ def improve(
         if split_strategy == "group" and group_column
         else None
     )
+    train_index, test_index = list(X_train.index), list(X_test.index)
     X_train, X_test = X_train[used], X_test[used]
 
     if tuning.cv_splitter(task, y_train, groups=train_groups) is None:
@@ -174,9 +198,15 @@ def improve(
         if on_progress:
             on_progress(entry)
 
-    def build_for(name: str, params: dict | None = None) -> Callable[[], object]:
+    def build_for(
+        name: str, params: dict | None = None, with_features: dict | None = None
+    ) -> Callable[[], object]:
+        feats = with_features or features
+
         def factory():
-            pipeline = modeling.build_pipeline(name, features["numeric"], features["categorical"])
+            pipeline = modeling.build_pipeline(
+                name, feats["numeric"], feats["categorical"], frequent=feats["frequent"]
+            )
             if params:
                 pipeline.set_params(**params)
             return pipeline
@@ -345,6 +375,103 @@ def improve(
         if _goal_met(best_score, goal):
             stopped_because = "goal_reached"
 
+    # --- Round 4: the columns, not the settings ------------------------------------------
+    #
+    # Tuning moves a score by hundredths. A date column that was being thrown away can move
+    # it by tenths. This round tries the derived inputs the other way round from how the run
+    # started -- all of them if none were on, none if some were -- with the model and
+    # settings that lead, and keeps whichever the folds prefer. "The derived inputs did not
+    # help" and "they did" are both findings, and either way the user learns which.
+    if not stopped_because:
+        alt_recipes, alt_frame = frames["alternative"]
+        alt_features, alt_used = inputs_for("alternative")
+        if alt_recipes == recipes or not proposed:
+            emit(
+                Round(
+                    name="derived_features",
+                    label="Derived inputs",
+                    what_it_tried="Looked for columns that could be turned into inputs -- "
+                    "dates, free text, blanks, values that repeat.",
+                    accepted=False,
+                    outcome="Nothing in this data can be derived from that isn't already in "
+                    "use.",
+                )
+            )
+        else:
+            X_train_alt = alt_frame.loc[train_index, alt_used]
+            trying_on = bool(alt_recipes)
+            what = (
+                f"Added {len(alt_recipes)} derived input"
+                f"{'s' if len(alt_recipes) != 1 else ''} "
+                f"({', '.join(r.id.split(':', 1)[1] for r in alt_recipes)}) and re-scored "
+                f"the leading model on the training folds."
+                if trying_on
+                else f"Removed the {len(recipes)} derived input"
+                f"{'s' if len(recipes) != 1 else ''} the run started with and re-scored the "
+                f"leading model on the training folds, to check they were earning their place."
+            )
+            scored = tuning.score_config(
+                build_for(best_name, best_params, alt_features),
+                X_train_alt,
+                y_train,
+                task,
+                groups=train_groups,
+            )
+            if scored is None:
+                emit(
+                    Round(
+                        name="derived_features",
+                        label="Derived inputs",
+                        what_it_tried=what,
+                        accepted=False,
+                        outcome="The model could not be scored with them, so they were left as "
+                        "they were.",
+                    )
+                )
+            elif _is_real_gain(scored.score, best_score, scored.std):
+                gain = round(scored.score - best_score, 4)
+                best_score, best_std = scored.score, scored.std
+                recipes, features, used = alt_recipes, alt_features, alt_used
+                X_train, X_test = alt_frame.loc[train_index, used], alt_frame.loc[test_index, used]
+                emit(
+                    Round(
+                        name="derived_features",
+                        label="Derived inputs",
+                        what_it_tried=what,
+                        score=scored.score,
+                        std=scored.std,
+                        gain=gain,
+                        accepted=True,
+                        outcome=(
+                            f"The derived inputs help: {metric_label} up {gain:+.3f}. They stay."
+                            if trying_on
+                            else f"The model does better without them: {metric_label} up "
+                            f"{gain:+.3f}. They were dropped."
+                        ),
+                        detail={"recipes": [r.id for r in alt_recipes]},
+                    )
+                )
+            else:
+                emit(
+                    Round(
+                        name="derived_features",
+                        label="Derived inputs",
+                        what_it_tried=what,
+                        score=scored.score,
+                        std=scored.std,
+                        gain=round(scored.score - best_score, 4),
+                        accepted=False,
+                        outcome=(
+                            "They did not move the score by more than the folds disagree with "
+                            "each other, so the inputs were left as they were."
+                        ),
+                        detail={"recipes": [r.id for r in alt_recipes]},
+                    )
+                )
+
+        if _goal_met(best_score, goal):
+            stopped_because = "goal_reached"
+
     if not stopped_because:
         stopped_because = "goal_reached" if _goal_met(best_score, goal) else (
             "goal_out_of_reach" if goal is not None else "no_further_gains"
@@ -366,6 +493,8 @@ def improve(
             "params": {k.replace("model__", ""): v for k, v in best_params.items()},
             "cv_score": best_score,
             "cv_std": best_std,
+            # The derived inputs the winner uses, as ids, so the caller rebuilds it the same way.
+            "feature_recipes": [r.id for r in recipes],
         },
         "test_metrics": test_metrics,
         "pipeline": final_pipeline,

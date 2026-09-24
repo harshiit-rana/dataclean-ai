@@ -255,6 +255,39 @@ def _importance_table(best: dict) -> list[str]:
     return lines
 
 
+def _derived_section(result: dict) -> list[str]:
+    """The inputs that weren't in the file.
+
+    A reader comparing the model card against their own spreadsheet will not find
+    `signup_date__weekday` in it, and a column they cannot locate is a column they cannot
+    check. Each one says where it came from and why it exists."""
+    recipes = (result.get("features") or {}).get("derived") or []
+    if not recipes:
+        return []
+
+    lines = [
+        "",
+        "## Inputs derived from the data",
+        "",
+        "These columns are not in the file. They were computed from columns that a model "
+        "could not otherwise use -- a date is a different value on nearly every row, and a "
+        "paragraph of text is not a category. `train_model.py` rebuilds every one of them.",
+        "",
+        "| From | Became | Why |",
+        "| --- | --- | --- |",
+    ]
+    for recipe in recipes:
+        outputs = ", ".join(f"`{o}`" for o in recipe.get("outputs") or [])
+        if not outputs:
+            # frequent_categories adds no column to the frame; it changes how one is encoded.
+            outputs = "its most common values, encoded; the rest pooled as *other*"
+        lines.append(
+            f"| `{recipe.get('column')}` | {outputs} | "
+            f"{str(recipe.get('reason', '')).replace('|', '/')} |"
+        )
+    return lines
+
+
 def _excluded_section(result: dict) -> list[str]:
     features = result.get("features", {})
     dropped = features.get("dropped", [])
@@ -366,6 +399,16 @@ def _deterministic_cautions(result: dict, best: dict) -> list[str]:
             f"understate what is achievable."
         )
 
+    derived = (result.get("features") or {}).get("derived") or []
+    if derived:
+        sources = ", ".join(str(r.get("column")) for r in derived)
+        cautions.append(
+            f"Some inputs were derived rather than read from the file ({sources}). Whatever "
+            f"scores this model, it can only be used on rows where those source columns are "
+            f"present and mean the same thing -- a date parsed in a different format, or a "
+            f"text field that stops being filled in, silently changes the inputs."
+        )
+
     point = result.get("operating_point") or {}
     if point.get("objective") not in (None, "default") and not point.get("reachable", True):
         cautions.append(
@@ -447,7 +490,7 @@ def build_model_card(
         "| --- | --- |",
         f"| Task | {result.get('task')} |",
         f"| Model chosen | {best.get('label', '—')} |",
-        f"| Columns used | {len(features.get('numeric', [])) + len(features.get('categorical', []))} |",
+        f"| Columns used | {len(features.get('numeric', [])) + len(features.get('categorical', [])) + len(features.get('frequent', []))} |",
         f"| Rows trained on | {_fmt(split.get('train_rows'))} |",
         f"| Rows held back for testing | {_fmt(split.get('test_rows'))} |",
         f"| How the data was split | {_split_description(split)} |",
@@ -461,6 +504,7 @@ def build_model_card(
     lines += _operating_point_section(result)
     lines += _error_by_range_table(diagnostics)
     lines += _importance_table(best)
+    lines += _derived_section(result)
     lines += _excluded_section(result)
     lines += _trust_section(result)
 

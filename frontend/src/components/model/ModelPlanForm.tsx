@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { DerivedFeatures } from "@/components/model/DerivedFeatures";
 import {
   OperatingPointForm,
   operatingPointIsComplete,
@@ -23,6 +24,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
   const [excluded, setExcluded] = useState<string[]>(plan.excluded_columns);
   const [models, setModels] = useState<string[]>(plan.candidate_models.map((m) => m.name));
   const [splitStrategy, setSplitStrategy] = useState<"random" | "time" | "group">("random");
+  const [recipes, setRecipes] = useState<string[]>(plan.feature_recipes ?? []);
   const [timeColumn, setTimeColumn] = useState<string>(plan.date_columns[0] ?? "");
   // Defaults to the most-repeated column, which is the one the readiness panel names.
   const [groupColumn, setGroupColumn] = useState<string>(plan.group_columns?.[0] ?? "");
@@ -43,7 +45,19 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
   const blocked = plan.blockers.length > 0;
   const trainable = plan.trainable_row_count ?? plan.row_count;
 
-  const usable = [...plan.features.numeric, ...plan.features.categorical];
+  // A recipe reads the column it derives from, so unticking that column has to take the
+  // recipe with it -- otherwise a column excluded for giving away the answer comes straight
+  // back in through a missing flag. The server refuses it too; this keeps the form honest.
+  const offeredRecipes = (plan.suggested_features ?? []).filter(
+    (recipe) => !excluded.includes(recipe.column)
+  );
+  const liveRecipes = recipes.filter((id) => offeredRecipes.some((r) => r.id === id));
+
+  const usable = [
+    ...plan.features.numeric,
+    ...plan.features.categorical,
+    ...(plan.features.frequent ?? []),
+  ];
   const candidates = [...usable, ...excluded].filter(
     (column, index, all) => all.indexOf(column) === index
   );
@@ -223,6 +237,8 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
         </CardContent>
       </Card>
 
+      <DerivedFeatures recipes={offeredRecipes} chosen={liveRecipes} onChange={setRecipes} />
+
       {twoClass && (
         <OperatingPointForm
           classLabels={plan.class_labels ?? []}
@@ -242,6 +258,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
               group_column: splitStrategy === "group" ? groupColumn : null,
               include_deep_diagnostics: true,
               operating_point: twoClass ? operatingPoint : null,
+              feature_recipes: liveRecipes,
             })
           }
           disabled={training || models.length === 0 || blocked || !tradeOffReady}
@@ -249,7 +266,8 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
           {training ? "Training..." : `Train ${models.length} model${models.length === 1 ? "" : "s"}`}
         </Button>
         <span className="text-sm text-muted-foreground">
-          {usable.length - excluded.filter((c) => usable.includes(c)).length} columns in,{" "}
+          {usable.length - excluded.filter((c) => usable.includes(c)).length} columns in
+          {liveRecipes.length > 0 && ` plus ${liveRecipes.length} derived`},{" "}
           {/* Rows that can be trained on, not rows in the file. Printing the file size here
               said "4,407 rows" under a button that would have fitted on 58. Where the two
               differ, both are shown -- the gap is the point. */}

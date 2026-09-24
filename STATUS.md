@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 19 September 2026 · 40 commits · 477 backend tests, 92 frontend tests
+Last updated: 24 September 2026 · 41 commits · 527 backend tests, 103 frontend tests
 
 ---
 
@@ -201,6 +201,41 @@ not work", which is just as much a claim about the test set as "this model works
 distinction matters because the two failures look identical from the outside and call for
 opposite responses: a bad model needs different columns, an unjudgeable one needs more rows.
 
+**Inputs built from the columns, not just chosen among them.** The improvement loop is what
+proved this was the gap: on the churn sample the settings search found nothing worth keeping,
+which means the ceiling is the columns rather than the settings — and the app was throwing
+real signal away. `signup_date` was dropped wholesale ("870 distinct values, too many to turn
+into model inputs") when tenure derived from it is obviously predictive of churn. Four
+recipes now turn columns the model couldn't use into ones it can: **date parts** (year, month,
+weekday, days-since), **text length** in characters and words, a **missingness flag**, and
+**frequent-value pooling** that keeps a high-cardinality column by giving its common values an
+input each and pooling the rest rather than discarding the column.
+
+Each is a declared piece of data, never code, so `train_model.py` reproduces it line for line
+— a recipe the export can't rebuild is a model trapped in the app, and there is a test that
+runs the generated script and checks the score matches. The first three are row-wise and
+stateless, so deriving them before the split cannot leak; the fourth learns which values are
+common, so it lives inside the pipeline on the training fold like every other learned
+statistic. And nothing applies itself: proposals arrive with the evidence behind them, ticked,
+untickable, and re-proposed server-side rather than trusted from the request — so a recipe on
+a column withheld for leaking the answer can't smuggle it back in through a missing flag.
+
+**Two wrong reasons fixed on the way.** A date column is row-unique, so the identifier rule
+claimed it and pre-ticked it for removal — which meant the recipe that would make it usable
+was never even offered. Free text was claimed the same way; the RSNA run dropped a column of
+radiology reports because *"nearly every row has a different value, so this identifies rows
+rather than describing them"*, which for a paragraph of clinical prose is precisely backwards.
+Neither is an identifier any more, and `classify_features` now names them for what they are
+with what to do about them attached.
+
+**The loop searches the columns too.** A fourth round tries the derived inputs the opposite
+way round from how the run started — all of them if none were on, none if some were — with the
+leading model and settings, judged on the same training folds and subject to the same
+"beat the fold spread" rule. *"The derived inputs did not help"* and *"they did"* are both
+findings. On a test file whose answer depends only on the weekday of a date column, the run
+without them is correctly called **no better than guessing** and the run with them is
+**useful**.
+
 **Where the cut-off sits.** A two-class model produces a probability, and somewhere a line is
 drawn; every precision and recall figure is measured at that line, and by default it sits at
 0.50 because that is scikit-learn's number. The threshold sweep showed the trade for a long
@@ -305,37 +340,47 @@ wrong reason and discards the most informative column in the file.
 
 ## What's next
 
-### 1. Feature engineering — the big one
-
-Tuning is the small lever, and the live run proved it: on the churn sample the settings search
-found nothing worth keeping, which means **the ceiling is the columns, not the settings.**
-
-The app currently leaves real signal on the table. In that same run `signup_date` was dropped
-entirely — 870 distinct values, "too many to turn into model inputs" — when *tenure derived
-from signup date* is obviously predictive of churn. Planned as a fourth round in the
-improvement loop, scored the same honest way:
-
-- **Date parts** — days since, year, month, day-of-week. Turns a dropped date column into four
-  usable ones.
-- **Frequency encoding** for high-cardinality categoricals that are currently discarded.
-- **Missingness indicators.** A blank `monthly_spend` means contractor, and that fact is itself
-  a signal — we know it carries signal, because the leakage detector already looks for exactly
-  this.
-- **Text length** for free-text columns — and, more importantly, a *reason* for free text that
-  isn't "identifier". The RSNA run dropped a column of radiology reports on the grounds that
-  "nearly every row has a different value, so this identifies rows rather than describing
-  them." For a paragraph of clinical prose that is precisely backwards: it is the most
-  descriptive column in the file. Right action, wrong reason — and in a tool whose entire
-  premise is that the reason is the product, a wrong reason is the defect.
-
-Same constraint as the tuned settings: each derived feature must be a declared recipe so
-`train_model.py` can reproduce it. A model the export can't rebuild is a model trapped in the app.
-
-### 2. Streaming the improvement loop
+### 1. Streaming the improvement loop
 
 It already reports progress round by round internally (`on_progress`), but the endpoint is a
 single blocking POST. A search takes tens of seconds to minutes; watching it work would be
-better than a paragraph of explanation next to a spinner.
+better than a paragraph of explanation next to a spinner. The fourth round made this more
+pressing rather than less: the loop now has one more thing to try.
+
+### Further out
+
+Direction rather than a queue. The end state is an *honest* AutoML — not a button that hands
+back a leaderboard score, but a system that walks from a raw file to a defensible model while
+showing its working at every step. Roughly in order of how much they'd be worth:
+
+- **More recipes, same contract.** Interaction and ratio features; target encoding done
+  leakage-safely inside the fold; automatic feature *selection* judged the way every other
+  round is. Each one still has to be a declared recipe the export can rebuild.
+- **Ensembling and stacking**, so "best of six" becomes "best combination of six" — with the
+  same rule that a combination has to beat the incumbent by more than the folds disagree.
+- **Calibration as an action, not a chart.** The calibration curve is already shown; being
+  able to *fix* a badly calibrated model is the same shape of win as moving the cut-off was.
+- **Free text as a real feature.** Length is a proxy. Embeddings would make the RSNA `Report`
+  column usable rather than merely correctly described.
+- **Several targets in one session.** The RSNA data had twelve; the app does one.
+- **Time-series awareness** beyond a date-ordered split: lags, rolling windows, and the
+  honesty about horizon that goes with them.
+- **Drift detection**, so a model can say *"the rows you are scoring no longer look like the
+  rows I was trained on"* — the natural extension of a tool built to admit what it can't
+  support.
+- **A job queue**, so a long search survives a restart and the retention sweep can leave the
+  app process. This is also what unblocks multi-worker deployment.
+- **Accounts and a session history**, which today is a deliberate scope choice rather than an
+  oversight.
+- **Deployment artifacts beyond a joblib**: a scoring endpoint, an image, a batch script —
+  and eventually the whole pipeline as a scheduled, re-runnable object you can point at next
+  month's file.
+
+The constraint that governs all of it: **every automated step has to be explainable,
+approvable and reproducible outside the app.** A recipe the export can't rebuild is a model
+trapped here; the only score worth printing is one nothing was selected against; and any
+capability that would let the tool sound more confident than its evidence supports doesn't get
+built.
 
 ---
 
@@ -343,8 +388,12 @@ better than a paragraph of explanation next to a spinner.
 
 - **The improvement loop is slow by nature.** It fits a model many times over. Sized to run
   behind a button — twelve draws per search, families more than 0.05 behind the leader skipped —
-  but it's still tens of seconds on a few thousand rows.
-- **`signup_date`-style columns are dropped, not derived from.** See item 1 above.
+  but it's still tens of seconds on a few thousand rows, and the derived-inputs round adds a
+  further cross-validated fit on top.
+- **A derived input is only as stable as its source column.** A date that starts arriving in
+  a different format, or a text field that stops being filled in, silently changes the inputs
+  a model was fitted on. The model card says so; nothing detects it yet, which is what the
+  drift item above is for.
 - **No account system.** Sessions are ephemeral and access tokens are per-session. This is a
   deliberate scope choice, not an oversight — but it means there's no "my past sessions" view.
 - **Single-process.** Fine for the intended use; a multi-worker deployment would need the
