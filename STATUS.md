@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 30 September 2026 · 43 commits · 543 backend tests, 104 frontend tests
+Last updated: 30 September 2026 · 44 commits · 555 backend tests, 113 frontend tests
 
 ---
 
@@ -234,6 +234,23 @@ findings. On a test file whose answer depends only on the weekday of a date colu
 without them is correctly called **no better than guessing** and the run with them is
 **useful**.
 
+**You watch it work.** The search used to be a single blocking request, and the page showed a
+paragraph of explanation next to a spinner for anything from twenty seconds to a few minutes.
+It now streams: a line as each round *starts* (the settings search alone can outlast anyone's
+patience with a still screen), each round as it finishes — rejected ones included — and the
+result. The search saves its own result in the worker, so a closed tab or a dropped connection
+doesn't lose it; the page says so and a refresh finds it. A comment line every fifteen seconds
+keeps proxies from closing a connection that looks idle.
+
+Doing this found a defect in every stream the app has. The client library's default closes a
+request when the tab is hidden and *sends it again* when the tab comes back. Every stream here
+is a POST that does something — start profiling, apply approved fixes, run a search — so
+switching tabs and back re-sent it. All three now keep the one request open.
+
+And "Improve it" after a page refresh used to fall back to the plan's defaults, because the
+request that trained the model lived only in component state — which quietly turned a grouped
+run into a random one. It now rebuilds the request from the saved result.
+
 **What the churn sample actually showed** (30 September 2026). This section used to open by
 saying the churn sample proved the ceiling was the columns, and that `signup_date` was the
 missing signal. Running it end to end through the API said otherwise, and found three things:
@@ -360,18 +377,10 @@ wrong reason and discards the most informative column in the file.
 
 ## What's next
 
-### 1. Streaming the improvement loop
-
-It already reports progress round by round internally (`on_progress`), but the endpoint is a
-single blocking POST. A search takes tens of seconds to minutes; watching it work would be
-better than a paragraph of explanation next to a spinner. The fourth round made this more
-pressing rather than less: the loop now has one more thing to try.
-
-### Further out
-
-Direction rather than a queue. The end state is an *honest* AutoML — not a button that hands
-back a leaderboard score, but a system that walks from a raw file to a defensible model while
-showing its working at every step. Roughly in order of how much they'd be worth:
+Nothing is queued. What follows is direction rather than a queue. The end state is an
+*honest* AutoML — not a button that hands back a leaderboard score, but a system that takes a
+raw file to a working model, and an honest answer about whether it works, while showing its
+working at every step. Roughly in order of how much they'd be worth:
 
 - **More recipes, same contract.** Interaction and ratio features; target encoding done
   leakage-safely inside the fold; automatic feature *selection* judged the way every other
@@ -415,7 +424,12 @@ built.
 - **The improvement loop is slow by nature.** It fits a model many times over. Sized to run
   behind a button — twelve draws per search, families more than 0.05 behind the leader skipped —
   but it's still tens of seconds on a few thousand rows, and the derived-inputs round adds a
-  further cross-validated fit on top.
+  further cross-validated fit on top. It now streams, so the wait is visible, but it isn't
+  shorter.
+- **A search can't be cancelled.** Closing the page stops listening, not searching: the worker
+  thread runs to the end and saves its result. That is deliberate — it is what keeps a closed
+  tab from losing a minute of fitting — but a second search started meanwhile runs alongside
+  it, and whichever finishes last is the one saved.
 - **A derived input is only as stable as its source column.** A date that starts arriving in
   a different format, or a text field that stops being filled in, silently changes the inputs
   a model was fitted on. The model card says so; nothing detects it yet, which is what the

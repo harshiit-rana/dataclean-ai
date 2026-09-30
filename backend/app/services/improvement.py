@@ -107,6 +107,7 @@ def improve(
     budget: int = tuning.DEFAULT_BUDGET,
     on_progress: Callable[[Round], None] | None = None,
     feature_recipes_wanted: list[str] | None = None,
+    on_stage: Callable[[str, str], None] | None = None,
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
 
@@ -115,7 +116,9 @@ def improve(
     which stops when the rounds stop paying for themselves.
 
     `on_progress` is called after each round so the caller can stream them; the loop is slow
-    enough that watching it work matters.
+    enough that watching it work matters. `on_stage(name, description)` is called as each
+    round *starts* -- a settings search can run for most of a minute on its own, and a
+    stream that only speaks when a round ends looks exactly like one that has hung.
 
     `feature_recipes_wanted` are the derived inputs the run started with. The fourth round
     tries the opposite -- all of them if none were on, none if some were -- and keeps whichever
@@ -198,6 +201,10 @@ def improve(
         if on_progress:
             on_progress(entry)
 
+    def starting(name: str, description: str) -> None:
+        if on_stage:
+            on_stage(name, description)
+
     def build_for(
         name: str, params: dict | None = None, with_features: dict | None = None
     ) -> Callable[[], object]:
@@ -214,6 +221,11 @@ def improve(
         return factory
 
     # --- Round 1: which model family, judged on folds rather than on the test set ---------
+    starting(
+        "baseline",
+        f"Cross-validating {len(candidates)} model "
+        f"{'family' if len(candidates) == 1 else 'families'} on the training rows.",
+    )
     #
     # train_candidates picks its winner by test-set score, which is fine for three models
     # looked at once. A loop that keeps going cannot afford even that, so family selection
@@ -256,6 +268,7 @@ def improve(
 
     # --- Round 2: settings for the leading family ----------------------------------------
     if not stopped_because:
+        starting("hyperparameters", f"Searching the settings of {modeling.MODELS[best_name].label.lower()}.")
         found = tuning.search(
             build_for(best_name), best_name, X_train, y_train, task,
             budget=budget, groups=train_groups,
@@ -311,6 +324,7 @@ def improve(
     # An untuned gradient booster losing to a tuned logistic regression says nothing about
     # which is better; default settings favour some families more than others.
     if not stopped_because:
+        starting("other_models", "Tuning the runners-up, in case they only lost on their defaults.")
         challengers = [
             name
             for name, score in family_scores.items()
@@ -383,6 +397,7 @@ def improve(
     # settings that lead, and keeps whichever the folds prefer. "The derived inputs did not
     # help" and "they did" are both findings, and either way the user learns which.
     if not stopped_because:
+        starting("derived_features", "Trying inputs built from your columns.")
         alt_recipes, alt_frame = frames["alternative"]
         alt_features, alt_used = inputs_for("alternative")
         if alt_recipes == recipes or not proposed:

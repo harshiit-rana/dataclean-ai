@@ -4,13 +4,15 @@
 import { fetchEventSource } from "@microsoft/fetch-event-source";
 import { API_BASE_URL } from "./client";
 import { sessionHeaders } from "@/lib/sessionToken";
-import type { ProfileStreamEvent } from "./types";
+import type { ImproveRequest, ImproveStreamEvent, ProfileStreamEvent } from "./types";
 
-export interface ProfileStreamHandlers {
-  onEvent: (event: ProfileStreamEvent) => void;
+export interface StreamHandlers<T> {
+  onEvent: (event: T) => void;
   onError: (error: Error) => void;
   onClose?: () => void;
 }
+
+export type ProfileStreamHandlers = StreamHandlers<ProfileStreamEvent>;
 
 export function streamProfile(
   sessionId: string,
@@ -32,10 +34,22 @@ export function streamResume(
   return streamPost(`${API_BASE_URL}/api/resume/${sessionId}`, decisions, handlers, sessionId);
 }
 
-function streamPost(
+/** Runs the improvement loop and reports each round as it happens.
+ *
+ * The search keeps running on the server if this connection drops, and saves its result when
+ * it finishes -- so a dropped stream means "come back for it", not "it failed". */
+export function streamImprove(
+  sessionId: string,
+  request: ImproveRequest,
+  handlers: StreamHandlers<ImproveStreamEvent>
+): AbortController {
+  return streamPost(`${API_BASE_URL}/api/model/${sessionId}/improve/stream`, request, handlers, sessionId);
+}
+
+export function streamPost<T>(
   url: string,
   body: unknown,
-  { onEvent, onError, onClose }: ProfileStreamHandlers,
+  { onEvent, onError, onClose }: StreamHandlers<T>,
   sessionId: string
 ): AbortController {
   const controller = new AbortController();
@@ -45,6 +59,11 @@ function streamPost(
     headers: { "Content-Type": "application/json", ...sessionHeaders(sessionId) },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: controller.signal,
+    // fetch-event-source's default is to abort the request when the tab is hidden and send
+    // it again when the tab comes back. Every stream here is a POST that *does* something --
+    // start profiling, apply approved fixes, run a search -- so switching tabs and back used
+    // to re-send it. Keep the one request open instead.
+    openWhenHidden: true,
     async onopen(response) {
       if (!response.ok) {
         // Surface the server's plain-English {error, detail} rather than a bare status code.
@@ -61,7 +80,7 @@ function streamPost(
     onmessage(msg) {
       if (!msg.data) return;
       try {
-        onEvent(JSON.parse(msg.data) as ProfileStreamEvent);
+        onEvent(JSON.parse(msg.data) as T);
       } catch {
         // malformed frame -- ignore rather than crash the stream
       }

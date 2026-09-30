@@ -20,7 +20,9 @@ for every other request in the process, including the SSE streams.
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
+from collections.abc import AsyncIterator
 
 import pandas as pd
 from fastapi import APIRouter, Depends
@@ -42,6 +44,7 @@ from app.services import (
     operating_point,
 )
 from app.api.routes_rules import stored_rules
+from app.api.sse import sse_response
 from app.services.session_store import read_session_meta, session_dir
 
 logger = logging.getLogger(__name__)
@@ -486,13 +489,18 @@ async def train_model(
     )
 
 
-@router.post("/api/model/{session_id}/improve")
-async def improve_model(
-    session_id: str,
+def _improve_and_save(
+    df,
+    *,
+    target: str,
+    task: str,
     request: ImproveRequest,
-    settings: Settings = Depends(get_settings),
+    point,
+    directory,
+    on_progress=None,
+    on_stage=None,
 ) -> dict:
-    """Search for a better model, then rebuild the result the normal way.
+    """Search, rebuild the winner the normal way, and save it. Runs in a worker thread.
 
     Two passes on purpose. The loop searches on cross-validated training folds and never
     looks at the test set, which is what makes its answer trustworthy but also means it has
@@ -501,77 +509,201 @@ async def improve_model(
     the model card, the joblib and the exported script all work on it unchanged, and the
     headline number is measured the same way it always was.
 
+    Saving happens here, in the worker, rather than in whichever route called it. A streamed
+    search whose browser went away mid-run still finishes and is still kept, so a refresh
+    finds it -- a minute of fitting thrown away because a tab was closed would be the worst
+    outcome available.
+
     The trail of rounds rides along on the result, including the rounds that were rejected.
     "We tried tuning it and tuning did not help" is a finding about the data.
+    """
+    found = improvement.improve(
+        df,
+        target_column=target,
+        task=task,
+        model_names=request.model_names or None,
+        excluded_columns=request.excluded_columns,
+        split_strategy=request.split_strategy,
+        time_column=request.time_column,
+        group_column=request.group_column,
+        goal=request.goal,
+        budget=request.budget,
+        feature_recipes_wanted=request.feature_recipes,
+        on_progress=on_progress,
+        on_stage=on_stage,
+    )
+    best = found["best"]
+    # Plain constructor names, not the `model__`-prefixed pipeline paths the search uses.
+    # train_candidates hands these to ModelSpec.build, which passes them straight to the
+    # estimator's constructor -- and to constructor_source, which writes them into the
+    # exported script. The prefix used to be re-added here, so the first time a search
+    # actually kept a setting, both broke: the rebuild raised "unexpected keyword argument
+    # 'model__class_weight'" and "Improve it" failed outright. Found on the churn sample;
+    # the tests passed because on their data the search never kept anything.
+    params = dict(best["params"])
+    if on_stage:
+        on_stage(
+            "rebuilding",
+            f"Refitting {best['label'].lower()} on the training rows and scoring it once on "
+            f"the held-out test set.",
+        )
+    rebuilt = modeling.train_candidates(
+        df,
+        target_column=target,
+        task=task,
+        model_names=[best["model"]],
+        excluded_columns=request.excluded_columns,
+        split_strategy=request.split_strategy,
+        time_column=request.time_column,
+        group_column=request.group_column,
+        include_deep_diagnostics=request.include_deep_diagnostics,
+        model_params={best["model"]: params},
+        point=point,
+        # Whatever the fourth round settled on, which may not be what was sent in -- the
+        # loop is allowed to add the derived inputs or drop them, and the rebuild has to
+        # be the configuration that won rather than the one that started.
+        feature_recipes_wanted=best.get("feature_recipes", []),
+    )
+    rebuilt["improvement"] = {
+        "rounds": found["rounds"],
+        "metric": found["metric"],
+        "goal": found["goal"],
+        "stopped_because": found["stopped_because"],
+        "cv_score": best["cv_score"],
+        "cv_std": best["cv_std"],
+        "settings": best["params"],
+    }
+    rebuilt["features"]["excluded"] = list(request.excluded_columns)
+    return model_store.save_result(
+        directory, rebuilt, fingerprint=model_store.fingerprint_frame(df)
+    )
+
+
+@router.post("/api/model/{session_id}/improve")
+async def improve_model(
+    session_id: str,
+    request: ImproveRequest,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Search for a better model, then rebuild the result the normal way.
+
+    The blocking form: one response when it is done. The page uses `/improve/stream` instead;
+    this stays for anything calling the API directly, and for the tests.
     """
     df, goal_context, directory, rules = _load_session(settings, session_id)
     target = (goal_context.target_column or "").strip()
     task = _refuse_if_the_data_cannot_support_a_model(df, goal_context, rules)
     point = _operating_point(request)
 
-    def run() -> dict:
-        found = improvement.improve(
-            df,
-            target_column=target,
-            task=task,
-            model_names=request.model_names or None,
-            excluded_columns=request.excluded_columns,
-            split_strategy=request.split_strategy,
-            time_column=request.time_column,
-            group_column=request.group_column,
-            goal=request.goal,
-            budget=request.budget,
-            feature_recipes_wanted=request.feature_recipes,
-        )
-        best = found["best"]
-        # Plain constructor names, not the `model__`-prefixed pipeline paths the search uses.
-        # train_candidates hands these to ModelSpec.build, which passes them straight to the
-        # estimator's constructor -- and to constructor_source, which writes them into the
-        # exported script. The prefix used to be re-added here, so the first time a search
-        # actually kept a setting, both broke: the rebuild raised "unexpected keyword argument
-        # 'model__class_weight'" and "Improve it" failed outright. Found on the churn sample;
-        # the tests passed because on their data the search never kept anything.
-        params = dict(best["params"])
-        rebuilt = modeling.train_candidates(
-            df,
-            target_column=target,
-            task=task,
-            model_names=[best["model"]],
-            excluded_columns=request.excluded_columns,
-            split_strategy=request.split_strategy,
-            time_column=request.time_column,
-            group_column=request.group_column,
-            include_deep_diagnostics=request.include_deep_diagnostics,
-            model_params={best["model"]: params},
-            point=point,
-            # Whatever the fourth round settled on, which may not be what was sent in -- the
-            # loop is allowed to add the derived inputs or drop them, and the rebuild has to
-            # be the configuration that won rather than the one that started.
-            feature_recipes_wanted=best.get("feature_recipes", []),
-        )
-        rebuilt["improvement"] = {
-            "rounds": found["rounds"],
-            "metric": found["metric"],
-            "goal": found["goal"],
-            "stopped_because": found["stopped_because"],
-            "cv_score": best["cv_score"],
-            "cv_std": best["cv_std"],
-            "settings": best["params"],
-        }
-        return rebuilt
-
     try:
-        result = await asyncio.to_thread(run)
+        return await asyncio.to_thread(
+            _improve_and_save,
+            df,
+            target=target,
+            task=task,
+            request=request,
+            point=point,
+            directory=directory,
+        )
     except modeling.ModelingError as exc:
         raise TrainingFailedError(str(exc)) from exc
     except Exception as exc:  # noqa: BLE001 -- surface the reason rather than a bare 500
         logger.exception("Improvement failed for session %s", session_id)
         raise TrainingFailedError(f"Improving stopped unexpectedly: {exc}") from exc
 
-    result["features"]["excluded"] = list(request.excluded_columns)
-    return model_store.save_result(
-        directory, result, fingerprint=model_store.fingerprint_frame(df)
-    )
+
+# Seconds of silence before the stream sends a comment line. A settings search can run for
+# most of a minute without finishing a round, and proxies close connections that look idle
+# for far less than that.
+KEEPALIVE_SECONDS = 15.0
+
+
+def _frame(payload: dict) -> str:
+    return f"data: {json.dumps(payload, default=str)}\n\n"
+
+
+@router.post("/api/model/{session_id}/improve/stream")
+async def improve_model_stream(
+    session_id: str,
+    request: ImproveRequest,
+    settings: Settings = Depends(get_settings),
+):
+    """The same search as `/improve`, reported as it happens.
+
+    A search takes tens of seconds to minutes, and the page used to show a paragraph of
+    explanation next to a spinner for all of it. The loop already reported each round as it
+    finished; this sends those reports on, plus a line as each round *starts*, because the
+    settings search alone can outlast any patience with a frozen screen.
+
+    Events, one JSON object per `data:` line:
+
+    - `{"type": "stage", "name", "description"}` -- a round, or the final rebuild, starting.
+    - `{"type": "round", "round": {...}}` -- a round finished, kept or not. Same shape as the
+      entries in the result's `improvement.rounds`.
+    - `{"type": "result", "result": {...}}` -- done; the same payload `/improve` returns.
+    - `{"type": "error", "detail"}` -- it failed; the detail is written for the user.
+
+    Everything that can be refused is refused *before* the stream opens -- a blocked verdict,
+    an unreadable trade-off -- so it arrives as an ordinary JSON error with a status code
+    rather than as an event inside a 200.
+    """
+    df, goal_context, directory, rules = _load_session(settings, session_id)
+    target = (goal_context.target_column or "").strip()
+    task = _refuse_if_the_data_cannot_support_a_model(df, goal_context, rules)
+    point = _operating_point(request)
+
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue[dict] = asyncio.Queue()
+
+    def push(event: dict) -> None:
+        # Called from the worker thread; the queue belongs to the event loop.
+        loop.call_soon_threadsafe(queue.put_nowait, event)
+
+    def on_progress(entry) -> None:
+        push({"type": "round", "round": entry.as_dict()})
+
+    def on_stage(name: str, description: str) -> None:
+        push({"type": "stage", "name": name, "description": description})
+
+    async def work() -> None:
+        try:
+            result = await asyncio.to_thread(
+                _improve_and_save,
+                df,
+                target=target,
+                task=task,
+                request=request,
+                point=point,
+                directory=directory,
+                on_progress=on_progress,
+                on_stage=on_stage,
+            )
+            await queue.put({"type": "result", "result": result})
+        except modeling.ModelingError as exc:
+            await queue.put({"type": "error", "detail": str(exc)})
+        except Exception as exc:  # noqa: BLE001 -- the reason goes to the page, not a 500
+            logger.exception("Streamed improvement failed for session %s", session_id)
+            await queue.put(
+                {"type": "error", "detail": f"Improving stopped unexpectedly: {exc}"}
+            )
+
+    async def events() -> AsyncIterator[str]:
+        # Held in a variable so the task is not garbage-collected mid-run. It is deliberately
+        # not cancelled when the client goes away: the worker thread cannot be interrupted
+        # anyway, and letting it finish is what gets the result saved.
+        task_handle = asyncio.create_task(work())
+        while True:
+            try:
+                event = await asyncio.wait_for(queue.get(), timeout=KEEPALIVE_SECONDS)
+            except asyncio.TimeoutError:
+                yield ": still searching\n\n"
+                continue
+            yield _frame(event)
+            if event["type"] in ("result", "error"):
+                break
+        await task_handle
+
+    return sse_response(events())
 
 
 @router.get("/api/model/{session_id}/result")

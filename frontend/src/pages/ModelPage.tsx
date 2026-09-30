@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -6,6 +6,7 @@ import { Button, buttonClasses } from "@/components/ui/button";
 import { DownloadButton } from "@/components/ui/download-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImprovementTrail } from "@/components/model/ImprovementTrail";
+import { LiveImprovement } from "@/components/model/LiveImprovement";
 import { ModelPlanForm } from "@/components/model/ModelPlanForm";
 import { ModelResults } from "@/components/model/ModelResults";
 import { RunHistory } from "@/components/model/RunHistory";
@@ -15,10 +16,46 @@ import {
   fetchModelHistory,
   fetchModelPlan,
   fetchModelResult,
-  improveModel,
   trainModel,
 } from "@/api/client";
-import type { ModelHistory, ModelPlan, ModelResult, TrainRequest } from "@/api/types";
+import { streamImprove } from "@/api/sse";
+import type {
+  ImprovementRound,
+  ImproveRequest,
+  ModelHistory,
+  ModelPlan,
+  ModelResult,
+  TrainRequest,
+} from "@/api/types";
+
+/** The request that produced a stored result, rebuilt from the result itself.
+ *
+ * "Improve it" means improve *this* -- same columns, same split, same trade-off -- and the
+ * request that trained it only lives in component state, which a refresh discards. Falling
+ * back to the plan's defaults after a reload quietly turned a grouped run into a random one.
+ * The stored result records everything that matters, so it is the fallback. */
+export function requestFromResult(result: ModelResult): TrainRequest {
+  const point = result.operating_point;
+  return {
+    excluded_columns: result.features.excluded ?? [],
+    model_names: [],
+    split_strategy: result.split.strategy,
+    time_column: result.split.time_column,
+    group_column: result.split.group_column,
+    include_deep_diagnostics: true,
+    operating_point:
+      point && point.objective !== "default"
+        ? {
+            objective: point.objective,
+            cost_of_missing: point.cost_of_missing,
+            cost_of_false_alarm: point.cost_of_false_alarm,
+            target_rate: point.target_rate,
+            positive_label: point.positive_label,
+          }
+        : null,
+    feature_recipes: (result.features.derived ?? []).map((recipe) => recipe.id),
+  };
+}
 
 /** Page 5: build a model from the cleaned data.
  *
@@ -41,6 +78,14 @@ export function ModelPage() {
   const [planError, setPlanError] = useState<string | null>(null);
   const [showPlan, setShowPlan] = useState(true);
   const [history, setHistory] = useState<ModelHistory | null>(null);
+  // The improvement loop, as it runs. Cleared at the start of each search.
+  const [liveRounds, setLiveRounds] = useState<ImprovementRound[]>([]);
+  const [liveStage, setLiveStage] = useState<string | null>(null);
+  const streamRef = useRef<AbortController | null>(null);
+
+  // Leaving the page stops listening. The search itself carries on server-side and saves
+  // its result, so coming back finds it.
+  useEffect(() => () => streamRef.current?.abort(), []);
 
   const load = useCallback(async () => {
     if (!sessionId) return;
@@ -86,40 +131,81 @@ export function ModelPage() {
   };
 
   /** Reuses whatever columns and split the last train used, so "improve it" means "improve
-   * this", not "start again with different inputs and see if the number moves". */
-  const handleImprove = async () => {
+   * this", not "start again with different inputs and see if the number moves". Streamed:
+   * each round appears as it finishes, and the page says what it is on as each one starts. */
+  const handleImprove = () => {
     if (!sessionId) return;
     const parsed = Number.parseFloat(goal);
     const target = goal.trim() !== "" && Number.isFinite(parsed) ? parsed : null;
+    const base: TrainRequest | null = lastRequest ?? (result ? requestFromResult(result) : null);
+
+    const request: ImproveRequest = {
+      excluded_columns: base?.excluded_columns ?? plan?.excluded_columns ?? [],
+      model_names: base?.model_names ?? [],
+      split_strategy: base?.split_strategy ?? "random",
+      time_column: base?.time_column ?? null,
+      // Without this, "improve" after a grouped train fell back to a grouped split with
+      // no column to group on, and the server refused it.
+      group_column: base?.group_column ?? null,
+      operating_point: base?.operating_point ?? null,
+      // The loop's fourth round may add these or drop them; what it is handed is where it
+      // starts from, not what it has to end with.
+      feature_recipes: base?.feature_recipes ?? plan?.feature_recipes ?? [],
+      include_deep_diagnostics: true,
+      goal: target,
+    };
 
     setImproving(true);
     setError(null);
     setCard(null);
-    try {
-      const improved = await improveModel(sessionId, {
-        excluded_columns: lastRequest?.excluded_columns ?? plan?.excluded_columns ?? [],
-        model_names: lastRequest?.model_names ?? [],
-        split_strategy: lastRequest?.split_strategy ?? "random",
-        time_column: lastRequest?.time_column ?? null,
-        // Without this, "improve" after a grouped train fell back to a grouped split with
-        // no column to group on, and the server refused it.
-        group_column: lastRequest?.group_column ?? null,
-        operating_point: lastRequest?.operating_point ?? null,
-        // The loop's fourth round may add these or drop them; what it is handed is where it
-        // starts from, not what it has to end with.
-        feature_recipes: lastRequest?.feature_recipes ?? plan?.feature_recipes ?? [],
-        include_deep_diagnostics: true,
-        goal: target,
-      });
-      setResult(improved);
-      setHistory(await fetchModelHistory(sessionId).catch(() => history));
-      setShowPlan(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    } catch (err) {
-      setError(err instanceof ApiError ? err.detail : String((err as Error)?.message ?? err));
-    } finally {
+    setLiveRounds([]);
+    setLiveStage(null);
+
+    let finished = false;
+    const finish = () => {
+      finished = true;
       setImproving(false);
-    }
+      setLiveStage(null);
+    };
+
+    streamRef.current?.abort();
+    streamRef.current = streamImprove(sessionId, request, {
+      onEvent: (event) => {
+        if (event.type === "stage") {
+          setLiveStage(event.description);
+        } else if (event.type === "round") {
+          setLiveRounds((previous) => [...previous, event.round]);
+        } else if (event.type === "result") {
+          finish();
+          setResult(event.result);
+          setShowPlan(false);
+          void fetchModelHistory(sessionId)
+            .then(setHistory)
+            .catch(() => undefined);
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        } else if (event.type === "error") {
+          finish();
+          setError(event.detail);
+        }
+      },
+      onError: (err) => {
+        if (finished) return;
+        finish();
+        setError(err.message);
+      },
+      onClose: () => {
+        if (finished) return;
+        // The connection closed without a result or an error. The search is still running
+        // on the server and saves its result when it finishes, so this is "come back for
+        // it", not "it failed" -- and saying it failed would send the user to start a
+        // second search that competes with the first.
+        finish();
+        setError(
+          "Lost the connection to the search. It keeps running on the server and its result " +
+            "will be here when you refresh the page in a minute or two."
+        );
+      },
+    });
   };
 
   const handleShowCard = async () => {
@@ -276,15 +362,7 @@ export function ModelPage() {
         </Card>
       )}
 
-      {improving && (
-        <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">
-            Searching. It fits the model many times over — once per setting per fold — so this
-            takes appreciably longer than a single train. It will stop on its own, either when
-            it reaches your target or when another round stops being worth it.
-          </CardContent>
-        </Card>
-      )}
+      {improving && <LiveImprovement rounds={liveRounds} stage={liveStage} />}
 
       {result?.improvement && !training && !improving && (
         <ImprovementTrail trail={result.improvement} />

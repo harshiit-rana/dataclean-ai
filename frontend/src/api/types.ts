@@ -544,6 +544,16 @@ export interface ImproveRequest extends TrainRequest {
   budget?: number;
 }
 
+/** What POST /api/model/{id}/improve/stream sends, one per `data:` line. */
+export type ImproveStreamEvent =
+  /** A round -- or the final refit, `name: "rebuilding"` -- is starting. */
+  | { type: "stage"; name: string; description: string }
+  /** A round finished, kept or not. Same shape as the result's improvement.rounds. */
+  | { type: "round"; round: ImprovementRound }
+  /** Done: the same payload POST /improve returns, already saved server-side. */
+  | { type: "result"; result: ModelResult }
+  | { type: "error"; detail: string };
+
 // --- SSE event payloads, PRD §10.2 -------------------------------------------------------
 
 export interface AgentStartEvent {

@@ -143,6 +143,15 @@ are both running locally, you're ready to make changes.
   a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and
   checking `X_test`. A round also has to clear `_is_real_gain`, which refuses anything smaller
   than the fold-to-fold spread; without that the loop "improves" forever on noise.
+- **A POST stream is opened once.** `streamPost` sets `openWhenHidden: true`. The library's
+  default aborts the request when the tab is hidden and re-sends it when the tab returns --
+  harmless for a GET, and for every stream here it meant re-running profiling, re-applying
+  approved fixes, or starting a second search. If you add a stream, go through `streamPost`.
+- **Work that outlives its request saves itself.** `_improve_and_save` persists the result in
+  the worker thread, not in the route that awaits it. The stream's generator is cancelled when
+  the client goes away; anything after that `await` would never run, and a minute of fitting
+  would be lost to a closed tab. Refuse what can be refused *before* the stream opens, so it
+  arrives as an ordinary JSON error with a status code rather than an event inside a 200.
 - **A test that loops over a result can pass by looping over nothing.** The check that tuned
   settings reach the exported script iterated over `improvement.settings` -- which was empty on
   its data, because the search never kept a setting there. So it passed while the path it
