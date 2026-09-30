@@ -17,14 +17,14 @@ const KIND_LABELS: Record<FeatureRecipe["kind"], string> = {
 
 /** Inputs the model can use, built from columns it otherwise couldn't.
  *
- * The improvement loop is what made this necessary: on the churn sample the settings search
- * found nothing worth keeping, which means the ceiling is the columns, not the settings. A
- * `signup_date` was being thrown away wholesale when tenure derived from it is obviously
- * predictive of churn.
+ * A date column used to be thrown away wholesale for having "too many values", and free
+ * text was misfiled as an identifier. Tuning can only move a score as far as the columns
+ * allow; these widen what the columns can offer.
  *
- * Ticked by default with the reason attached, and untickable — the same shape as the
- * suggestion cards and the business rules. A list of things the app quietly decided to
- * compute would be the same defect the dropped-columns list already fixed. */
+ * Offered with the reason attached, and off until ticked. They were on by default until the
+ * churn sample, where signup_date's parts duplicated a tenure column already in the file and
+ * made the default model worse. An extra input is a change, and a change is the user's to
+ * opt into -- the improvement loop tries them either way and reports whether they helped. */
 export function DerivedFeatures({ recipes, chosen, onChange }: DerivedFeaturesProps) {
   if (recipes.length === 0) return null;
 
@@ -38,8 +38,9 @@ export function DerivedFeatures({ recipes, chosen, onChange }: DerivedFeaturesPr
         <p className="text-sm text-muted-foreground">
           Some columns can&apos;t be used as they stand — a date is a different value on
           nearly every row, and a paragraph of text isn&apos;t a category. These turn them
-          into something a model can learn from. Each one is rebuilt by the exported
-          script, so nothing here traps the model in this app.
+          into something a model can learn from. They&apos;re off until you tick them;
+          &ldquo;Improve it&rdquo; tries them either way and tells you whether they helped.
+          Each one is rebuilt by the exported script.
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">

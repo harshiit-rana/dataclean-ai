@@ -198,7 +198,7 @@ export interface FeatureRecipe {
 export interface SuggestedExclusion {
   column: string;
   reason: string;
-  kind: "leakage" | "identifier";
+  kind: "leakage" | "identifier" | "personal";
   severity: Severity;
 }
 

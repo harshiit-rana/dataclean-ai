@@ -142,6 +142,22 @@ def _suggested_exclusions(df: pd.DataFrame, goal: GoalContext, task: str) -> lis
             }
         )
 
+    for column in df.columns:
+        if column == target or column in {s["column"] for s in suggestions}:
+            continue
+        if _looks_like_personal_details(str(column), df[column]):
+            suggestions.append(
+                {
+                    "column": column,
+                    "reason": "This is a person's name or contact details. It says who someone "
+                    "is, not anything about what they do, so whatever a model learns from it "
+                    "is either chance or something the name stands in for -- such as gender "
+                    "or ethnicity -- which you almost certainly don't want it deciding on.",
+                    "kind": "personal",
+                    "severity": "high",
+                }
+            )
+
     rows = len(df)
     for column in df.columns:
         if column == target or column in {s["column"] for s in suggestions}:
@@ -159,6 +175,40 @@ def _suggested_exclusions(df: pd.DataFrame, goal: GoalContext, task: str) -> lis
             )
 
     return suggestions
+
+
+# Column names that hold a person's name or contact details, compared after lower-casing and
+# dropping everything but letters. A closed list of known words rather than a guess at what
+# sounds personal, for the same reason the business-rule proposals use one: "account_name"
+# and "product_name" are not people.
+PERSONAL_COLUMN_NAMES = frozenset(
+    {
+        "name", "fullname", "firstname", "lastname", "surname", "forename", "givenname",
+        "familyname", "middlename", "customername", "clientname", "employeename",
+        "patientname", "contactname", "username",
+        "email", "emailaddress", "mail", "phone", "phonenumber", "telephone", "mobile",
+        "mobilenumber", "cellphone",
+    }
+)
+
+
+def _looks_like_personal_details(column: str, series: pd.Series) -> bool:
+    """Names and contact details, found by the column's name.
+
+    Found on the churn sample: `last_name` was the model's second most important input. With
+    about a hundred rows per surname, a churn rate spread of 0.21 to 0.35 across twelve of
+    them is what chance produces -- and the importance chart, which sums the coefficients of
+    every category, made that chance look like a finding. The data alone cannot show that a
+    name is meaningless; the column's name can. When a name *does* carry signal it is
+    usually worse, because what it carries is whatever the name stands in for.
+
+    Suggested for exclusion, never enforced -- a `username` can be a legitimate key into
+    something the owner of the data knows about.
+    """
+    if pd.api.types.is_numeric_dtype(series):
+        return False
+    normalised = "".join(ch for ch in column.lower() if ch.isalpha())
+    return normalised in PERSONAL_COLUMN_NAMES
 
 
 IDENTIFIER_UNIQUENESS = 0.95
@@ -283,10 +333,14 @@ async def get_model_plan(
     chosen_features = (
         [r["id"] for r in stored.get("features", {}).get("derived", [])]
         if stored
-        # Ticked by default on a first run. Each one is a column the app would otherwise
-        # throw away, and the reason is attached -- an untickable list of things we quietly
-        # decided not to use would be the same defect the dropped-columns list already fixed.
-        else [r.id for r in proposed_features]
+        # Offered, not ticked. They were ticked by default until the churn sample: its
+        # signup_date parts duplicate a tenure_months column already in the file, and the
+        # default train got worse with them (AUC 0.825 to 0.799). An exclusion is pre-ticked
+        # because it guards against harm; an extra input is a change, and a change is the
+        # user's to opt into -- the same reason a proposed business rule does nothing until
+        # approved. The improvement loop's fourth round tries them either way and says
+        # whether they helped.
+        else []
     )
 
     return ModelPlanResponse(
@@ -470,7 +524,14 @@ async def improve_model(
             feature_recipes_wanted=request.feature_recipes,
         )
         best = found["best"]
-        params = {f"model__{k}": v for k, v in best["params"].items()}
+        # Plain constructor names, not the `model__`-prefixed pipeline paths the search uses.
+        # train_candidates hands these to ModelSpec.build, which passes them straight to the
+        # estimator's constructor -- and to constructor_source, which writes them into the
+        # exported script. The prefix used to be re-added here, so the first time a search
+        # actually kept a setting, both broke: the rebuild raised "unexpected keyword argument
+        # 'model__class_weight'" and "Improve it" failed outright. Found on the churn sample;
+        # the tests passed because on their data the search never kept anything.
+        params = dict(best["params"])
         rebuilt = modeling.train_candidates(
             df,
             target_column=target,

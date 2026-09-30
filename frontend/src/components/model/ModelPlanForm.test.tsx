@@ -235,3 +235,17 @@ describe("ModelPlanForm — derived inputs", () => {
     expect(screen.queryByText(/Inputs we can build/)).not.toBeInTheDocument();
   });
 });
+
+describe("ModelPlanForm — personal details", () => {
+  it("says why a name is suggested for leaving out", () => {
+    renderForm({
+      features: { numeric: [], categorical: ["last_name", "region"], dropped: [] },
+      suggested_exclusions: [
+        { column: "last_name", reason: "This is a person's name.", kind: "personal", severity: "high" },
+      ],
+      excluded_columns: ["last_name"],
+    });
+    expect(screen.getByText(/A person's name or contact details/)).toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: /last_name/ })).not.toBeChecked();
+  });
+});

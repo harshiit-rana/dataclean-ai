@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 30 September 2026 · 42 commits · 536 backend tests, 103 frontend tests
+Last updated: 30 September 2026 · 43 commits · 543 backend tests, 104 frontend tests
 
 ---
 
@@ -201,12 +201,10 @@ not work", which is just as much a claim about the test set as "this model works
 distinction matters because the two failures look identical from the outside and call for
 opposite responses: a bad model needs different columns, an unjudgeable one needs more rows.
 
-**Inputs built from the columns, not just chosen among them.** The improvement loop is what
-proved this was the gap: on the churn sample the settings search found nothing worth keeping,
-which means the ceiling is the columns rather than the settings — and the app was throwing
-real signal away. `signup_date` was dropped wholesale ("870 distinct values, too many to turn
-into model inputs") when tenure derived from it is obviously predictive of churn. Four
-recipes now turn columns the model couldn't use into ones it can: **date parts** (year, month,
+**Inputs built from the columns, not just chosen among them.** Tuning can only move a score
+as far as the columns allow, and the app was throwing columns away: a date was dropped
+wholesale for having too many distinct values, and free text was misfiled as an identifier.
+Four recipes now turn columns the model couldn't use into ones it can: **date parts** (year, month,
 weekday, days-since), **text length** in characters and words, a **missingness flag**, and
 **frequent-value pooling** that keeps a high-cardinality column by giving its common values an
 input each and pooling the rest rather than discarding the column.
@@ -216,9 +214,9 @@ Each is a declared piece of data, never code, so `train_model.py` reproduces it 
 runs the generated script and checks the score matches. The first three are row-wise and
 stateless, so deriving them before the split cannot leak; the fourth learns which values are
 common, so it lives inside the pipeline on the training fold like every other learned
-statistic. And nothing applies itself: proposals arrive with the evidence behind them, ticked,
-untickable, and re-proposed server-side rather than trusted from the request — so a recipe on
-a column withheld for leaking the answer can't smuggle it back in through a missing flag.
+statistic. And nothing applies itself: proposals arrive with the evidence behind them, off
+until ticked, and re-proposed server-side rather than trusted from the request — so a recipe
+on a column withheld for leaking the answer can't smuggle it back in through a missing flag.
 
 **Two wrong reasons fixed on the way.** A date column is row-unique, so the identifier rule
 claimed it and pre-ticked it for removal — which meant the recipe that would make it usable
@@ -235,6 +233,28 @@ leading model and settings, judged on the same training folds and subject to the
 findings. On a test file whose answer depends only on the weekday of a date column, the run
 without them is correctly called **no better than guessing** and the run with them is
 **useful**.
+
+**What the churn sample actually showed** (30 September 2026). This section used to open by
+saying the churn sample proved the ceiling was the columns, and that `signup_date` was the
+missing signal. Running it end to end through the API said otherwise, and found three things:
+
+- *"Improve it" crashed whenever the settings search kept a result.* The route re-added the
+  `model__` pipeline prefix before handing the settings to the constructor, which rejected
+  them. The tests passed because on their data the search never kept anything — the settings
+  dict was empty and every check over it was vacuous. Now fixed, with tests that force a kept
+  setting and fail on the old code.
+- *The file already has `tenure_months`,* so `signup_date`'s parts add nothing — and with the
+  derived inputs pre-ticked, the default train got slightly worse (AUC 0.825 → 0.799). The
+  fourth round measured it correctly (about −0.005, inside the fold noise). Derived inputs are now
+  **off until ticked**: an exclusion is pre-ticked because it guards against harm, but an extra
+  input is a change, and changes are the user's to opt into. The loop tries them either way.
+- *`last_name` was the model's second most important input.* With about a hundred rows per
+  surname, a churn-rate spread of 0.21–0.35 across twelve of them is what chance produces, and
+  the importance chart — which sums the coefficients of every category — made chance look like
+  a finding. Columns holding a person's name or contact details are now suggested for exclusion
+  with the reason attached (a closed list of words, so `product_name` is left alone). Leaving
+  them out *raised* AUC to 0.842, and the settings gain the loop had kept shrank to within the
+  noise — some of what it had "found" was fitting the surnames.
 
 **Where the cut-off sits.** A two-class model produces a probability, and somewhere a line is
 drawn; every precision and recall figure is measured at that line, and by default it sits at
@@ -385,6 +405,12 @@ built.
 ---
 
 ## Known limitations
+
+- **Column importance favours columns with many categories.** Coefficients are summed across a
+  column's one-hot categories, so twelve small noise coefficients add up to something that
+  looks important — that is how `last_name` ranked second on the churn sample. Permutation
+  importance (shown when the deeper diagnostics run) does not have this bias and is the one to
+  trust when the two disagree.
 
 - **The improvement loop is slow by nature.** It fits a model many times over. Sized to run
   behind a button — twelve draws per search, families more than 0.05 behind the leader skipped —

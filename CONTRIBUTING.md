@@ -143,6 +143,17 @@ are both running locally, you're ready to make changes.
   a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and
   checking `X_test`. A round also has to clear `_is_real_gain`, which refuses anything smaller
   than the fold-to-fold spread; without that the loop "improves" forever on noise.
+- **A test that loops over a result can pass by looping over nothing.** The check that tuned
+  settings reach the exported script iterated over `improvement.settings` -- which was empty on
+  its data, because the search never kept a setting there. So it passed while the path it
+  guarded was broken: the first real kept setting crashed "Improve it". When a test's subject
+  is conditional on the data, force the condition (a monkeypatched `improve` here) rather than
+  hoping the fixture triggers it.
+- **Names and contact details are suggested out of the inputs.** `_looks_like_personal_details`
+  matches the column's name against a closed list of words, because the data alone cannot show
+  that a surname is meaningless -- on the churn sample it ranked second for importance on pure
+  noise. When a name *does* carry signal it is usually worse, because what it carries is what
+  it stands in for. Suggested, never enforced.
 - **A derived input is a declared recipe, and the export rebuilds it.** `features.Recipe` is
   a frozen dataclass with a closed set of four kinds; `apply` and `as_pandas` are two
   renderings of the same recipe and a test applies both to one frame and compares them. If

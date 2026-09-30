@@ -10,6 +10,12 @@ import {
 } from "@/components/model/OperatingPointForm";
 import type { ModelPlan, OperatingPointRequest, TrainRequest } from "@/api/types";
 
+const EXCLUSION_LABELS: Record<string, string> = {
+  leakage: "Gives away the answer",
+  identifier: "Looks like an ID",
+  personal: "A person's name or contact details",
+};
+
 interface ModelPlanFormProps {
   plan: ModelPlan;
   onTrain: (request: TrainRequest) => void;
@@ -103,7 +109,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
                   {suggestion && (
                     <span className="mt-0.5 block text-xs text-muted-foreground">
                       <span className="font-medium text-amber-700 dark:text-amber-500">
-                        {suggestion.kind === "leakage" ? "Gives away the answer" : "Looks like an ID"}
+                        {EXCLUSION_LABELS[suggestion.kind] ?? "Suggested to leave out"}
                         {" — "}
                       </span>
                       {suggestion.reason}

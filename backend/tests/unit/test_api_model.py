@@ -579,12 +579,15 @@ class TestDerivedInputsOverTheApi:
         assert offered["date_parts:signup_date"]["evidence"]["span_days"] > 0
         assert "signup_date" in offered["date_parts:signup_date"]["reason"]
 
-    def test_they_are_ticked_but_the_user_decides(self):
-        """Pre-ticked with the reason attached, like the suggested exclusions -- but sending
-        none must train without them."""
+    def test_they_are_offered_but_off_until_chosen(self):
+        """Offered with the reason attached, off by default. They were pre-ticked until the
+        churn sample, where signup_date's parts duplicated a tenure column already in the
+        file and made the default train worse. An extra input is a change; a change is the
+        user's to opt into, and the loop's fourth round measures it either way."""
         session_id = _session(_derivable_csv())
         plan = client.get(f"/api/model/{session_id}/plan").json()
-        assert set(plan["feature_recipes"]) == {f["id"] for f in plan["suggested_features"]}
+        assert plan["suggested_features"]
+        assert plan["feature_recipes"] == []
 
         response = client.post(
             f"/api/model/{session_id}/train",
@@ -673,3 +676,137 @@ class TestDerivedInputsOverTheApi:
         assert round_4["accepted"]
         # The rebuild has to be the configuration that won, not the one that was sent in.
         assert "signup_date__weekday" in result["features"]["numeric"]
+
+
+
+class TestAKeptSettingSurvivesTheRebuild:
+    """Found on the churn sample, the first data where the settings search kept anything.
+
+    The route re-added the `model__` pipeline prefix before handing the settings to
+    train_candidates, whose constructor rejected them, so "Improve it" failed outright. The
+    existing tests passed because on their data the search never kept a setting -- the
+    settings dict was empty and every check over it was vacuous. These force a kept setting
+    so the path is actually exercised."""
+
+    KEPT = {"C": 0.1, "class_weight": None}
+
+    def _fake_improve(self, *args, **kwargs):
+        return {
+            "rounds": [
+                {"name": "baseline", "label": "Starting point", "what_it_tried": "",
+                 "score": 0.8, "std": 0.01, "gain": None, "accepted": True, "outcome": "",
+                 "detail": {}},
+                {"name": "hyperparameters", "label": "Model settings", "what_it_tried": "",
+                 "score": 0.83, "std": 0.01, "gain": 0.03, "accepted": True, "outcome": "",
+                 "detail": {}},
+            ],
+            "metric": "roc_auc",
+            "goal": None,
+            "stopped_because": "no_further_gains",
+            "best": {
+                "model": "logistic_regression",
+                "label": "Logistic regression",
+                "params": dict(self.KEPT),
+                "cv_score": 0.83,
+                "cv_std": 0.01,
+                "feature_recipes": [],
+            },
+        }
+
+    def test_improving_with_a_kept_setting_does_not_fail(self, monkeypatch):
+        from app.services import improvement
+
+        monkeypatch.setattr(improvement, "improve", self._fake_improve)
+        response = client.post(
+            f"/api/model/{_session()}/improve",
+            json={"budget": 4, "include_deep_diagnostics": False},
+        )
+        assert response.status_code == 200, response.text
+        chosen = response.json()["results"][0]
+        assert chosen["failed"] is None
+        assert chosen["tuned_params"] == self.KEPT
+
+    def test_the_kept_setting_is_what_the_model_was_built_with(self, monkeypatch):
+        from app.services import improvement, model_store
+
+        monkeypatch.setattr(improvement, "improve", self._fake_improve)
+        session_id = _session()
+        client.post(
+            f"/api/model/{session_id}/improve",
+            json={"budget": 4, "include_deep_diagnostics": False},
+        )
+        import joblib
+
+        directory = session_dir(get_settings().upload_dir, session_id)
+        fitted = joblib.load(model_store.pipeline_path(directory))
+        assert fitted.named_steps["model"].C == 0.1
+        assert fitted.named_steps["model"].class_weight is None
+
+    def test_the_kept_setting_reaches_the_script_as_a_plain_argument(self, monkeypatch):
+        from app.services import improvement
+
+        monkeypatch.setattr(improvement, "improve", self._fake_improve)
+        session_id = _session()
+        client.post(
+            f"/api/model/{session_id}/improve",
+            json={"budget": 4, "include_deep_diagnostics": False},
+        )
+        script = client.get(f"/api/model/{session_id}/script").text
+        assert "C=0.1" in script
+        assert "class_weight=None" in script
+        assert "model__" not in script
+
+
+
+def _people_csv(n: int = 300) -> bytes:
+    rng = np.random.default_rng(29)
+    signal = rng.normal(0, 1, n)
+    buffer = io.StringIO()
+    pd.DataFrame(
+        {
+            "First Name": rng.choice(["Ada", "Alan", "Grace", "Radia", "Tim"], n),
+            "last_name": rng.choice(["Lovelace", "Turing", "Hopper", "Perlman"], n),
+            "Email": [f"user{i % 150}@example.com" for i in range(n)],
+            "product_name": rng.choice(["basic", "pro", "team"], n),
+            "signal": signal.round(4),
+            "outcome": np.where(rng.random(n) < 1 / (1 + np.exp(-2 * signal)), "yes", "no"),
+        }
+    ).to_csv(buffer, index=False)
+    return buffer.getvalue().encode()
+
+
+class TestPersonalDetailsAreNotInputs:
+    """Found on the churn sample: `last_name` was the model's second most important input.
+    With ~100 rows per surname its churn-rate spread was what chance produces, and the
+    importance chart made chance look like a finding."""
+
+    def _suggested(self) -> dict:
+        plan = client.get(f"/api/model/{_session(_people_csv())}/plan").json()
+        return plan, {s["column"]: s for s in plan["suggested_exclusions"]}
+
+    def test_names_and_contact_details_are_suggested_for_exclusion(self):
+        plan, suggested = self._suggested()
+        for column in ("First Name", "last_name", "Email"):
+            assert suggested[column]["kind"] == "personal", column
+            assert column in plan["excluded_columns"]  # pre-ticked, not silently applied
+
+    def test_the_reason_names_what_is_wrong_with_it(self):
+        _plan, suggested = self._suggested()
+        assert "who someone is" in suggested["last_name"]["reason"]
+        assert "gender" in suggested["last_name"]["reason"]
+
+    def test_a_thing_with_a_name_is_not_a_person(self):
+        """`product_name` names a product. A closed list of words, not a guess at what
+        sounds personal."""
+        _plan, suggested = self._suggested()
+        assert "product_name" not in suggested
+
+    def test_the_user_can_keep_one_anyway(self):
+        session_id = _session(_people_csv())
+        response = client.post(
+            f"/api/model/{session_id}/train",
+            json={"model_names": ["logistic_regression"], "include_deep_diagnostics": False,
+                  "excluded_columns": ["First Name", "Email"]},
+        )
+        assert response.status_code == 200, response.text
+        assert "last_name" in response.json()["features"]["categorical"]
