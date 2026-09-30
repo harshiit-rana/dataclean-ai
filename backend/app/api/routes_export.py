@@ -17,7 +17,8 @@ import zipfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import FileResponse, StreamingResponse
+import pandas as pd
+from fastapi.responses import FileResponse, PlainTextResponse, StreamingResponse
 
 from app.config import Settings, get_settings
 from app.core.errors import AppError, SessionNotFoundError
@@ -25,7 +26,7 @@ from app.dependencies import get_graph
 from app.graph.checkpointer import thread_config
 from app.graph.nodes.audit_agent import generate_audit_artifacts, is_report_stale
 from app.models.graph_state import GraphState
-from app.services import model_export, model_store
+from app.services import cleaning_export, model_export, model_store
 from app.services.session_store import read_session_meta, session_dir
 
 logger = logging.getLogger(__name__)
@@ -45,6 +46,42 @@ def _session_files(settings: Settings, session_id: str) -> tuple[dict, Path]:
     if meta is None:
         raise SessionNotFoundError(session_id)
     return meta, session_dir(settings.upload_dir, session_id)
+
+
+CLEAN_SCRIPT_NAME = "clean.py"
+
+
+async def _cleaning_script(session_id: str, directory: Path, graph, file_name: str) -> str | None:
+    """clean.py for this session, built from its action log. None when the log can't be read.
+
+    Built on every request rather than written to disk: an undo or a chat instruction changes
+    the log after the fact, and a script on disk would go stale the same way a report does --
+    except nothing would mark it stale."""
+    try:
+        state = await graph.aget_state(thread_config(session_id))
+        log = list((state.values or {}).get("action_log", [])) if state else []
+        original = pd.read_csv(directory / "original.csv")
+        return cleaning_export.build_cleaning_script(original, log, file_name=file_name)
+    except Exception:  # noqa: BLE001 -- a missing script must not sink the rest of the export
+        logger.exception("clean.py could not be built for session %s", session_id)
+        return None
+
+
+@router.get("/api/export/{session_id}/clean-script", response_class=PlainTextResponse)
+async def get_cleaning_script(
+    session_id: str,
+    settings: Settings = Depends(get_settings),
+    graph=Depends(get_graph),
+) -> PlainTextResponse:
+    """The session's cleaning as a runnable script: reproduces the cleaned file from the
+    upload, and cleans a newer export the same way."""
+    meta, directory = _session_files(settings, session_id)
+    script = await _cleaning_script(session_id, directory, graph, meta.get("file_name", "original.csv"))
+    if script is None:
+        raise NothingToExportError("The cleaning steps for this session could not be read.")
+    return PlainTextResponse(
+        script, headers={"Content-Disposition": f'attachment; filename="{CLEAN_SCRIPT_NAME}"'}
+    )
 
 
 def _ensure_training_script(directory: Path) -> None:
@@ -183,11 +220,20 @@ async def export_bundle(
         raise NothingToExportError(
             "Nothing has been generated for this session yet. Approve some fixes first."
         )
+    # Only once there is something cleaned to reproduce -- a script for an untouched upload
+    # would be a file that copies a CSV.
+    clean_script = (
+        await _cleaning_script(session_id, directory, graph, meta.get("file_name", "original.csv"))
+        if (directory / "cleaned.csv").exists()
+        else None
+    )
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for path, name in present:
             archive.write(path, arcname=name)
+        if clean_script is not None:
+            archive.writestr(CLEAN_SCRIPT_NAME, clean_script)
     buffer.seek(0)
 
     return StreamingResponse(

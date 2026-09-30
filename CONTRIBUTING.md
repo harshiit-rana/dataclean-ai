@@ -150,6 +150,11 @@ are both running locally, you're ready to make changes.
   those values -- never its own. They travel through `apply_operation(..., learned=)`, never
   through `params`: parameters come from the LLM and from chat, and neither may supply one. If
   you add an operation that reads a statistic, add it to `LEARNED_OPERATIONS` and to `learn`.
+- **`clean.py` mirrors the operations by hand, so a test holds it to them.** Each operation has
+  a template in `cleaning_export._lines` that must do exactly what the operation does. If you
+  change an operation, change its template; if you add one, add a template and a step to
+  `EVERY_OPERATION` in `test_cleaning_export.py`, which fails until the registry is covered and
+  compares the script's output with the app's byte for byte.
 - **No row leaves without a reason.** Replay keeps the upload's row numbers as the index through
   every step and records which step removed each row; the predictions file carries every
   uploaded row. Operations must preserve the index (filter with a mask, never `reset_index`) or

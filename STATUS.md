@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 30 September 2026 · 46 commits · 597 backend tests, 122 frontend tests
+Last updated: 30 September 2026 · 47 commits · 614 backend tests, 122 frontend tests
 
 ---
 
@@ -63,8 +63,8 @@ Two architectural decisions worth knowing about:
 case, what the cleaned data should look like, which columns matter most, how aggressive to be
 — and optionally the column you're predicting.
 
-**Profiling.** Six issue types detected: missing values, duplicates, outliers (IQR),
-type mismatches, inconsistent formats, high cardinality. Ranked by relevance to your stated
+**Profiling.** Seven issue types detected: missing values, duplicates, outliers (IQR),
+type mismatches, inconsistent formats, stray whitespace, high cardinality. Ranked by relevance to your stated
 goal.
 
 **Suggestion cards.** One per issue, written by the LLM and streamed token by token. Found /
@@ -78,6 +78,11 @@ they were the data — *"between -19.32 and 63.15"* for monthly spend. The issue
 carries the real colliding spellings from the column, and outliers are described by the values
 found (*"1 unusually high value (the largest is 250.00), while the other 8 sit between 10.00 and
 13.00"*), never by the threshold that found them.
+
+Stray spaces are a seventh kind of problem. The churn sample's `plan` column held `' basic '`
+beside `basic`, `Basic` and `BASIC`; the casing check caught the capitals, and lower-casing them
+left `' basic '` and `basic` as two unrelated categories. The card now says what fixing it buys:
+*"Trimming them merges 12 different spellings into 9, and ignoring capitals as well leaves 3."*
 
 **Approval, then execution.** The graph pauses at `human_approval` and checkpoints to Redis.
 Your decisions resume it. Eighteen whitelisted operations do the work. Your original file is
@@ -349,6 +354,14 @@ or model page — and does everything it can with it:
 - **Checks itself when it can.** If the new file carries real answers, it reports how the model
   did on them against how it did when built — with the same too-few-rows rule as the verdict.
 
+**And outside the app, `clean.py`.** `train_model.py` let someone rebuild the model without
+the app; the cleaning behind its training data had no equivalent. The export now includes the
+session's cleaning as a script, one commented block per applied fix, with every learned value
+written in as a literal. Run on the original upload it reproduces the cleaned file; run on a
+later export it cleans it exactly as the app's "use this on a new file" does. A test runs it in
+a subprocess over a log that exercises all eighteen operations and compares the output with
+the app's, byte for byte, on both the original and a changed file.
+
 A column the new file lacks is skipped with the reason rather than failing everything else; the
 target being absent is expected, and said to be. A missing model input is refused by name, all
 of them at once.
@@ -418,11 +431,7 @@ wrong reason and discards the most informative column in the file.
 
 ## What's next
 
-Nothing is queued. **Next, and small:** a `clean.py` export beside `train_model.py`, so the
-cleaning can be reproduced outside the app as the model already can; and a detector for stray
-whitespace — the churn sample's `plan` column has `' basic '` beside `basic`, a
-`trim_whitespace` operation exists, and nothing ever proposes it. What follows is direction
-rather than a queue. The end state is an
+Nothing is queued. What follows is direction rather than a queue. The end state is an
 *honest* AutoML — not a button that hands back a leaderboard score, but a system that takes a
 raw file to a working model, and an honest answer about whether it works, while showing its
 working at every step. Roughly in order of how much they'd be worth:

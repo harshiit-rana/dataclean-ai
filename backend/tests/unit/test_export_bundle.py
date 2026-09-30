@@ -8,12 +8,20 @@ without the one artifact the model path exists to produce. These pin the on-dema
 from __future__ import annotations
 
 import ast
+import io
+import zipfile
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
+import pytest
+from fastapi.testclient import TestClient
 
 from app.api.routes_export import _ensure_training_script
+from app.config import get_settings
+from app.main import app
 from app.services import model_store, modeling
+from app.services.session_store import session_dir
 
 
 def _trained(directory) -> dict:
@@ -69,3 +77,51 @@ def test_an_unreadable_result_does_not_sink_the_export(tmp_path):
     )
     _ensure_training_script(tmp_path)  # must not raise
     assert not (tmp_path / model_store.SCRIPT_FILENAME).exists()
+
+
+# --- clean.py -------------------------------------------------------------------------------
+
+client = TestClient(app)
+
+LOG = [{"action_id": "a1", "operation": "fill_median", "column_name": "spend",
+        "operation_params": {}, "status": "applied"}]
+
+
+class _FakeGraph:
+    async def aget_state(self, _config):
+        return SimpleNamespace(values={"action_log": LOG}, next=())
+
+
+@pytest.fixture
+def cleaned_session():
+    had = hasattr(app.state, "graph")
+    previous = getattr(app.state, "graph", None)
+    app.state.graph = _FakeGraph()
+    payload = "\n".join(["spend,plan", "10,a", ",b", "30,a", ""]).encode()
+    session_id = client.post(
+        "/api/upload", files={"file": ("jan.csv", io.BytesIO(payload), "text/csv")}
+    ).json()["session_id"]
+    directory = session_dir(get_settings().upload_dir, session_id)
+    (directory / "cleaned.csv").write_text(
+        "\n".join(["spend,plan", "10.0,a", "20.0,b", "30.0,a", ""]), encoding="utf-8"
+    )
+    yield session_id
+    if had:
+        app.state.graph = previous
+    else:
+        del app.state.graph
+
+
+def test_the_cleaning_script_can_be_downloaded(cleaned_session):
+    response = client.get(f"/api/export/{cleaned_session}/clean-script")
+    assert response.status_code == 200
+    assert 'filename="clean.py"' in response.headers["content-disposition"]
+    assert ".fillna(20.0)" in response.text  # the median of 10 and 30, written in
+    assert "jan.csv" in response.text
+
+
+def test_the_bundle_carries_the_cleaning_script(cleaned_session):
+    response = client.get(f"/api/export/{cleaned_session}/zip")
+    assert response.status_code == 200
+    names = zipfile.ZipFile(io.BytesIO(response.content)).namelist()
+    assert "clean.py" in names

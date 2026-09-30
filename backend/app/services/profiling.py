@@ -210,6 +210,65 @@ def _detect_inconsistent_casing(df: pd.DataFrame) -> list[ColumnIssue]:
     return issues
 
 
+def _detect_stray_whitespace(df: pd.DataFrame) -> list[ColumnIssue]:
+    """Text with spaces before or after it: `' basic '` beside `basic`.
+
+    Found on the churn sample, where `plan` held 151 rows of `' basic '` next to `basic`,
+    `Basic` and `BASIC`. The casing check caught the capitals, and lower-casing them left
+    `' basic '` and `basic` as two categories -- to the eye the same word, to a model two
+    unrelated values, each with half the rows it should have. A `trim_whitespace` operation
+    existed; nothing ever proposed it.
+
+    The description says how many spellings collapse once spaces and capitals are both
+    ignored, because that number -- not the count of padded cells -- is what the fix buys.
+    """
+    issues = []
+    for col in df.columns:
+        series = df[col]
+        if series.dtype != object:
+            continue
+        non_null = series.dropna().astype(str)
+        if non_null.empty:
+            continue
+        padded = non_null[non_null != non_null.str.strip()]
+        if padded.empty:
+            continue
+        distinct = int(non_null.nunique())
+        trimmed = int(non_null.str.strip().nunique())
+        folded = int(non_null.str.strip().str.lower().nunique())
+        example = padded.value_counts().index[0]
+        merges = distinct - trimmed
+        description = (
+            f"Column '{col}' has {len(padded)} value{'s' if len(padded) != 1 else ''} with "
+            f"spaces before or after the text (e.g. {example!r})."
+        )
+        if merges:
+            description += (
+                f" Trimming them merges {distinct} different spellings into {trimmed}"
+                + (f", and ignoring capitals as well leaves {folded}." if folded < trimmed else ".")
+            )
+        issues.append(
+            ColumnIssue(
+                issue_id=generate_issue_id(),
+                column_name=col,
+                issue_type="inconsistent_format",
+                # Worth more when the padding splits one value into two categories than when
+                # it is cosmetic.
+                severity="medium" if merges else "low",
+                description=description,
+                stats={
+                    "padded_values": int(len(padded)),
+                    "example": str(example),
+                    "distinct_values": distinct,
+                    "distinct_after_trim": trimmed,
+                    "distinct_after_trim_and_case": folded,
+                },
+                priority_score=0.45 if merges else 0.2,
+            )
+        )
+    return issues
+
+
 def _case_collision_variants(non_null: pd.Series) -> list[str]:
     """The spellings of the most common value that appears under more than one casing,
     most frequent first. Real values from this column -- the description used to say
@@ -337,6 +396,7 @@ def detect_issues(df: pd.DataFrame) -> list[ColumnIssue]:
     issues += _detect_type_mismatches(df)
     issues += _detect_inconsistent_date_formats(df)
     issues += _detect_inconsistent_casing(df)
+    issues += _detect_stray_whitespace(df)
     issues += _detect_outliers(df)
     issues += _detect_high_cardinality(df)
     issues.sort(key=lambda i: i.priority_score, reverse=True)

@@ -59,6 +59,17 @@ export function ExportPage() {
         >
           Cleaned CSV only
         </DownloadButton>
+        {/* The cleaning as a script, with the learned values written in: reproduces this
+            file, and cleans next month's the same way without the app. */}
+        <DownloadButton
+          sessionId={sessionId!}
+          path={`/api/export/${sessionId}/clean-script`}
+          filename="clean.py"
+          variant="outline"
+          onError={setError}
+        >
+          clean.py
+        </DownloadButton>
         {hasPdf && (
           <DownloadButton
             sessionId={sessionId!}

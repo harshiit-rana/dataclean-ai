@@ -121,3 +121,43 @@ def test_outlier_description_covers_both_tails():
     )
     assert issue.stats["outlier_count"] == 3
     assert issue.stats["lowest_outlier"] == -5.0
+
+
+
+# --- Stray whitespace (found on the churn sample) -----------------------------------------
+
+
+def _whitespace_issues(df):
+    return [i for i in detect_issues(df) if "spaces before or after" in i.description]
+
+
+def test_padded_values_that_split_a_category_are_found():
+    """`' basic '` beside `basic`: to the eye one word, to a model two unrelated values."""
+    df = pd.DataFrame({"plan": [" basic ", "basic", "Basic", " pro", "pro", "pro"]})
+    issues = _whitespace_issues(df)
+    assert len(issues) == 1
+    issue = issues[0]
+    assert issue.severity == "medium"
+    assert issue.stats["padded_values"] == 2
+    assert issue.stats["distinct_values"] == 5
+    assert issue.stats["distinct_after_trim"] == 3
+    assert issue.stats["distinct_after_trim_and_case"] == 2
+    assert "merges 5 different spellings into 3" in issue.description
+    assert "leaves 2" in issue.description
+
+
+def test_padding_that_merges_nothing_is_low_priority():
+    df = pd.DataFrame({"note": [" alpha", "beta ", "gamma"]})
+    issue = _whitespace_issues(df)[0]
+    assert issue.severity == "low"
+    assert "merges" not in issue.description
+
+
+def test_the_example_is_a_real_padded_value_from_the_column():
+    df = pd.DataFrame({"plan": [" basic ", " basic ", "basic", "pro"]})
+    assert _whitespace_issues(df)[0].stats["example"] == " basic "
+
+
+def test_clean_text_and_numbers_are_left_alone():
+    df = pd.DataFrame({"plan": ["basic", "pro"], "spend": [1.5, 2.5]})
+    assert _whitespace_issues(df) == []
