@@ -641,3 +641,66 @@ export type ProfileStreamEvent =
   | ActionCompleteEvent
   | AllActionsCompleteEvent
   | ErrorEvent;
+
+/** One of the session's fixes, run against the new file. */
+export interface AppliedStep {
+  action_id: string;
+  operation: string;
+  column: string | null;
+  status: "applied" | "skipped" | "failed";
+  note: string | null;
+  rows_before: number;
+  rows_after: number;
+  dropped_count: number;
+  /** The statistic the session learned and reused: a fill value, or outlier limits. */
+  learned: Record<string, number | string> | null;
+}
+
+export interface DriftColumn {
+  column: string;
+  kind: "numeric" | "categorical";
+  status: "stable" | "shifted" | "different" | "not_judged";
+  psi?: number;
+  outside_training_range?: number;
+  training_range?: [number, number];
+  training_median?: number;
+  new_median?: number;
+  unseen_share?: number;
+  unseen_examples?: string[];
+  note?: string;
+}
+
+export interface DriftReport {
+  verdict: "similar" | "shifted" | "different" | "not_enough_rows";
+  headline: string;
+  columns: DriftColumn[];
+}
+
+/** POST /api/apply/{session_id}: a finished session used on a new file. */
+export interface ApplyResult {
+  session_id: string;
+  apply_id: string;
+  file_name: string;
+  rows_in: number;
+  rows_kept: number;
+  steps: AppliedStep[];
+  /** First few rows removed by a step, 1-based data rows. */
+  dropped: { row: number; reason: string }[];
+  dropped_count: number;
+  notes: string[];
+  drift: DriftReport | null;
+  predictions: {
+    count: number;
+    columns: string[];
+    preview: Record<string, string | number | null>[];
+    cutoff: number | null;
+  } | null;
+  answers: {
+    rows: number;
+    metric: string | null;
+    reported: number | null;
+    now: number | null;
+    headline: string;
+  } | null;
+  downloads: { cleaned: string; predictions?: string };
+}

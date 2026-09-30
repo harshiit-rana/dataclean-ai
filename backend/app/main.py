@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
     health,
+    routes_apply,
     routes_chat,
     routes_export,
     routes_goal,
@@ -119,6 +120,7 @@ def create_app() -> FastAPI:
         routes_readiness.router,
         routes_rules.router,
         routes_model.router,
+        routes_apply.router,
     ):
         app.include_router(router, dependencies=guarded)
 

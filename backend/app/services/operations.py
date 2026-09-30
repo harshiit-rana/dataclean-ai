@@ -100,29 +100,36 @@ def _require_numeric(df: pd.DataFrame, column: str) -> pd.Series:
 # --- missing values -----------------------------------------------------------------------
 
 
-def _fill_median(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+def _fill_median(df: pd.DataFrame, params: dict, learned: dict | None = None) -> pd.DataFrame:
     column = _require_column(df, params)
     numeric = _require_numeric(df, column)
+    value = learned["fill_value"] if learned else numeric.median()
     out = df.copy()
-    out[column] = numeric.fillna(numeric.median())
+    out[column] = numeric.fillna(value)
     return out
 
 
-def _fill_mean(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+def _fill_mean(df: pd.DataFrame, params: dict, learned: dict | None = None) -> pd.DataFrame:
     column = _require_column(df, params)
     numeric = _require_numeric(df, column)
+    value = learned["fill_value"] if learned else numeric.mean()
     out = df.copy()
-    out[column] = numeric.fillna(numeric.mean())
+    out[column] = numeric.fillna(value)
     return out
 
 
-def _fill_mode(df: pd.DataFrame, params: dict) -> pd.DataFrame:
-    column = _require_column(df, params)
+def _mode_of(df: pd.DataFrame, column: str):
     modes = df[column].mode(dropna=True)
     if modes.empty:
         raise OperationFailedError(f"Column {column!r} has no values to derive a mode from.")
+    return modes.iloc[0]
+
+
+def _fill_mode(df: pd.DataFrame, params: dict, learned: dict | None = None) -> pd.DataFrame:
+    column = _require_column(df, params)
+    value = learned["fill_value"] if learned else _mode_of(df, column)
     out = df.copy()
-    out[column] = out[column].fillna(modes.iloc[0])
+    out[column] = out[column].fillna(value)
     return out
 
 
@@ -218,19 +225,19 @@ def _iqr_bounds(series: pd.Series) -> tuple[float, float]:
     return q1 - _OUTLIER_IQR_MULTIPLIER * iqr, q3 + _OUTLIER_IQR_MULTIPLIER * iqr
 
 
-def _cap_outliers(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+def _cap_outliers(df: pd.DataFrame, params: dict, learned: dict | None = None) -> pd.DataFrame:
     column = _require_column(df, params)
     numeric = _require_numeric(df, column)
-    lower, upper = _iqr_bounds(numeric)
+    lower, upper = (learned["lower"], learned["upper"]) if learned else _iqr_bounds(numeric)
     out = df.copy()
     out[column] = numeric.clip(lower=lower, upper=upper)
     return out
 
 
-def _drop_outlier_rows(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+def _drop_outlier_rows(df: pd.DataFrame, params: dict, learned: dict | None = None) -> pd.DataFrame:
     column = _require_column(df, params)
     numeric = _require_numeric(df, column)
-    lower, upper = _iqr_bounds(numeric)
+    lower, upper = (learned["lower"], learned["upper"]) if learned else _iqr_bounds(numeric)
     keep = numeric.isna() | ((numeric >= lower) & (numeric <= upper))
     return df[keep].copy()
 
@@ -393,14 +400,59 @@ def parse_operation(text: str) -> tuple[str, dict] | None:
     return name, params
 
 
-def apply_operation(df: pd.DataFrame, name: str, params: dict) -> tuple[pd.DataFrame, dict, dict]:
-    """Runs one whitelisted operation. Returns (new_df, before_stats, after_stats)."""
+# Operations whose effect depends on a statistic read from the data they are applied to.
+LEARNED_OPERATIONS = frozenset(
+    {"fill_median", "fill_mean", "fill_mode", "cap_outliers", "drop_outlier_rows"}
+)
+
+
+def _plain(value):
+    """numpy scalars -> Python ones, so a learned value survives JSON and repr()."""
+    return value.item() if hasattr(value, "item") else value
+
+
+def learn(df: pd.DataFrame, name: str, params: dict) -> dict | None:
+    """What a data-dependent operation reads from the data it is applied to, or None.
+
+    `fill_median` on January's file fills with January's median. Replayed on February's file
+    it must fill with January's median too -- the model learned from rows filled that way,
+    and filling February's gaps with February's own median quietly cleans the new rows
+    differently from the rows the model was trained on. Same for the mode and for the
+    outlier limits. So replay reads these once, from the session's own data at the point the
+    step ran, and hands them back through `apply_operation(..., learned=)`.
+
+    A separate argument rather than a parameter on purpose: parameters arrive from the LLM
+    and from chat instructions, and neither should be able to supply a "learned" value.
+    """
+    if name not in LEARNED_OPERATIONS:
+        return None
+    column = _require_column(df, params)
+    if name in ("fill_median", "fill_mean"):
+        numeric = _require_numeric(df, column)
+        value = numeric.median() if name == "fill_median" else numeric.mean()
+        return {"fill_value": _plain(value)}
+    if name == "fill_mode":
+        return {"fill_value": _plain(_mode_of(df, column))}
+    lower, upper = _iqr_bounds(_require_numeric(df, column))
+    return {"lower": _plain(lower), "upper": _plain(upper)}
+
+
+def apply_operation(
+    df: pd.DataFrame, name: str, params: dict, learned: dict | None = None
+) -> tuple[pd.DataFrame, dict, dict]:
+    """Runs one whitelisted operation. Returns (new_df, before_stats, after_stats).
+
+    `learned` replaces the statistic a data-dependent operation would otherwise read from
+    `df` -- see `learn`. Ignored by every other operation."""
     operation = OPERATIONS.get(name)
     if operation is None:
         raise UnknownOperationError(name)
 
     column = params.get("column")
     before = compute_stats(df, column)
-    result = operation.apply(df, params)
+    if learned and name in LEARNED_OPERATIONS:
+        result = operation.apply(df, params, learned=learned)
+    else:
+        result = operation.apply(df, params)
     after = compute_stats(result, column)
     return result, before, after

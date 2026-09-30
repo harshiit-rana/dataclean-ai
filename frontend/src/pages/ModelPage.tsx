@@ -307,6 +307,9 @@ export function ModelPage() {
           >
             Download the fitted model
           </DownloadButton>
+          <Link to={`/apply/${sessionId}`} className={buttonClasses("outline", "sm")}>
+            Predict on a new file
+          </Link>
           <Link to={`/export/${sessionId}`} className={buttonClasses("ghost", "sm")}>
             Export everything
           </Link>

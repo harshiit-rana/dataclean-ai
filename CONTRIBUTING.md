@@ -143,6 +143,17 @@ are both running locally, you're ready to make changes.
   a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and
   checking `X_test`. A round also has to clear `_is_real_gain`, which refuses anything smaller
   than the fold-to-fold spread; without that the loop "improves" forever on noise.
+- **A statistic learned from one file is applied to the next as learned.** Five operations
+  read something from the data they run on (`operations.LEARNED_OPERATIONS`: fills and outlier
+  limits). When a session is applied to a new file, `replay.freeze` replays the log over
+  `original.csv` and reads each of those off the data at the step it ran, and the new file gets
+  those values -- never its own. They travel through `apply_operation(..., learned=)`, never
+  through `params`: parameters come from the LLM and from chat, and neither may supply one. If
+  you add an operation that reads a statistic, add it to `LEARNED_OPERATIONS` and to `learn`.
+- **No row leaves without a reason.** Replay keeps the upload's row numbers as the index through
+  every step and records which step removed each row; the predictions file carries every
+  uploaded row. Operations must preserve the index (filter with a mask, never `reset_index`) or
+  this breaks.
 - **A page that starts work on mount has to ask whether the work is already done.** The Review
   page starts profiling when it mounts, and `/api/profile` used to start the graph from the
   top every time -- so a reload re-profiled, rewrote every card at one LLM call each, and threw

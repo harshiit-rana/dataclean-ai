@@ -70,6 +70,9 @@ export function ExportPage() {
             Report PDF only
           </DownloadButton>
         )}
+        <Link to={`/apply/${sessionId}`} className={buttonClasses("outline")}>
+          Use this on a new file
+        </Link>
         <Link to="/" className={buttonClasses("ghost")}>
           Clean another file
         </Link>

@@ -16,5 +16,11 @@ export const OPERATION_LABELS: Record<string, string> = {
   cap_outliers: "Clamped extreme values",
   drop_outlier_rows: "Dropped rows with extreme values",
   drop_column: "Removed the column",
+  // The four chat instructions map onto. Missing until the apply page listed a session's
+  // steps -- any view of a chat-cleaned log showed these as raw operation names.
+  rename_column: "Renamed the column",
+  round_numeric: "Rounded the numbers",
+  replace_values: "Replaced one value with another",
+  filter_rows: "Kept or dropped rows matching a condition",
   none: "No executable fix was attached",
 };

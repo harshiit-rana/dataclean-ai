@@ -239,6 +239,12 @@ predictions over the training rows, never on the test set, then reports what the
 delivered on the held-out rows next to what the folds promised. The threshold reaches the
 exported script as a declared constant.
 
+**And you can use it again.** Upload next month's file and it is cleaned with the fixes you
+approved — using the median and limits this session learned, not the new file's own — then
+every row is predicted at the cut-off you chose, and the app tells you whether the new rows
+still look like what the model learned from. Rows a fix removed come back with the reason, so
+nothing goes missing when you join the predictions back.
+
 **Every verdict shows its working.** "Ready" is a claim about what *isn't* wrong, and a reader
 can't confirm that by looking at the data. So the readiness panel opens onto the checks behind
 it — what each one concluded, the numbers, and what would change the answer — including the

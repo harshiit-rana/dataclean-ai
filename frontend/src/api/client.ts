@@ -2,6 +2,7 @@
 // (POST /api/profile/{id}) is handled separately in api/sse.ts.
 
 import type {
+  ApplyResult,
   BusinessRule,
   CorrelationResult,
   ErrorResponse,
@@ -96,6 +97,17 @@ export async function uploadCsv(file: File): Promise<UploadResponse> {
   // Kept for the rest of this session's requests; everything after upload needs it.
   storeSessionToken(body.session_id, body.session_token);
   return body;
+}
+
+/** Cleans a new CSV the way this session's file was cleaned, and scores it if a model was
+ * trained. The session's token goes with it -- the new file is read against this session's
+ * data and model. */
+export async function applyToNewFile(sessionId: string, file: File): Promise<ApplyResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return handleResponse<ApplyResult>(
+    await sessionFetch(sessionId, `/api/apply/${sessionId}`, { method: "POST", body: formData })
+  );
 }
 
 export async function fetchPreview(sessionId: string): Promise<PreviewResponse> {

@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 30 September 2026 · 45 commits · 562 backend tests, 114 frontend tests
+Last updated: 30 September 2026 · 46 commits · 597 backend tests, 122 frontend tests
 
 ---
 
@@ -322,6 +322,41 @@ changed* and excluded from the arithmetic. It is a record, not a restore point.
 not to trust. A test runs the generated script in a subprocess and checks it reproduces the
 reported metrics.
 
+### Using a session again
+
+A session used to be single-use. Next month's export meant uploading it and approving every
+fix again, and a trained model could only be used by writing Python against the downloaded
+joblib. Now a finished session takes a new file — **Use this on a new file** from the export
+or model page — and does everything it can with it:
+
+- **Cleans it the same way.** The action log already describes the cleaning completely; undo
+  depends on that. The same log runs against the new file.
+- **With the statistics this session learned, not the new file's own.** `fill_median` on the
+  new file fills with the *original's* median, and the outlier limits are the original's.
+  Filling February's gaps with February's median would clean the new rows differently from the
+  rows the model learned from. Those values are not stored: replaying the log over
+  `original.csv` reads each one off the data as it stood at that step, and they are handed to
+  the operation through an argument that neither the LLM nor chat can set.
+- **Predicts every row** that survives, at the cut-off the model was reported at rather than
+  `predict()`'s 0.50, with the derived inputs rebuilt and the columns aligned.
+- **Accounts for every row.** The predictions file has every uploaded row, in order, with its
+  prediction or the step that removed it. A row that silently vanishes breaks anyone joining
+  predictions back onto their own data.
+- **Says whether the new rows look like the training data.** PSI per input against the
+  training deciles, the share of values outside the training range, the share of categories
+  the model never saw. Below 30 rows it declines to judge. A model scores whatever it is given
+  and never notices when it is extrapolating; this is the app saying so for it.
+- **Checks itself when it can.** If the new file carries real answers, it reports how the model
+  did on them against how it did when built — with the same too-few-rows rule as the verdict.
+
+A column the new file lacks is skipped with the reason rather than failing everything else; the
+target being absent is expected, and said to be. A missing model input is refused by name, all
+of them at once.
+
+Tried on the churn sample, trained on the first 900 rows and applied to the remaining 318:
+every row came back, 316 predicted and 2 dropped as duplicates with that reason, drift was
+judged stable, and the model scored 0.785 AUC on the later rows against 0.749 when built.
+
 ### Cross-cutting
 
 - **Session access tokens.** Knowing a session id isn't enough to read its data. Issued at
@@ -383,7 +418,11 @@ wrong reason and discards the most informative column in the file.
 
 ## What's next
 
-Nothing is queued. What follows is direction rather than a queue. The end state is an
+Nothing is queued. **Next, and small:** a `clean.py` export beside `train_model.py`, so the
+cleaning can be reproduced outside the app as the model already can; and a detector for stray
+whitespace — the churn sample's `plan` column has `' basic '` beside `basic`, a
+`trim_whitespace` operation exists, and nothing ever proposes it. What follows is direction
+rather than a queue. The end state is an
 *honest* AutoML — not a button that hands back a leaderboard score, but a system that takes a
 raw file to a working model, and an honest answer about whether it works, while showing its
 working at every step. Roughly in order of how much they'd be worth:
@@ -400,9 +439,6 @@ working at every step. Roughly in order of how much they'd be worth:
 - **Several targets in one session.** The RSNA data had twelve; the app does one.
 - **Time-series awareness** beyond a date-ordered split: lags, rolling windows, and the
   honesty about horizon that goes with them.
-- **Drift detection**, so a model can say *"the rows you are scoring no longer look like the
-  rows I was trained on"* — the natural extension of a tool built to admit what it can't
-  support.
 - **A job queue**, so a long search survives a restart and the retention sweep can leave the
   app process. This is also what unblocks multi-worker deployment.
 - **Accounts and a session history**, which today is a deliberate scope choice rather than an
@@ -437,9 +473,9 @@ built.
   tab from losing a minute of fitting — but a second search started meanwhile runs alongside
   it, and whichever finishes last is the one saved.
 - **A derived input is only as stable as its source column.** A date that starts arriving in
-  a different format, or a text field that stops being filled in, silently changes the inputs
-  a model was fitted on. The model card says so; nothing detects it yet, which is what the
-  drift item above is for.
+  a different format, or a text field that stops being filled in, changes the inputs a model
+  was fitted on. When a session is applied to a new file the drift check compares the derived
+  inputs along with the rest, so a shift shows up there -- but only when someone runs it.
 - **No account system.** Sessions are ephemeral and access tokens are per-session. This is a
   deliberate scope choice, not an oversight — but it means there's no "my past sessions" view.
 - **Single-process.** Fine for the intended use; a multi-worker deployment would need the
