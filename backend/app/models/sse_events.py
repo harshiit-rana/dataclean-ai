@@ -52,9 +52,10 @@ class InterruptReachedEvent(BaseModel):
     session_id: str
 
 
-# --- Events for the /api/resume and /api/chat endpoints ---------------------------------
-# These endpoints are stubs today (see routes_resume.py, routes_chat.py); the event shapes
-# are defined now so the SSE contract is stable ahead of the real implementation.
+# --- Events for the /api/resume stream --------------------------------------------------
+# The cleaning run that follows approval. ThinkingEvent and CodePreviewEvent were defined for
+# a code-generating chat path that was never built -- chat maps onto whitelisted operations
+# instead (routes_chat.py) and answers with plain JSON -- so nothing emits those two today.
 
 
 class ActionStartEvent(BaseModel):

@@ -63,7 +63,6 @@ async def profiling_agent(state: GraphState) -> dict:
     # Adds the findings that only exist once a prediction target is known (leakage, unusable
     # target). A no-op when the user didn't name one.
     issues = ml_readiness.augment_issues(df, issues, state.goal_context)
-    raw_profile = profiling.run_ydata_profile(df)
 
     if issues:
         settings = get_settings()
@@ -99,6 +98,5 @@ async def profiling_agent(state: GraphState) -> dict:
     # Stored as plain dicts -- see GraphState's docstring on checkpoint round-tripping.
     return {
         "issues": [issue.model_dump() for issue in issues],
-        "raw_profile": raw_profile,
         "current_agent": "profiling_agent",
     }

@@ -86,6 +86,8 @@ class GraphState(BaseModel):
 
     goal_context: Optional[GoalContext] = None
 
+    # No longer written (ydata-profiling was removed). Kept so sessions checkpointed before
+    # that still load; nothing reads it.
     raw_profile: Optional[dict] = None
     issues: list[dict] = Field(default_factory=list)  # ColumnIssue.model_dump()
     suggestion_cards: list[dict] = Field(default_factory=list)  # SuggestionCard.model_dump()

@@ -14,6 +14,18 @@ export interface StreamHandlers<T> {
 
 export type ProfileStreamHandlers = StreamHandlers<ProfileStreamEvent>;
 
+/** A stream the server refused before it opened, with the status it refused with. The status
+ * is what lets a page tell "already done -- go here instead" from "something broke". */
+export class StreamRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+    this.name = "StreamRequestError";
+  }
+}
+
 export function streamProfile(
   sessionId: string,
   handlers: ProfileStreamHandlers
@@ -74,7 +86,7 @@ export function streamPost<T>(
         } catch {
           // non-JSON error body -- keep the status code
         }
-        throw new Error(detail);
+        throw new StreamRequestError(detail, response.status);
       }
     },
     onmessage(msg) {

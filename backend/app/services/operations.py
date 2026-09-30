@@ -13,8 +13,10 @@ Rationale:
 - The operation is chosen during the Explanation Agent's existing per-issue call, so
   executing approved fixes costs zero additional LLM tokens.
 
-Free-form conversational instructions (PRD FR-37..40) are the case that genuinely needs
-code generation; that path will need the sandbox, and is not implemented yet.
+Free-form conversational instructions (PRD FR-37..40) were expected to be the case that
+needed code generation and a sandbox. They didn't: routes_chat.py maps each instruction onto
+this same registry (filter_rows, replace_values and friends cover what people actually ask
+for) and declines what can't be expressed, so nothing in the app executes generated code.
 
 Every operation is pure: it returns a new DataFrame and never mutates the input.
 """

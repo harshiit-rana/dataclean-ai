@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { AgentStatusBar } from "@/components/review/AgentStatusBar";
 import { ApprovalBar } from "@/components/review/ApprovalBar";
 import { ColumnDetailPanel } from "@/components/review/ColumnDetailPanel";
@@ -13,8 +13,9 @@ import type { ColumnIssue, PreviewResponse } from "@/api/types";
 
 /** Page 2, PRD US-04/US-06: shows the uploaded data as a table (click a column header to
  * inspect what it holds and what was flagged in it), with the streamed suggestion cards
- * below for approve/reject. Submitting decisions (POST /api/resume) happens once that
- * endpoint is implemented -- see SuggestionCardView's docstring. */
+ * below for approve/reject. Decisions go to POST /api/resume together, from the approval bar.
+ *
+ * A reload replays the saved cards rather than profiling again -- see routes_profile.py. */
 export function ReviewPage() {
   const { sessionId } = useParams();
   const navigate = useNavigate();
@@ -109,7 +110,18 @@ export function ReviewPage() {
         <IssueCountSummary counts={stream.issueCounts} />
       </div>
 
-      {stream.status === "error" && <p className="text-sm text-destructive">{stream.error}</p>}
+      {stream.status === "error" && stream.errorStatus === 409 ? (
+        // Already reviewed and cleaned -- a reload of this page, or the back button. Not an
+        // error to apologise for; there is somewhere to go.
+        <div className="rounded-md border border-border bg-muted/40 p-4 text-sm">
+          <p>{stream.error}</p>
+          <Link to={`/clean/${sessionId}`} className="mt-2 inline-block text-primary underline">
+            Go to the cleaning page
+          </Link>
+        </div>
+      ) : (
+        stream.status === "error" && <p className="text-sm text-destructive">{stream.error}</p>
+      )}
 
       {stream.partialWarning && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">

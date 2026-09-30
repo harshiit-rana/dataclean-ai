@@ -1,7 +1,7 @@
 """LangGraph StateGraph wiring. PRD §13.1.
 
     goal_intake -> profiling_agent -> explanation_agent -> human_approval [interrupt]
-        -> cleaning_agent -> conversational_loop -> audit_agent -> END
+        -> cleaning_agent -> audit_agent -> END
 
 human_approval uses LangGraph's dynamic `interrupt()` call (inside the node itself, see
 nodes/human_approval.py) rather than the static `interrupt_before=[...]` compile-time
@@ -49,9 +49,9 @@ def build_graph(checkpointer=None):
     builder.add_edge("cleaning_agent", "audit_agent")
     builder.add_edge("audit_agent", END)
 
-    # conversational_loop (§13.1) is still a stub that raises NotImplementedError --
-    # deliberately left out of the graph rather than wired in, so a real run ends cleanly
-    # after the audit report instead of crashing at an unimplemented node. Insert it between
-    # cleaning_agent and audit_agent when it lands.
+    # The PRD puts a conversational_loop node between cleaning_agent and audit_agent. It is
+    # deliberately left out: plain-English cleaning is served by POST /api/chat after the
+    # graph has finished (routes_chat.py), because re-entering the graph per message would
+    # re-run profiling for nothing. The stub raises if called; see its docstring.
 
     return builder.compile(checkpointer=checkpointer)

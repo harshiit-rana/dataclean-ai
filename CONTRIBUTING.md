@@ -143,6 +143,16 @@ are both running locally, you're ready to make changes.
   a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and
   checking `X_test`. A round also has to clear `_is_real_gain`, which refuses anything smaller
   than the fold-to-fold spread; without that the loop "improves" forever on noise.
+- **A page that starts work on mount has to ask whether the work is already done.** The Review
+  page starts profiling when it mounts, and `/api/profile` used to start the graph from the
+  top every time -- so a reload re-profiled, rewrote every card at one LLM call each, and threw
+  away undecided cards. It now reads the checkpoint first: paused at approval means replay the
+  saved cards (no LLM calls), finished means a 409 pointing at the cleaning page, and only a
+  session that never ran or died part-way starts again.
+- **Dependencies have a floor and a cap.** `requirements.txt` floors are the versions the suite
+  last passed against and caps are the next release allowed to break the API. They used to be
+  floors only, some years stale, so a fresh build got whatever was newest that day. To move up:
+  raise the bound, run the suite, commit both together.
 - **A POST stream is opened once.** `streamPost` sets `openWhenHidden: true`. The library's
   default aborts the request when the tab is hidden and re-sends it when the tab returns --
   harmless for a GET, and for every stream here it meant re-running profiling, re-applying

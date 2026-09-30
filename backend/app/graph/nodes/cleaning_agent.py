@@ -1,4 +1,4 @@
-﻿"""cleaning_agent node. PRD §12.3.
+"""cleaning_agent node. PRD §12.3.
 
 Executes the fixes the user approved at the human_approval interrupt, in card order, and
 writes the result to a NEW file (`cleaned.csv`) in the session directory. The user's

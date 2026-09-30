@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { streamProfile } from "@/api/sse";
+import { StreamRequestError, streamProfile } from "@/api/sse";
 import type { ColumnIssue, ProfileStreamEvent, SuggestionCard } from "@/api/types";
 
 interface ProfileStreamState {
@@ -11,6 +11,9 @@ interface ProfileStreamState {
   cards: SuggestionCard[];
   streamingCardText: Record<string, string>;
   error: string | null;
+  /** The HTTP status when the server refused to start at all. 409 means the session was
+   * already cleaned, which is somewhere to go rather than something that went wrong. */
+  errorStatus: number | null;
   /** A run that stopped early but still produced cards. Distinct from `error` because those
    * cards are reviewable and the approval controls must stay usable — a provider rate limit
    * after four of twelve suggestions is a partial success, not a dead session. */
@@ -26,6 +29,7 @@ const initialState: ProfileStreamState = {
   cards: [],
   streamingCardText: {},
   error: null,
+  errorStatus: null,
   partialWarning: null,
 };
 
@@ -125,7 +129,12 @@ export function useProfileStream(sessionId: string | null) {
                   "The connection dropped before the last suggestions arrived. Everything " +
                   "below is complete and can be applied as it stands.",
               }
-            : { ...s, status: "error", error: error.message }
+            : {
+                ...s,
+                status: "error",
+                error: error.message,
+                errorStatus: error instanceof StreamRequestError ? error.status : null,
+              }
         ),
       onClose: flushChunks,
     });

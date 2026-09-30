@@ -1,21 +1,19 @@
-"""Statistical profiling: ydata-profiling wrapper + custom issue detectors -> list[ColumnIssue].
+"""Statistical profiling: the custom issue detectors -> list[ColumnIssue].
 
 PRD FR-11..19. Per §9.3, ColumnIssue.description is "Plain English description of what
 was found. No LLM involved." -- everything in this module is deterministic pandas/numpy;
 semantic interpretation and goal-aware priority adjustment happens later, in the LLM-backed
 Profiling Agent node (app/graph/nodes/profiling_agent.py, PRD §12.1).
 
-ydata-profiling itself is wrapped defensively and kept independent of issue detection: it is
-a heavyweight, version-sensitive dependency (PRD §17.1 flags it as a medium schedule risk),
-and a profiling failure must not crash the session. Its JSON output is stored verbatim as
-GraphState.raw_profile ("source of truth for statistics" per §9.1) but the ColumnIssue list
-below is derived independently so the core detection logic never depends on ydata-profiling
-succeeding.
+There used to be a ydata-profiling report here too, stored as GraphState.raw_profile as the
+PRD's "source of truth for statistics". Nothing ever read it. It was removed once it turned
+out it could not even be imported on a current install -- it needs `pkg_resources`, which
+recent setuptools no longer ships -- so every session had been logging a traceback and
+storing an empty dict, and the issues below had been the only statistics all along.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 import uuid
@@ -26,8 +24,6 @@ from app.models.graph_state import ColumnIssue
 
 logger = logging.getLogger(__name__)
 
-PROFILING_TIMEOUT_SECONDS = 60  # PRD NFR-02
-
 _NUMERIC_MISMATCH_THRESHOLD = 0.9  # share of non-null values that must parse as numeric
 _DATE_MISMATCH_THRESHOLD = 0.9  # share of non-null values that must parse as a date
 _OUTLIER_IQR_MULTIPLIER = 1.5
@@ -35,19 +31,6 @@ _OUTLIER_IQR_MULTIPLIER = 1.5
 
 def generate_issue_id() -> str:
     return f"issue_{uuid.uuid4().hex[:8]}"
-
-
-def run_ydata_profile(df: pd.DataFrame) -> dict:
-    """Runs ydata-profiling in minimal mode (PRD §17.1 mitigation) and returns the raw report
-    as a dict. Never raises -- returns {} on any failure so the pipeline can continue."""
-    try:
-        from ydata_profiling import ProfileReport
-
-        report = ProfileReport(df, minimal=True, progress_bar=False, explorative=False)
-        return json.loads(report.to_json())
-    except Exception:
-        logger.exception("ydata-profiling failed; continuing without raw_profile")
-        return {}
 
 
 def _severity_and_score(rate: float, high_cut: float, medium_cut: float) -> tuple[str, float]:

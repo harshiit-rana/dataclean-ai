@@ -1,15 +1,13 @@
-"""conversational_loop node. PRD §13.1 / FR-37..40 -- STUB.
+"""conversational_loop node. PRD §13.1 / FR-37..40 -- deliberately unwired.
 
-Will handle further plain-English cleaning instructions the user types after the initial
-suggestion-card pass (e.g. "also drop rows where age is negative"). Reads the latest entry
-appended to `state.conversation_history`, calls Claude via
-`app.services.prompts.cleaning_prompts.build_conversational_cleaning_messages` to generate
-pandas code, executes it the same way `cleaning_agent` does, and appends a new
-ActionLogEntry with source="conversational". Loops back to itself (or to human_approval,
-per §13.1's graph diagram) until the user signals they're done, at which point the graph
-proceeds to audit_agent.
+The PRD's graph has a node here for plain-English cleaning instructions after the card pass.
+That feature exists, as POST /api/chat/{session_id} (routes_chat.py), not as this node: by the
+time anyone is typing instructions the graph has already run to completion, and re-entering it
+per message would re-run profiling and explanation for nothing. It also maps instructions
+onto the whitelisted operations rather than generating pandas code, as the PRD had it.
 
-TODO: implement per PRD §13.1, FR-37..40.
+It is not added to the graph (see workflow.py) and still raises if called. Wire it in only if
+chat ever needs to happen *before* cleaning finishes.
 """
 
 from __future__ import annotations

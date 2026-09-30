@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 30 September 2026 · 44 commits · 555 backend tests, 113 frontend tests
+Last updated: 30 September 2026 · 45 commits · 562 backend tests, 114 frontend tests
 
 ---
 
@@ -328,6 +328,12 @@ reported metrics.
   upload, only the hash stored, required on every session-scoped request. Off in development.
 - **Retention.** Files deleted 24 hours after last use, swept hourly in-process.
 - **Light and dark**, following your OS until you use the toggle.
+- **A reload doesn't redo work.** Reloading the Review page used to re-profile the file and
+  rewrite every suggestion card; it now replays the saved cards, and a session that has
+  already been cleaned points you at the cleaning page instead.
+- **Reproducible installs.** Dependencies are bounded above as well as below, at the versions
+  the tests pass against. ydata-profiling was removed: its output was never read, and on a
+  current install it could not even be imported.
 - **Degrade, don't crash.** A failed LLM call, an operation that can't run, a PDF that won't
   render — none of these end a session that already touched your data.
 

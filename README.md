@@ -76,7 +76,7 @@ npm run dev
 - **Agents**: any LangChain `BaseChatModel` -- provider picked at runtime by `LLM_PROVIDER`
   (`app/services/llm_client.py`), so nodes never call anything provider-specific. See "LLM
   provider" below.
-- **Profiling**: deterministic pandas/IQR-based detectors, independent of `ydata-profiling`
+- **Profiling**: deterministic pandas/IQR-based detectors
   (which is wrapped defensively and never allowed to crash a session) -- the LLM only adds
   semantic interpretation and goal-aware re-prioritization on top.
 - **Frontend**: React + Vite + Tailwind, SSE consumed via `@microsoft/fetch-event-source`
