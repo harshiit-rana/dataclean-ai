@@ -70,7 +70,12 @@ IMPUTING_OPERATIONS = frozenset(
 # split means test-set information reaches the training rows, and every offline score comes
 # out flattering. Not wrong -- but the user should know it before approving, and it belongs
 # in the audit trail.
-DATASET_STATISTIC_OPERATIONS = frozenset({"fill_median", "fill_mean", "fill_mode", "cap_outliers"})
+# Fixes that read a statistic from the whole file before any split. drop_outlier_rows was
+# missing: it decides which rows to remove by limits computed over every row, test rows
+# included, exactly as cap_outliers decides where to clip.
+DATASET_STATISTIC_OPERATIONS = frozenset(
+    {"fill_median", "fill_mean", "fill_mode", "cap_outliers", "drop_outlier_rows"}
+)
 
 
 def infer_task_type(series: pd.Series, declared: str = "auto") -> str | None:

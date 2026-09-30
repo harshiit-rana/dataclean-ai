@@ -213,27 +213,40 @@ def choose_threshold(y_binary: np.ndarray, scores: np.ndarray, point: OperatingP
 # --- the out-of-fold scores the choice is made on ------------------------------------------
 
 
-def out_of_fold_scores(build, X_train, y_train, positive_label: str, groups=None) -> tuple[np.ndarray | None, int]:
-    """P(positive) for every training row, from a model that did not train on it.
+def out_of_fold_scores(
+    build, X_train, y_train, positive_label: str, groups=None, ordered: bool = False
+) -> tuple[np.ndarray | None, int]:
+    """P(positive) for each training row, from a model that did not train on it.
 
-    Returns (scores, folds). None when the training data can't support two folds, in which
-    case no cut-off can be chosen honestly and the caller falls back to the default.
+    Returns (scores, folds). Rows no fold validated on are NaN: with forward-in-time folds the
+    earliest chunk is only ever trained on, which is also why this is an explicit loop rather
+    than `cross_val_predict` -- that refuses folds that don't partition the rows. None when
+    the training data can't support two folds, in which case no cut-off can be chosen
+    honestly and the caller falls back to the default.
     """
-    from sklearn.model_selection import cross_val_predict
-
-    y = pd.Series(y_train).astype(str)
-    splitter = cv_splitter("classification", y, groups=groups)
+    y = pd.Series(y_train).astype(str).reset_index(drop=True)
+    X = X_train.reset_index(drop=True)
+    splitter = cv_splitter("classification", y, groups=groups, ordered=ordered)
     if splitter is None:
         return None, 0
 
-    pipeline = build()
-    probabilities = cross_val_predict(
-        pipeline, X_train, y, cv=splitter, method="predict_proba", groups=groups, n_jobs=1
-    )
-    # cross_val_predict orders the columns by the sorted class labels it saw.
-    classes = sorted(y.unique())
-    index = classes.index(str(positive_label))
-    return np.asarray(probabilities)[:, index], int(splitter.get_n_splits())
+    scores = np.full(len(y), np.nan)
+    folds = 0
+    group_values = None if groups is None else pd.Series(groups).reset_index(drop=True)
+    for train_idx, test_idx in splitter.split(X, y, group_values):
+        try:
+            model = build().fit(X.iloc[train_idx], y.iloc[train_idx])
+        except Exception:  # noqa: BLE001 -- e.g. an early time chunk with one class only
+            logger.debug("A fold could not be fitted for the cut-off", exc_info=True)
+            continue
+        classes = [str(c) for c in model.classes_]
+        if str(positive_label) not in classes:
+            continue
+        scores[test_idx] = np.asarray(model.predict_proba(X.iloc[test_idx]))[:, classes.index(str(positive_label))]
+        folds += 1
+    if folds == 0:
+        return None, 0
+    return scores, folds
 
 
 def apply(
@@ -247,6 +260,7 @@ def apply(
     point: OperatingPoint,
     positive_label: str,
     groups=None,
+    ordered: bool = False,
 ) -> dict | None:
     """Chooses the cut-off on the training folds and reports it against the test set.
 
@@ -276,10 +290,16 @@ def apply(
                 "at_default": observed,
             }
 
-        train_scores, folds = out_of_fold_scores(build, X_train, y_train, positive_label, groups)
+        train_scores, folds = out_of_fold_scores(build, X_train, y_train, positive_label, groups, ordered)
         if train_scores is None:
             return None
         train_binary = (pd.Series(y_train).astype(str) == str(positive_label)).to_numpy().astype(int)
+        # Only rows some fold validated on. With forward-in-time folds the earliest rows are
+        # never validated, and a score of NaN must not be read as a prediction.
+        covered = ~np.isnan(train_scores)
+        train_binary, train_scores = train_binary[covered], train_scores[covered]
+        if len(train_binary) == 0 or train_binary.min() == train_binary.max():
+            return None
 
         chosen = choose_threshold(train_binary, train_scores, point)
         threshold = chosen["threshold"]
@@ -288,8 +308,9 @@ def apply(
             **_request_fields(point, positive_label),
             "threshold": threshold,
             "chosen_on": (
-                f"out-of-fold predictions over the {len(train_binary):,} training rows "
-                f"({folds} folds); the test set was not consulted"
+                f"out-of-fold predictions over {len(train_binary):,} training rows "
+                f"({folds} folds{', each validated on rows later than it trained on' if ordered else ''}); "
+                f"the test set was not consulted"
             ),
             "folds": folds,
             "reachable": chosen["reachable"],

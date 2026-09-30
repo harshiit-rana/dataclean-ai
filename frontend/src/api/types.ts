@@ -488,6 +488,8 @@ export interface ModelResult {
      * 800 training rows drawn from 4 customers is not 800 independent observations. */
     train_groups: number | null;
     test_groups: number | null;
+    /** Test rows that are exact copies of a training row, answer included. */
+    test_rows_seen_in_training?: number;
   };
   baseline: Record<string, number | string>;
   primary_metric: string;

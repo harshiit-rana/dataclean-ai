@@ -115,7 +115,7 @@ def scoring_for(task: str, y) -> str:
     return "roc_auc" if pd.Series(y).nunique() == 2 else "accuracy"
 
 
-def cv_splitter(task: str, y, folds: int = CV_FOLDS, groups=None):
+def cv_splitter(task: str, y, folds: int = CV_FOLDS, groups=None, ordered: bool = False):
     """Stratified for classification, so every fold keeps the class balance -- without it a
     rare class can be missing from a fold entirely and the score for that fold is undefined.
 
@@ -124,10 +124,21 @@ def cv_splitter(task: str, y, folds: int = CV_FOLDS, groups=None):
     is grouped, every configuration in the search is compared on grouped folds. Otherwise the
     loop would pick its winner on exactly the leakage the split was chosen to prevent.
 
+    `ordered` is for a date-based split, and overrides both. The final test set there is the
+    most recent rows, but every fold inside the training rows used to be shuffled -- so model
+    choice, tuning and the cut-off were all made by training on later rows and validating on
+    earlier ones, which rewards whatever exploits the future: the very thing a date-based
+    split exists to rule out. Time-ordered folds validate each chunk only on a model trained
+    on the rows before it. The rows must arrive in time order, which `split_data` guarantees.
+
     Returns None when the data can't support even two folds, which is the caller's signal
     that searching isn't possible here.
     """
-    from sklearn.model_selection import GroupKFold, KFold, StratifiedKFold
+    from sklearn.model_selection import GroupKFold, KFold, StratifiedKFold, TimeSeriesSplit
+
+    if ordered:
+        usable = min(folds, len(y) - 1)
+        return TimeSeriesSplit(n_splits=usable) if usable >= 2 else None
 
     if groups is not None:
         usable = min(folds, int(pd.Series(groups).nunique()))
@@ -157,6 +168,7 @@ def score_config(
     *,
     folds: int = CV_FOLDS,
     groups=None,
+    ordered: bool = False,
 ) -> SearchResult | None:
     """Cross-validates one configuration. The unit of comparison everything else uses.
 
@@ -166,7 +178,7 @@ def score_config(
     """
     from sklearn.model_selection import cross_val_score
 
-    splitter = cv_splitter(task, y_train, folds, groups)
+    splitter = cv_splitter(task, y_train, folds, groups, ordered)
     if splitter is None:
         return None
 
@@ -199,6 +211,7 @@ def search(
     budget: int = DEFAULT_BUDGET,
     folds: int = CV_FOLDS,
     groups=None,
+    ordered: bool = False,
 ) -> SearchResult | None:
     """Randomized search over this model's space, cross-validated on the training data.
 
@@ -211,7 +224,7 @@ def search(
     if not space:
         return None
 
-    splitter = cv_splitter(task, y_train, folds, groups)
+    splitter = cv_splitter(task, y_train, folds, groups, ordered)
     if splitter is None:
         return None
 

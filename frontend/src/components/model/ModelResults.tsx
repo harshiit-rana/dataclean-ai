@@ -91,6 +91,15 @@ export function ModelResults({ result }: { result: ModelResult }) {
           </p>
           {/* The entity counts, not just the rows. 800 training rows drawn from 4 customers
               is not 800 independent observations, and the row count alone hides that. */}
+          {(result.split.test_rows_seen_in_training ?? 0) > 0 && (
+            <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2">
+              {result.split.test_rows_seen_in_training!.toLocaleString()} of those{" "}
+              {result.split.test_rows.toLocaleString()} test rows are exact copies of training
+              rows, answer included — the model had already seen those answers, so the score
+              above is flattered by them. If they&apos;re duplicated records rather than genuine
+              repeats, remove duplicates during cleaning and retrain.
+            </p>
+          )}
           {result.split.strategy === "group" && result.split.test_groups != null && (
             <p className="mt-1 text-muted-foreground">
               That is {result.split.train_groups?.toLocaleString()} distinct{" "}

@@ -178,7 +178,9 @@ def improve(
     train_index, test_index = list(X_train.index), list(X_test.index)
     X_train, X_test = X_train[used], X_test[used]
 
-    if tuning.cv_splitter(task, y_train, groups=train_groups) is None:
+    # A date-based split validates every fold forwards in time, here as in the final split.
+    ordered = split_strategy == "time"
+    if tuning.cv_splitter(task, y_train, groups=train_groups, ordered=ordered) is None:
         raise modeling.ModelingError(
             "There are too few rows in the smallest class to cross-validate, so there is no "
             "safe way to compare one configuration against another on this data."
@@ -234,7 +236,7 @@ def improve(
     best_name, best_score, best_std = "", float("-inf"), 0.0
     for name in candidates:
         result = tuning.score_config(
-            build_for(name), X_train, y_train, task, groups=train_groups
+            build_for(name), X_train, y_train, task, groups=train_groups, ordered=ordered
         )
         if result is None:
             continue
@@ -271,7 +273,7 @@ def improve(
         starting("hyperparameters", f"Searching the settings of {modeling.MODELS[best_name].label.lower()}.")
         found = tuning.search(
             build_for(best_name), best_name, X_train, y_train, task,
-            budget=budget, groups=train_groups,
+            budget=budget, groups=train_groups, ordered=ordered,
         )
         if found is None:
             emit(
@@ -335,7 +337,7 @@ def improve(
         for name in challengers:
             found = tuning.search(
                 build_for(name), name, X_train, y_train, task,
-                budget=budget, groups=train_groups,
+                budget=budget, groups=train_groups, ordered=ordered,
             )
             if found and _is_real_gain(found.score, best_score, found.std):
                 if improved_challenger is None or found.score > improved_challenger[1].score:
@@ -430,7 +432,7 @@ def improve(
                 X_train_alt,
                 y_train,
                 task,
-                groups=train_groups,
+                groups=train_groups, ordered=ordered,
             )
             if scored is None:
                 emit(

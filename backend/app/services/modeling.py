@@ -829,6 +829,108 @@ def source_column_importance(importances: list[dict], columns: list[str]) -> lis
     )
 
 
+# Above this many training rows, selection uses three folds instead of five. It fits every
+# candidate once per fold, and on a large file the extra folds cost more than they tell.
+ROWS_FOR_FEWER_SELECTION_FOLDS = 20_000
+SELECTION_FOLDS_LARGE = 3
+
+
+def test_rows_seen_in_training(X_train, X_test, y_train, y_test) -> int:
+    """How many test rows are exact copies -- inputs and answer -- of a training row.
+
+    A copy of a training row in the test set is a question the model has already been shown
+    the answer to, and every one of them flatters the score. The contradictory-labels check
+    finds identical inputs with *different* answers; nothing looked for identical inputs with
+    the same answer on both sides of the split. They can be genuine repeats, or duplicates
+    the cleaning step wasn't asked to remove -- the app can't tell which, so it counts them
+    and says so rather than guessing.
+    """
+    try:
+        train = X_train.assign(__answer__=pd.Series(y_train).to_numpy())
+        test = X_test.assign(__answer__=pd.Series(y_test).to_numpy())
+        # Rows as tuples of strings, so NaN matches NaN and 1 matches 1.0 the way a reader
+        # comparing the two files would expect.
+        seen = set(train.astype(str).itertuples(index=False, name=None))
+        return int(sum(row in seen for row in test.astype(str).itertuples(index=False, name=None)))
+    except Exception:  # noqa: BLE001 -- a diagnostic, never a reason to fail a run
+        logger.warning("Could not compare test rows with training rows", exc_info=True)
+        return 0
+
+
+def choose_on_training_folds(
+    trained, build_for, X_train, y_train, task: str, *, groups=None, ordered: bool = False
+) -> dict:
+    """Which of the trained candidates to keep, decided without the test set.
+
+    This used to be `max(trained, key=<test-set score>)`: fit every candidate, score each on
+    the held-out rows, keep the highest. That makes the reported score the best of several
+    draws on those particular rows -- the same selection-on-the-test-set the improvement loop
+    was built to avoid, done once on every plain train. The verdict partly compensated by
+    raising its bar with the number of candidates, but compensating for a biased choice is
+    not the same as not making one.
+
+    So each candidate is cross-validated on the training rows -- grouped folds for a grouped
+    split, the folds the improvement loop uses -- and the best cross-validated score wins. The
+    test set is then opened once, for the winner's reported number, which nothing was chosen
+    against. Ties go to the simpler model, in registry order.
+
+    When the training rows can't be folded at all (a rare class too small to spread across
+    two folds), there is no honest basis for a choice. The simplest candidate is kept and the
+    result says so, rather than quietly falling back to the test set.
+    """
+    from app.services import tuning
+
+    order = {name: i for i, name in enumerate(MODELS)}
+    ranked = sorted(trained, key=lambda r: order.get(r["model"], len(order)))
+    if len(ranked) == 1:
+        return {
+            "chosen": ranked[0]["model"],
+            "method": "only_candidate",
+            "metric": None,
+            "folds": 0,
+            "scores": {},
+            "chosen_on": "the only model trained",
+        }
+
+    folds = SELECTION_FOLDS_LARGE if len(X_train) > ROWS_FOR_FEWER_SELECTION_FOLDS else tuning.CV_FOLDS
+    scores: dict[str, dict] = {}
+    for entry in ranked:
+        found = tuning.score_config(
+            build_for(entry["model"]), X_train, y_train, task, folds=folds, groups=groups,
+            ordered=ordered,
+        )
+        if found is not None:
+            scores[entry["model"]] = {"score": found.score, "std": found.std, "folds": found.fits}
+
+    if not scores:
+        return {
+            "chosen": ranked[0]["model"],
+            "method": "default_order",
+            "metric": None,
+            "folds": 0,
+            "scores": {},
+            "chosen_on": (
+                "no candidate could be cross-validated on the training rows, so the simplest "
+                "one was kept -- choosing by test-set score instead would make the reported "
+                "number the best of several draws on those rows"
+            ),
+        }
+
+    chosen = max(scores, key=lambda name: (scores[name]["score"], -order.get(name, 0)))
+    metric = tuning.scoring_for(task, y_train)
+    return {
+        "chosen": chosen,
+        "method": "cross_validation",
+        "metric": metric,
+        "folds": scores[chosen]["folds"],
+        "scores": scores,
+        "chosen_on": (
+            f"cross-validated {metric} over {scores[chosen]['folds']} folds of the training "
+            f"rows; the test set was not consulted"
+        ),
+    }
+
+
 def train_candidates(
     df: pd.DataFrame,
     *,
@@ -947,7 +1049,33 @@ def train_candidates(
         )
 
     key = "r2" if task == "regression" else ("roc_auc" if "roc_auc" in trained[0]["metrics"] else "f1")
-    best = max(trained, key=lambda r: r["metrics"].get(key, float("-inf")))
+    selection_groups = (
+        df.loc[list(X_train.index), group_column]
+        if split_strategy == "group" and group_column
+        else None
+    )
+    selection = choose_on_training_folds(
+        trained,
+        lambda name: (
+            lambda: build_pipeline(
+                name,
+                features["numeric"],
+                features["categorical"],
+                (model_params or {}).get(name),
+                features["frequent"],
+            )
+        ),
+        X_train,
+        y_train,
+        task,
+        groups=selection_groups,
+        ordered=split_strategy == "time",
+    )
+    best = next(r for r in trained if r["model"] == selection["chosen"])
+    for entry in results:
+        scored = selection["scores"].get(entry["model"])
+        entry["cv_score"] = scored["score"] if scored else None
+        entry["cv_std"] = scored["std"] if scored else None
     baseline = baseline_score(y_train, y_test, task)
 
     # The expensive tier, for the chosen model only. `build` hands back an *unfitted*
@@ -977,6 +1105,7 @@ def train_candidates(
             y_test,
             task,
             groups=cv_groups,
+            ordered=split_strategy == "time",
         )
 
     # Where the cut-off sits, for a two-class model. Chosen on the training folds against
@@ -1005,6 +1134,7 @@ def train_candidates(
             point=point,
             positive_label=best["metrics"]["positive_label"],
             groups=train_groups,
+            ordered=split_strategy == "time",
         )
 
     return {
@@ -1018,6 +1148,7 @@ def train_candidates(
             "group_column": group_column if split_strategy == "group" else None,
             "train_rows": int(len(X_train)),
             "test_rows": int(len(X_test)),
+            "test_rows_seen_in_training": test_rows_seen_in_training(X_train, X_test, y_train, y_test),
             # How many entities ended up on each side. The row counts alone hide the thing
             # that matters about a grouped split: 800 training rows drawn from 4 customers is
             # not 800 independent observations.
@@ -1036,6 +1167,9 @@ def train_candidates(
         "primary_metric": key,
         "results": results,
         "best_model": best["model"],
+        # How the winner was chosen. The test set is not part of it -- see
+        # choose_on_training_folds.
+        "selection": {k: v for k, v in selection.items() if k != "scores"},
         "deep_diagnostics": deep,
         # Correlated features split the credit between them in any importance ranking, so
         # both look unimportant and neither gets investigated. Worth showing next to it.
@@ -1054,6 +1188,10 @@ def train_candidates(
                 if task == "classification"
                 else None
             ),
+            # Still the number of candidates, although the winner is no longer chosen on the
+            # test set -- which is what this correction for picking the best of several draws
+            # was compensating for. Loosening a guard is its own decision, not a side effect
+            # of fixing the thing it guarded against; until it is made, the bar stays strict.
             model_count=len(trained),
         ),
     }

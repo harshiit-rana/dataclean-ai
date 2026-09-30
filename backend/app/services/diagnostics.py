@@ -363,7 +363,9 @@ def compute_diagnostics(pipeline, X_test, y_test, task: str, metrics: dict) -> d
         return {}
 
 
-def cross_validate_pipeline(build, X, y, task: str, folds: int = CV_FOLDS, groups=None) -> dict:
+def cross_validate_pipeline(
+    build, X, y, task: str, folds: int = CV_FOLDS, groups=None, ordered: bool = False
+) -> dict:
     """Scores across k folds instead of one split.
 
     A single held-out set gives one number with no sense of how much it would move on a
@@ -380,6 +382,28 @@ def cross_validate_pipeline(build, X, y, task: str, folds: int = CV_FOLDS, group
     scoring = "r2" if task == "regression" else "roc_auc"
     if task == "classification" and pd.Series(y).nunique() > 2:
         scoring = "accuracy"
+
+    if ordered:
+        # Date-based split: each fold validated on rows later than it trained on. X arrives
+        # as training rows then test rows, both in time order, so the whole is in order.
+        from sklearn.model_selection import TimeSeriesSplit
+
+        usable_folds = int(min(folds, len(y) - 1))
+        if usable_folds < 2:
+            return {}
+        y_input = pd.Series(y).astype(str) if task == "classification" else y
+        scores = cross_val_score(
+            build(), X, y_input, cv=TimeSeriesSplit(n_splits=usable_folds), scoring=scoring, n_jobs=1
+        )
+        values = [round(float(s), 4) for s in scores]
+        return {
+            "metric": scoring,
+            "folds": values,
+            "mean": round(float(np.mean(values)), 4),
+            "std": round(float(np.std(values)), 4),
+            "spread": round(float(max(values) - min(values)), 4),
+            "ordered": True,
+        }
 
     if groups is not None:
         distinct = int(pd.Series(groups).nunique())
@@ -426,7 +450,7 @@ def cross_validate_pipeline(build, X, y, task: str, folds: int = CV_FOLDS, group
     }
 
 
-def learning_curve_points(build, X, y, task: str) -> list[dict]:
+def learning_curve_points(build, X, y, task: str, ordered: bool = False) -> list[dict]:
     """Score against training-set size, for both the training and validation folds.
 
     Reads the two failure modes directly off the shape: the curves converging at a poor score
@@ -438,16 +462,23 @@ def learning_curve_points(build, X, y, task: str) -> list[dict]:
     scoring = "r2" if task == "regression" else "accuracy"
     y_input = pd.Series(y).astype(str) if task == "classification" else y
 
+    if ordered:
+        # Validated forwards in time, and not shuffled -- see cross_validate_pipeline.
+        from sklearn.model_selection import TimeSeriesSplit
+
+        cv, shuffle = TimeSeriesSplit(n_splits=3), False
+    else:
+        cv, shuffle = 3, True
     sizes, train_scores, validation_scores = learning_curve(
         build(),
         X,
         y_input,
         train_sizes=np.linspace(0.2, 1.0, 5),
-        cv=3,
+        cv=cv,
         scoring=scoring,
         n_jobs=1,
-        shuffle=True,
-        random_state=42,
+        shuffle=shuffle,
+        random_state=42 if shuffle else None,
     )
     return [
         {
@@ -493,7 +524,7 @@ def permutation_importance_scores(pipeline, X_test, y_test, task: str, top_n: in
 
 
 def compute_deep_diagnostics(
-    build, pipeline, X_train, X_test, y_train, y_test, task: str, groups=None
+    build, pipeline, X_train, X_test, y_train, y_test, task: str, groups=None, ordered: bool = False
 ) -> dict:
     """The expensive tier: refits the model many times. Run for the chosen model only, and
     skipped on data large enough for the cost to be felt.
@@ -518,9 +549,9 @@ def compute_deep_diagnostics(
     for key, work in (
         (
             "cross_validation",
-            lambda: cross_validate_pipeline(build, X_all, y_all, task, groups=groups),
+            lambda: cross_validate_pipeline(build, X_all, y_all, task, groups=groups, ordered=ordered),
         ),
-        ("learning_curve", lambda: learning_curve_points(build, X_all, y_all, task)),
+        ("learning_curve", lambda: learning_curve_points(build, X_all, y_all, task, ordered=ordered)),
         (
             "permutation_importance",
             lambda: permutation_importance_scores(pipeline, X_test, y_test, task),

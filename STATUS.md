@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 30 September 2026 · 47 commits · 614 backend tests, 122 frontend tests
+Last updated: 1 October 2026 · 48 commits · 630 backend tests, 122 frontend tests
 
 ---
 
@@ -326,6 +326,50 @@ changed* and excluded from the arithmetic. It is a record, not a restore point.
 (tuned settings included), the fitted `model.joblib`, and a written model card that says what
 not to trust. A test runs the generated script in a subprocess and checks it reproduces the
 reported metrics.
+
+### Where test information could reach a decision — an audit
+
+Prompted by a roadmap review that made the rule explicit: *the final test set must never be used
+to choose anything*. Every decision the model path makes was traced to the rows it sees.
+
+**Fixed:**
+
+- **The Train button chose its winner on the test set.** It fitted every candidate, scored each
+  on the held-out rows and kept the highest — so the reported number was the best of several
+  draws on those rows. The improvement loop had always avoided this; the plain train had not.
+  Candidates are now compared on cross-validated folds of the training rows and the test set is
+  opened once, for the winner. On a fixture where the honest run chose the random forest,
+  flipping every test-set answer made the old code choose logistic regression instead; it now
+  chooses the same model either way, and that is a test. The verdict's extra strictness for
+  "best of several" is deliberately left in place: loosening a guard is its own decision, not a
+  side effect of fixing what it guarded against.
+- **A date-based split shuffled every fold inside the training rows.** The final test set was
+  correctly the most recent rows, but model choice, tuning, the cut-off, the cross-validation
+  spread and the learning curve all trained on later rows and validated on earlier ones —
+  rewarding whatever exploits the future, the very thing the split exists to rule out. All of
+  them now use forward-in-time folds.
+- **Copies of training rows in the test set went uncounted.** The contradictory-labels check
+  finds identical inputs with different answers; identical rows with the *same* answer on both
+  sides of the split — questions the model has already seen answered — were invisible. They are
+  now counted, shown on the results page and cautioned in the model card.
+- **`drop_outlier_rows` wasn't warned about** alongside the other fixes that read a statistic
+  from the whole file before any split.
+
+**Known, and left as they are:**
+
+- **Fixes that compute a statistic over the whole file** (fill with the median, cap outliers)
+  still run before the split when approved. The card warns, but once approved the blanks are
+  gone, so the pipeline's own training-only imputer has nothing left to do. The effect is small
+  for a median — but it is a leak, and the honest fix is to not offer these when a model is the
+  goal, and let the pipeline do it.
+- **The leakage check and the suggested exclusions read the whole file**, test answers
+  included, to decide which columns to leave out. It only flags columns that predict the answer
+  near-perfectly, where 80% or 100% of the rows give the same verdict, so the influence is
+  negligible — but it is a decision informed by the test set.
+- **You can look at the test set as often as you like.** Every retrain reports its test score
+  and the run history lines them up, so "change a column, retrain, look" is selection on the
+  test set by hand. This is the largest remaining gap and the next thing to build: count the
+  looks per data version, and require a fresh holdout once a result has been used to decide.
 
 ### Using a session again
 

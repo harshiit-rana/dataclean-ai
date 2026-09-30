@@ -130,6 +130,12 @@ are both running locally, you're ready to make changes.
   as `useful` is, and neither can be made from twelve rows. Related: `_auc_noise_threshold` is
   deliberately uncapped. The `min(0.75, ...)` that used to be there fired only on the smallest
   test sets — the exact case the formula exists to be strict about — and lowered the bar.
+- **A date-based split has to be forward-in-time all the way down.** Same rule as grouping:
+  `split_strategy="time"` sets `ordered=True` on every fold the run makes -- model choice,
+  tuning, the improvement loop, the cut-off, the cross-validation spread, the learning curve --
+  so each chunk is validated on a model trained only on rows before it. Rows arrive in time
+  order from `split_data`; keep it that way. The cut-off uses an explicit fold loop rather than
+  `cross_val_predict`, which refuses folds that don't cover every row.
 - **A grouped split has to be grouped all the way down.** Choosing `split_strategy="group"`
   changes four things, not one: the train/test split uses `GroupShuffleSplit`, cross-validation
   uses `GroupKFold`, the improvement loop's search folds are grouped, and the grouping column
@@ -138,7 +144,10 @@ are both running locally, you're ready to make changes.
   beside the honest one, and nothing on the page says why they disagree. `readiness_checks`
   owns the shape test (`MIN_DISTINCT_FOR_ENTITY`, `MIN_REPETITION_FOR_ENTITY`) and the model
   plan offers exactly the columns it flags — two answers to one question is the bug to avoid.
-- **Nothing selects on the test set.** The improvement loop searches against cross-validated
+- **Nothing selects on the test set -- including the plain train.** `train_candidates` used to
+  keep whichever candidate scored best on the held-out rows; it now calls
+  `choose_on_training_folds`, and a test flips every test-set answer and asserts the choice
+  does not move. The improvement loop searches against cross-validated
   folds of the training data and opens the held-out set exactly once, at the end. If you add
   a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and
   checking `X_test`. A round also has to clear `_is_real_gain`, which refuses anything smaller

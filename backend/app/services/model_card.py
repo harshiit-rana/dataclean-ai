@@ -377,6 +377,15 @@ def _deterministic_cautions(result: dict, best: dict) -> list[str]:
             f"and the figures would move noticeably on a different split."
         )
 
+    seen = split.get("test_rows_seen_in_training") or 0
+    if seen and test_rows:
+        cautions.append(
+            f"{seen} of the {test_rows} test rows ({seen / test_rows:.0%}) are exact copies of "
+            f"training rows, answer included -- the model had already been shown those answers, "
+            f"so the scores above are flattered by them. If they are duplicated records rather "
+            f"than genuine repeats, remove the duplicates during cleaning and retrain."
+        )
+
     for row in diagnostics.get("per_class") or []:
         if row["support"] < MIN_ROWS_PER_CLASS:
             cautions.append(
