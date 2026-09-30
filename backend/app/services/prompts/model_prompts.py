@@ -40,7 +40,11 @@ in terms of statistics. "Of the people it flags, about two thirds really do leav
 "precision is 0.66".
 - cautions: 2-4 entries, each specific to this data. Draw on the class balance, the test-set \
 size, the cross-validation spread and the columns that were excluded. Do not include generic \
-advice that would apply to any model."""
+advice that would apply to any model.
+- Some inputs may be listed under derived_inputs. Those are not columns of the file -- they \
+were computed from one. Describe them by what they measure ("how long ago they signed up", \
+"how much was written in the notes"), never as though the file contained them, and do not \
+describe their source column as discarded."""
 
 
 def build_model_card_messages(result: dict, file_name: str, goal_context) -> list[BaseMessage]:
@@ -61,11 +65,26 @@ def build_model_card_messages(result: dict, file_name: str, goal_context) -> lis
         "verdict": (result.get("assessment") or {}).get("verdict"),
         "verdict_explanation": (result.get("assessment") or {}).get("headline"),
         "split": result.get("split"),
+        # Every column the model actually saw. `frequent` used to be missing here, which
+        # left a pooled column in neither list -- invisible to prose that is explicitly
+        # asked to comment on which columns were used and which were not.
         "features_used": (
             result.get("features", {}).get("numeric", [])
             + result.get("features", {}).get("categorical", [])
+            + result.get("features", {}).get("frequent", [])
         ),
         "columns_left_out": result.get("features", {}).get("dropped", []),
+        # Inputs that are not columns of the file. Without these the prose can describe a
+        # model as using `signup_date__weekday` without knowing where it came from, or
+        # report a date column as discarded when it was in fact the source of four inputs.
+        "derived_inputs": [
+            {
+                "from_column": r.get("column"),
+                "produced": r.get("outputs") or "its most common values, the rest pooled",
+                "why": r.get("reason"),
+            }
+            for r in result.get("features", {}).get("derived", []) or []
+        ],
         "cross_validation": deep.get("cross_validation"),
         "top_columns": best.get("column_importance", [])[:5],
         "class_counts": best.get("diagnostics", {}).get("class_distribution"),

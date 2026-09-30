@@ -97,6 +97,12 @@ are both running locally, you're ready to make changes.
   so a run from before the change is *labelled* rather than deleted or silently compared.
   History bookkeeping must never fail a training run — losing a result that exists because its
   record couldn't be written is the worst outcome available.
+- **An artifact the export promises is built on demand, not as a side effect.** `train_model.py`
+  used to reach disk only when someone generated the model card, so "Export everything" after
+  skipping the write-up produced an archive without the script — the one artifact the model
+  path exists to produce. `routes_export._ensure_training_script` now writes it when the
+  bundle is requested, the same way the audit report is refreshed on demand. If you add an
+  artifact to the bundle, make sure something other than an unrelated button creates it.
 - **A page that needs navigation state has to recover without it.** `CleanPage` takes the
   approved decisions from router state, which a browser reload discards -- and it used to
   answer that with "start from the review step", stranding anyone who pressed F5. It now

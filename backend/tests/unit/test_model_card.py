@@ -7,6 +7,8 @@ right even when the LLM call fails.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from app.services.model_card import build_model_card
@@ -311,3 +313,75 @@ class TestTheCutoffSection:
         card = _card(operating_point={**self.POINT, "reachable": False, "note": "No cut-off catches 99%."})
         assert "No cut-off catches 99%." in card
         assert "no cut-off achieves that" in card
+
+
+class TestTheProseKnowsAboutDerivedInputs:
+    """The prose is explicitly asked to comment on which columns were used and which were
+    not. Anything the payload omits is a column the writer cannot see."""
+
+    RESULT = {
+        "target_column": "churn",
+        "task": "classification",
+        "best_model": "m",
+        "results": [{"model": "m", "label": "Logistic regression", "metrics": {"roc_auc": 0.8}}],
+        "features": {
+            "numeric": ["signal", "signup_date__days"],
+            "categorical": [],
+            "frequent": ["city"],
+            "dropped": [{"column": "signup_date", "reason": "Used through its derived inputs."}],
+            "derived": [
+                {
+                    "id": "date_parts:signup_date",
+                    "kind": "date_parts",
+                    "column": "signup_date",
+                    "outputs": ["signup_date__days"],
+                    "reason": "Dates spanning 897 days.",
+                    "evidence": {},
+                },
+                {
+                    "id": "frequent_categories:city",
+                    "kind": "frequent_categories",
+                    "column": "city",
+                    "outputs": [],
+                    "reason": "77 values, the top 20 cover 65% of rows.",
+                    "evidence": {},
+                },
+            ],
+        },
+    }
+
+    def _payload(self) -> dict:
+        from app.services.prompts.model_prompts import build_model_card_messages
+
+        human = build_model_card_messages(self.RESULT, "data.csv", None)[1].content
+        return json.loads(human[human.index("{") : human.rindex("}") + 1])
+
+    def test_a_pooled_column_is_not_invisible(self):
+        """It appears in neither `numeric` nor `categorical`, so before this it was in
+        neither features_used nor columns_left_out -- a column the model used that the
+        writer was never told about."""
+        assert "city" in self._payload()["features_used"]
+
+    def test_the_derived_inputs_say_where_they_came_from(self):
+        derived = {d["from_column"]: d for d in self._payload()["derived_inputs"]}
+        assert derived["signup_date"]["produced"] == ["signup_date__days"]
+        assert "897 days" in derived["signup_date"]["why"]
+
+    def test_a_recipe_that_adds_no_column_still_says_what_it_did(self):
+        derived = {d["from_column"]: d for d in self._payload()["derived_inputs"]}
+        assert derived["city"]["produced"] == "its most common values, the rest pooled"
+
+    def test_the_writer_is_told_not_to_call_a_derived_input_a_column(self):
+        from app.services.prompts.model_prompts import SYSTEM_PROMPT
+
+        assert "derived_inputs" in SYSTEM_PROMPT
+        assert "not columns of the file" in SYSTEM_PROMPT
+
+    def test_nothing_derived_leaves_the_payload_empty_rather_than_absent(self):
+        from app.services.prompts.model_prompts import build_model_card_messages
+
+        bare = {**self.RESULT, "features": {"numeric": ["signal"], "categorical": [], "dropped": []}}
+        human = build_model_card_messages(bare, "data.csv", None)[1].content
+        payload = json.loads(human[human.index("{") : human.rindex("}") + 1])
+        assert payload["derived_inputs"] == []
+        assert payload["features_used"] == ["signal"]

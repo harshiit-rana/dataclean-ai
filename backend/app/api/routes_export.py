@@ -25,7 +25,7 @@ from app.dependencies import get_graph
 from app.graph.checkpointer import thread_config
 from app.graph.nodes.audit_agent import generate_audit_artifacts, is_report_stale
 from app.models.graph_state import GraphState
-from app.services import model_store
+from app.services import model_export, model_store
 from app.services.session_store import read_session_meta, session_dir
 
 logger = logging.getLogger(__name__)
@@ -45,6 +45,31 @@ def _session_files(settings: Settings, session_id: str) -> tuple[dict, Path]:
     if meta is None:
         raise SessionNotFoundError(session_id)
     return meta, session_dir(settings.upload_dir, session_id)
+
+
+def _ensure_training_script(directory: Path) -> None:
+    """Writes train_model.py if a model exists and the script doesn't.
+
+    It used to be written only as a side effect of generating the model card, so a user who
+    trained a model, skipped the write-up and pressed "Export everything" got an archive
+    with no script in it -- the one artifact the whole model path exists to produce, missing
+    because of an unrelated button they never pressed. The bundle now builds it on demand,
+    the same way the audit report is refreshed on demand just above.
+
+    Never raises: the rest of the archive is still worth serving.
+    """
+    path = directory / model_store.SCRIPT_FILENAME
+    if path.exists():
+        return
+    result = model_store.load_result(directory)
+    if result is None:
+        return
+    try:
+        path.write_text(
+            model_export.build_training_script(result, file_name="cleaned.csv"), encoding="utf-8"
+        )
+    except Exception:  # noqa: BLE001 -- see docstring
+        logger.exception("Training script could not be written for the export bundle")
 
 
 async def _ensure_fresh_report(session_id: str, directory: Path, graph) -> None:
@@ -138,6 +163,7 @@ async def export_bundle(
     """
     meta, directory = _session_files(settings, session_id)
     await _ensure_fresh_report(session_id, directory, graph)
+    _ensure_training_script(directory)
     stem = _stem(meta)
 
     # (path on disk, name inside the archive). The markdown report is included as a fallback

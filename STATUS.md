@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 24 September 2026 · 41 commits · 527 backend tests, 103 frontend tests
+Last updated: 30 September 2026 · 42 commits · 536 backend tests, 103 frontend tests
 
 ---
 
