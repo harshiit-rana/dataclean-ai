@@ -475,7 +475,14 @@ wrong reason and discards the most informative column in the file.
 
 ## What's next
 
-Nothing is queued. What follows is direction rather than a queue. The end state is an
+**The work is tracked as GitHub issues.** The roadmap issue
+([#1](https://github.com/harshiit-rana/dataclean-ai/issues/1)) lists 117 scoped issues across
+seven workstreams and five milestones -- Evaluation Integrity, Statistical Reliability, AutoML
+Improvements, Reproducibility, Production Readiness -- with priorities, sizes, dependencies and
+a recommended order. The first decision is the evaluation protocol: what counts as a look at the
+test set, and how a fresh holdout is obtained.
+
+The direction below is unchanged; the issues are its concrete form. The end state is an
 *honest* AutoML — not a button that hands back a leaderboard score, but a system that takes a
 raw file to a working model, and an honest answer about whether it works, while showing its
 working at every step. Roughly in order of how much they'd be worth:
