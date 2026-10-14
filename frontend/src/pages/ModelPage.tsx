@@ -22,6 +22,7 @@ import {
 import { streamImprove } from "@/api/sse";
 import type {
   ImprovementRound,
+  CalibrationMethod,
   ImproveRequest,
   ModelHistory,
   ModelPlan,
@@ -58,6 +59,7 @@ export function requestFromResult(result: ModelResult): TrainRequest {
     clip_outliers: result.features.clipped ?? [],
     keep_identical_rows_together: result.split.keep_duplicates_together ?? false,
     sealed_holdout: result.split.sealed ?? false,
+    calibration: result.calibration?.method ?? "none",
   };
 }
 
@@ -159,7 +161,7 @@ export function ModelPage() {
   /** Reuses whatever columns and split the last train used, so "improve it" means "improve
    * this", not "start again with different inputs and see if the number moves". Streamed:
    * each round appears as it finishes, and the page says what it is on as each one starts. */
-  const handleImprove = () => {
+  const handleImprove = (calibration?: CalibrationMethod) => {
     if (!sessionId) return;
     const parsed = Number.parseFloat(goal);
     const target = goal.trim() !== "" && Number.isFinite(parsed) ? parsed : null;
@@ -183,6 +185,7 @@ export function ModelPage() {
       keep_identical_rows_together:
         base?.keep_identical_rows_together ?? plan?.keep_identical_rows_together ?? false,
       sealed_holdout: base?.sealed_holdout ?? plan?.sealed_holdout ?? false,
+      calibration: calibration ?? base?.calibration ?? "none",
       include_deep_diagnostics: true,
       goal: target,
     };
@@ -238,6 +241,20 @@ export function ModelPage() {
         );
       },
     });
+  };
+
+  /** Retrains the model that is on screen with its probabilities calibrated (or not). A model the
+   * improvement loop tuned is rebuilt by the loop again, since a plain train would lose its
+   * settings and give a different model. Either way it is a new run, and a new look at the
+   * held-out rows, which the card says before it is clicked. */
+  const handleCalibrate = (method: CalibrationMethod) => {
+    if (!result) return;
+    if (result.improvement) {
+      handleImprove(method);
+      return;
+    }
+    const base: TrainRequest = lastRequest ?? requestFromResult(result);
+    void handleTrain({ ...base, calibration: method });
   };
 
   const handleShowCard = async () => {
@@ -386,7 +403,7 @@ export function ModelPage() {
                 placeholder="e.g. 0.85"
                 className="h-9 w-28 rounded-md border border-border bg-transparent px-3 text-sm tabular-nums"
               />
-              <Button onClick={handleImprove} disabled={improving}>
+              <Button onClick={() => handleImprove()} disabled={improving}>
                 Improve it
               </Button>
               <span className="text-xs text-muted-foreground">
@@ -406,6 +423,8 @@ export function ModelPage() {
       {result && !training && !improving && (
         <ModelResults
           result={result}
+          onCalibrate={handleCalibrate}
+          calibrating={training || improving}
           onFinalise={handleFinalise}
           finalising={finalising}
           finaliseError={finaliseError}

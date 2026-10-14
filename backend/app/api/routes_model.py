@@ -760,6 +760,7 @@ async def train_model(
             clip_outliers=request.clip_outliers,
             keep_identical_rows_together=request.keep_identical_rows_together,
             sealed_holdout=request.sealed_holdout,
+            calibration=request.calibration,
         )
 
     try:
@@ -860,6 +861,7 @@ def _improve_and_save(
         clip_outliers=request.clip_outliers,
         keep_identical_rows_together=request.keep_identical_rows_together,
         sealed_holdout=request.sealed_holdout,
+        calibration=request.calibration,
     )
     rebuilt["improvement"] = {
         "rounds": found["rounds"],

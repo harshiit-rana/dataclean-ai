@@ -225,7 +225,9 @@ def out_of_fold_scores(
     honestly and the caller falls back to the default.
     """
     y = pd.Series(y_train).astype(str).reset_index(drop=True)
-    X = X_train.reset_index(drop=True)
+    # Folds are taken by position, so the labels do not matter here -- but they are kept, because
+    # a calibrated estimator fitted inside each fold finds its rows' groups by label.
+    X = X_train
     splitter = cv_splitter("classification", y, groups=groups, ordered=ordered)
     if splitter is None:
         return None, 0

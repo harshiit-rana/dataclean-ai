@@ -201,6 +201,57 @@ class TestChoosingTheCutOff:
         assert rigged["observed"] != honest["observed"]
 
 
+# ------------------------------------------------------------------ calibration
+
+
+class TestCalibratingTheProbabilities:
+    """The mapping is fitted on folds of the training rows. Flip every held-out answer and the
+    fitted calibrator, the folds it used and the cut-off chosen on its probabilities must not
+    move; only the before-and-after report of how it did on the held-out rows may."""
+
+    def _train(self, df, **kwargs):
+        return modeling.train_candidates(
+            df, target_column="outcome", task="classification",
+            model_names=["random_forest_classifier"], include_deep_diagnostics=False,
+            calibration="sigmoid", **kwargs,
+        )
+
+    def test_the_fitted_calibrator_is_unmoved(self, learnable, flipped_test_answers):
+        probe = learnable.drop(columns="outcome").iloc[:80]
+        honest = self._train(learnable)
+        flipped_test_answers()
+        rigged = self._train(learnable)
+
+        honest_model, rigged_model = _chosen(honest)["pipeline"], _chosen(rigged)["pipeline"]
+        assert np.array_equal(honest_model.predict_proba(probe), rigged_model.predict_proba(probe))
+        assert rigged["calibration"]["folds"] == honest["calibration"]["folds"]
+        assert rigged["calibration"]["method"] == honest["calibration"]["method"]
+        # The report is allowed to move -- and has to, or the flip did nothing.
+        assert rigged["calibration"]["after"] != honest["calibration"]["after"]
+
+    def test_the_offer_to_calibrate_is_made_without_the_test_answers_deciding_the_methods(
+        self, learnable, flipped_test_answers
+    ):
+        honest = modeling.train_candidates(
+            learnable, target_column="outcome", task="classification",
+            model_names=["random_forest_classifier"], include_deep_diagnostics=False,
+        )["calibration"]
+        flipped_test_answers()
+        rigged = modeling.train_candidates(
+            learnable, target_column="outcome", task="classification",
+            model_names=["random_forest_classifier"], include_deep_diagnostics=False,
+        )["calibration"]
+        assert rigged["options"] == honest["options"]  # which methods the data supports
+
+    def test_the_cut_off_chosen_on_calibrated_probabilities_is_unmoved(self, learnable, flipped_test_answers):
+        honest = self._train(learnable, point=OperatingPoint("f1"))["operating_point"]
+        flipped_test_answers()
+        rigged = self._train(learnable, point=OperatingPoint("f1"))["operating_point"]
+        assert rigged["threshold"] == honest["threshold"]
+        assert rigged["expected"] == honest["expected"]
+        assert rigged["observed"] != honest["observed"]
+
+
 # ------------------------------------------------------------------ the improvement loop
 
 

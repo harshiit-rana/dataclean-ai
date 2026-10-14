@@ -342,6 +342,22 @@ in the held-out table and the card with their bootstrap ranges, in the chart's d
 the run history, are marked lower-is-better, and are deliberately not coloured pass or fail: the
 error is noisy on a small test set. Multi-class and regression results are unchanged.
 
+**Calibration as an action.** When the error is past five points *and* clearly past what chance
+alone would show on that many test rows (on a few hundred rows even honest probabilities score
+several points, so the bar is relative), the results page offers to calibrate: sigmoid, or isotonic
+where there are at least a thousand training rows and a hundred of the rarer answer. It is fitted
+with `CalibratedClassifierCV` on cross-validation folds of the training rows only, through the same
+fold rule as everything else done to them (whole groups, copies together, forward in time), then
+the held-out rows are scored once more with it and the page and card show before and after: Brier
+score, calibration error, AUC, and recall and precision at the default line, which move because 0.50
+now sits on honest probabilities. It is one model with one mapping (`ensemble=False`), so a sigmoid
+leaves the AUC unchanged to the last digit and a test asserts it; a forward-in-time split cannot use
+that form, so it averages one copy per fold and says so. A method the data cannot support is
+declined with the reason and the model left alone. The cut-off is chosen on calibrated
+probabilities, calibration appears in the run history, and applying it re-runs training, which
+counts as another look at the test rows. A test with every held-out answer flipped shows the fitted
+calibrator and the cut-off do not move.
+
 **The simplest model the folds cannot separate from the best.** The winner used to be the raw
 highest cross-validated score, so a forest that beat logistic regression by 0.002, with the folds
 disagreeing by 0.03, "won" although the evidence does not tell them apart. It is now the
@@ -666,8 +682,9 @@ working at every step. Roughly in order of how much they'd be worth:
   round is. Each one still has to be a declared recipe the export can rebuild.
 - **Ensembling and stacking**, so "best of six" becomes "best combination of six" — with the
   same rule that a combination has to beat the incumbent by more than the folds disagree.
-- **Calibration as an action, not a chart.** The calibration curve is already shown; being
-  able to *fix* a badly calibrated model is the same shape of win as moving the cut-off was.
+- **Calibration for more than two answers, and inside the improvement search.** Calibration is
+  an action now (below), but only for a two-class target, and the search itself still ranks
+  uncalibrated models.
 - **Free text as a real feature.** Length is a proxy. Embeddings would make the RSNA `Report`
   column usable rather than merely correctly described.
 - **Several targets in one session.** The RSNA data had twelve; the app does one.

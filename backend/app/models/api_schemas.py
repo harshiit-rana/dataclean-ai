@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -224,6 +224,10 @@ class TrainRequest(BaseModel):
     # once with `finalise`. Needs a file big enough for both held-out parts to be judged; when
     # it is not, the ordinary two-way split is used and the result says why.
     sealed_holdout: bool = False
+    # Correct the chosen model's probabilities, fitted on folds of the training rows. Two-class
+    # targets only; when the data cannot support the method the model is left as it was and the
+    # result says why. Isotonic needs a thousand rows and a hundred of the rarer answer.
+    calibration: Literal["none", "sigmoid", "isotonic"] = "none"
 
 
 class ImproveRequest(TrainRequest):

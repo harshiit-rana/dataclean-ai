@@ -397,6 +397,9 @@ export interface ModelRun {
     positive_label: string | null;
     observed: CutoffMetrics | null;
   } | null;
+  /** The calibration method applied, "none" when the probabilities are the model's own. A run
+   * that differs only here is the comparison "did calibrating help?" needs to be able to show. */
+  calibration?: CalibrationMethod | null;
 }
 
 /** Whether the change from the run before is real. `paired` resamples the shared held-out rows
@@ -434,6 +437,33 @@ export interface OperatingPointRequest {
   positive_label?: string | null;
 }
 
+/** How a model's probabilities were corrected, fitted on training rows only. */
+export type CalibrationMethod = "none" | "sigmoid" | "isotonic";
+
+export interface CalibrationReport {
+  /** What was applied; "none" when the probabilities are the model's own. */
+  method: CalibrationMethod;
+  requested: CalibrationMethod;
+  /** Why a request was declined, e.g. isotonic on too few rows. The model is left as it was. */
+  refused_because: string | null;
+  /** Above this and clearly above chance, calibration is offered. */
+  ece_threshold: number;
+  /** The uncalibrated model's calibration error on the held-out rows. */
+  error: number;
+  /** What a perfectly calibrated model would still show on this many rows. */
+  chance_error: number | null;
+  /** True when the error is past the bar and past chance, and nothing has been applied yet. */
+  recommended: boolean;
+  options: Record<"sigmoid" | "isotonic", { available: boolean; reason: string | null }>;
+  folds: number;
+  /** True for a forward-in-time split, where the calibrated model averages one copy per fold. */
+  ensemble: boolean;
+  fitted_on: string | null;
+  /** Held-out scores without and with calibration; null when none was applied. */
+  before: Record<string, number> | null;
+  after: Record<string, number> | null;
+}
+
 export interface TrainRequest {
   excluded_columns: string[];
   model_names: string[];
@@ -453,6 +483,8 @@ export interface TrainRequest {
   keep_identical_rows_together?: boolean;
   /** Take a final partition out first, to open once with `finalise`. */
   sealed_holdout?: boolean;
+  /** Correct the chosen model's probabilities; two-class targets only. */
+  calibration?: CalibrationMethod;
 }
 
 /** The confusion matrix at one cut-off, as counts and rates. */
@@ -703,6 +735,8 @@ export interface ModelResult {
   improvement?: ImprovementTrail | null;
   /** Where the cut-off sits, for a two-class model. Null for regression and multi-class. */
   operating_point?: OperatingPointResult | null;
+  /** What was done to the probabilities and what could be: null for anything but two classes. */
+  calibration?: CalibrationReport | null;
 }
 
 /** One attempt at making the model better, kept whether or not it worked.

@@ -27,6 +27,7 @@ function describeSetup(run: ModelRun): string {
     parts.push(`split by ${run.split.time_column}`);
   }
   if (run.tuned) parts.push("tuned");
+  if (run.calibration && run.calibration !== "none") parts.push(`calibrated (${run.calibration})`);
   if (run.feature_recipes?.length) {
     parts.push(`${run.feature_recipes.length} derived`);
   }

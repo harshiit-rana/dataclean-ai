@@ -24,9 +24,15 @@ import {
   LearningCurveChart,
   PermutationImportanceChart,
 } from "@/components/charts/ModelCharts";
+import { CalibrationCard } from "@/components/model/CalibrationCard";
 import { OperatingPointCard } from "@/components/model/OperatingPointCard";
 import { HeldOutUse, ScoreLabel } from "@/components/model/ScoreLabel";
-import type { CandidateResult, MetricIntervals, ModelResult } from "@/api/types";
+import type {
+  CalibrationMethod,
+  CandidateResult,
+  MetricIntervals,
+  ModelResult,
+} from "@/api/types";
 
 const METRIC_LABELS: Record<string, string> = {
   accuracy: "Accuracy",
@@ -399,6 +405,10 @@ function HeldOutTable({ result, keys }: { result: ModelResult; keys: string[] })
 
 interface ModelResultsProps {
   result: ModelResult;
+  /** Retrains with the probabilities calibrated by this method ("none" undoes it). Present only
+   * where the page can do it. */
+  onCalibrate?: (method: CalibrationMethod) => void;
+  calibrating?: boolean;
   /** Opens the sealed final holdout. Present only where the page can do it. */
   onFinalise?: () => void;
   finalising?: boolean;
@@ -540,6 +550,8 @@ export function ModelResults({
   finalising,
   finaliseError,
   finaliseNote,
+  onCalibrate,
+  calibrating,
 }: ModelResultsProps) {
   const best = result.results.find((r) => r.model === result.best_model);
   const verdict = VERDICT_STYLES[result.assessment.verdict] ?? VERDICT_STYLES.marginal;
@@ -648,6 +660,8 @@ export function ModelResults({
           </CardContent>
         </Card>
       )}
+
+      <CalibrationCard report={result.calibration} onCalibrate={onCalibrate} busy={calibrating} />
 
       {result.operating_point && (
         <OperatingPointCard point={result.operating_point} evaluation={result.evaluation} />

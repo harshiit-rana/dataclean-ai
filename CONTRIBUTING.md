@@ -361,6 +361,15 @@ are both running locally, you're ready to make changes.
   from the data, not from the call. Do not interpret the interval with a plain paired t-test:
   `uncertainty.fold_difference` applies the Nadeau-Bengio correction for overlapping training
   sets, and the page's wording depends on it.
+- **Calibration is fitted on `calibration.TrainingFolds`, never on the test rows.** The folds are
+  `tuning.cv_splitter`'s -- whole groups, copies together, forward in time -- built from whichever
+  rows `fit` is handed, which is why the fold object looks groups up by the label of each row of
+  `X` and why `operating_point.out_of_fold_scores` no longer resets `X`'s index. `ensemble=False`
+  is deliberate: one model and one mapping keeps a sigmoid's AUC exactly where it was and keeps the
+  saved model one estimator; scikit-learn refuses it for forward-in-time folds, which is the only
+  place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
+  does not need this application's class to load. `TestCalibratingTheProbabilities` in
+  `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
 - **A new two-class metric goes in four places.** `modeling.evaluate` computes it, `uncertainty`
   recomputes it as a weighted sum (so it gets a range, and a test holds the two equal), the card's
   `_METRIC_LABELS` explains it in plain English, and the frontend's `CLASSIFICATION_KEYS` lists it.

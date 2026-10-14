@@ -170,6 +170,9 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
             "tuned": bool(improvement),
             "tuned_settings": improvement.get("settings") or {},
             "stopped_because": improvement.get("stopped_because"),
+            # Whether the probabilities were calibrated, and by which method. A run that differs
+            # only here is the comparison "did calibrating help?" needs to be able to show.
+            "calibration": (result.get("calibration") or {}).get("method"),
             # Where the cut-off sat and why. Two runs with the same AUC and different recall
             # are the same model at different lines, and the table has to be able to say so.
             "operating_point": (

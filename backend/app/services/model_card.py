@@ -290,6 +290,73 @@ def _error_by_range_table(diagnostics: dict) -> list[str]:
     return lines
 
 
+def _calibration_section(result: dict) -> list[str]:
+    """Whether the probabilities were corrected, and what that did.
+
+    Written when calibration was applied, and also when it was asked for and refused -- a card
+    that says nothing would let a reader assume it was done. When it was neither asked for nor
+    needed there is nothing to say."""
+    calibration = result.get("calibration")
+    if not calibration:
+        return []
+
+    if calibration.get("method") in (None, "none"):
+        if not calibration.get("refused_because"):
+            return []
+        return [
+            "",
+            "## Probability calibration",
+            "",
+            f"Calibration ({calibration.get('requested')}) was asked for and not applied: "
+            f"{calibration['refused_because']} The probabilities are the model's own.",
+        ]
+
+    method = calibration["method"]
+    before, after = calibration.get("before") or {}, calibration.get("after") or {}
+    rows = [
+        ("brier_score", "Brier score (lower is better)"),
+        ("expected_calibration_error", "Calibration error (lower is better)"),
+        ("roc_auc", "ROC AUC"),
+        ("accuracy", "Accuracy at the default 0.50 line"),
+        ("recall", "Recall at the default 0.50 line"),
+        ("precision", "Precision at the default 0.50 line"),
+    ]
+    lines = [
+        "",
+        "## Probability calibration",
+        "",
+        f"The model's probabilities were corrected with **{method}** calibration, fitted on "
+        f"{calibration.get('fitted_on')}. The held-out rows were scored once more, with it, to "
+        f"show the change; they did not take part in fitting it.",
+        "",
+        "| | Before | After |",
+        "| --- | --- | --- |",
+    ]
+    for key, label in rows:
+        if key in before and key in after:
+            lines.append(f"| {label} | {_fmt(before[key])} | {_fmt(after[key])} |")
+    lines += [
+        "",
+        "Calibration changes what a probability means, not which cases rank higher"
+        + (
+            ", so the AUC is unchanged."
+            if method == "sigmoid" and not calibration.get("ensemble")
+            else "; the AUC can move slightly."
+        )
+        + " It can change the answers at the default 0.50 line, because 0.50 now sits on honest "
+        "probabilities: on a rare answer that flags fewer rows. Choose the cut-off for the "
+        "trade-off that matters rather than reading the default line.",
+    ]
+    if calibration.get("ensemble"):
+        lines += [
+            "",
+            "This was a forward-in-time split, whose folds cover only the later rows, so the "
+            "calibrated model averages one copy per fold rather than a single model with a "
+            "single mapping; the AUC difference above includes that averaging.",
+        ]
+    return lines
+
+
 def _operating_point_section(result: dict) -> list[str]:
     """Where the cut-off sits, what it was chosen for, and how the test set answered.
 
@@ -678,6 +745,7 @@ def build_model_card(
     lines += _metric_glossary(result)
     lines += _per_class_table(diagnostics)
     lines += _confusion_table(diagnostics)
+    lines += _calibration_section(result)
     lines += _operating_point_section(result)
     lines += _error_by_range_table(diagnostics)
     lines += _importance_table(best)

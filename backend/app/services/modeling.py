@@ -24,7 +24,13 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from app.services import diagnostics, features as feature_recipes, operating_point, uncertainty
+from app.services import (
+    calibration as calibration_service,
+    diagnostics,
+    features as feature_recipes,
+    operating_point,
+    uncertainty,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1519,9 +1525,14 @@ def train_candidates(
     clip_outliers: list[str] | None = None,
     keep_identical_rows_together: bool = False,
     sealed_holdout: bool = False,
+    calibration: str = "none",
 ) -> dict:
     """Trains each requested model on the same split and returns everything needed to compare
     them. A model that fails to fit is reported rather than aborting the others.
+
+    `calibration` ("none", "sigmoid" or "isotonic") asks for the chosen model's probabilities to
+    be corrected, fitted on cross-validation folds of the training rows -- see calibration.py.
+    When the data cannot support the method the model is left as it was and the result says why.
 
     `model_params` carries settings the improvement loop found, keyed by model name. Running
     the tuned model back through this function rather than reporting the loop's own numbers
@@ -1710,6 +1721,16 @@ def train_candidates(
     best = next(r for r in trained if r["model"] == selection["chosen"])
     if features.get("clipped"):
         features["clip_limits"] = clip_limits(best["pipeline"], features["clipped"])
+
+    def build_best():
+        return build_pipeline(
+            best["model"],
+            features["numeric"],
+            features["categorical"],
+            (model_params or {}).get(best["model"]),
+            features["frequent"],
+            clip=features.get("clipped"),
+        )
     for entry in results:
         scored = selection["scores"].get(entry["model"])
         entry["cv_score"] = scored["score"] if scored else None
@@ -1719,6 +1740,55 @@ def train_candidates(
         # Beside the candidate's own Brier score, where the history and the card can read it.
         if "brier_score" in entry["metrics"] and "brier_score" in baseline:
             entry["metrics"]["brier_baseline"] = baseline["brier_score"]
+    # Probability calibration, for the chosen model only and only when asked for. The mapping is
+    # fitted on folds of the training rows; the held-out rows are scored once more, with it, so
+    # the page can show before and after. The model delivered is the calibrated one, so from here
+    # on everything -- intervals, charts, the cut-off, the saved file -- describes it.
+    uncalibrated = dict(best["metrics"])
+    uncalibrated_points = best["diagnostics"].get("calibration")
+    applied_calibration = None
+    calibration_refusal = None
+    point_build = build_best
+    if calibration != "none" and task == "classification" and "brier_score" in uncalibrated:
+        calibration_refusal = calibration_service.eligibility(calibration, task, y_train)
+        if calibration_refusal is None:
+            try:
+                calibrated, used = calibration_service.fit(
+                    build_best, calibration, X_train, y_train,
+                    groups=fold_groups, ordered=split_strategy == "time",
+                )
+                after = evaluate(calibrated, X_test, y_test, task, uncalibrated.get("positive_label"))
+                if "brier_score" in baseline:
+                    after["brier_baseline"] = baseline["brier_score"]
+                best["pipeline"] = calibrated
+                best["metrics"] = after
+                best["diagnostics"] = diagnostics.compute_diagnostics(calibrated, X_test, y_test, task, after)
+                point_build = calibration_service.estimator_factory(
+                    build_best, calibration, groups=fold_groups, ordered=split_strategy == "time"
+                )
+                applied_calibration = {
+                    "method": calibration,
+                    "folds": used,
+                    "ensemble": split_strategy == "time",
+                    "metrics": after,
+                    "fitted_on": (
+                        f"cross-validation over {used} folds of the {len(X_train):,} training rows"
+                        f"{', each calibrated on rows later than the model trained on' if split_strategy == 'time' else ''}; "
+                        f"the test set was not consulted"
+                    ),
+                }
+            except Exception as exc:  # noqa: BLE001 -- calibration is a refinement, never a reason to lose a result
+                logger.warning("Calibration could not be fitted", exc_info=True)
+                calibration_refusal = f"Calibration could not be fitted on these rows ({exc})."
+    calibration_summary = calibration_service.report(
+        requested=calibration,
+        task=task,
+        y_train=y_train,
+        uncalibrated_metrics=uncalibrated,
+        applied=applied_calibration,
+        refused_because=calibration_refusal,
+        points=uncalibrated_points,
+    )
     # How far the headline held-out numbers could move on different rows. For the chosen model
     # only: it is the one whose score is reported, and the candidates' fold scores already
     # carry their own spread.
@@ -1759,14 +1829,7 @@ def train_candidates(
     deep: dict = {}
     if include_deep_diagnostics:
         deep = diagnostics.compute_deep_diagnostics(
-            lambda: build_pipeline(
-                best["model"],
-                features["numeric"],
-                features["categorical"],
-                (model_params or {}).get(best["model"]),
-                features["frequent"],
-                clip=features.get("clipped"),
-            ),
+            build_best,
             best["pipeline"],
             X_train,
             X_test,
@@ -1785,14 +1848,9 @@ def train_candidates(
     if task == "classification" and best["metrics"].get("positive_label") is not None:
         train_groups = fold_groups
         chosen_point = operating_point.apply(
-            build=lambda: build_pipeline(
-                best["model"],
-                features["numeric"],
-                features["categorical"],
-                (model_params or {}).get(best["model"]),
-                features["frequent"],
-                clip=features.get("clipped"),
-            ),
+            # The calibrated estimator when the probabilities were calibrated, so the line is
+            # chosen on the same probabilities it will be applied to.
+            build=point_build,
             pipeline=best["pipeline"],
             X_train=X_train,
             y_train=y_train,
@@ -1809,6 +1867,7 @@ def train_candidates(
         "target_column": target_column,
         "features": features,
         "operating_point": chosen_point,
+        "calibration": calibration_summary,
         "split": {
             "strategy": split_strategy,
             "time_column": time_column if split_strategy == "time" else None,
