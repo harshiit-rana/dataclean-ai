@@ -521,6 +521,9 @@ export interface OperatingPointResult {
   expected: CutoffMetrics | null;
   /** What the sealed test set delivered at this line. */
   observed: CutoffMetrics;
+  /** 95% ranges for the delivered precision and recall: where they could land on other rows.
+   * Absent on a small test set, and on results from before ranges were computed. */
+  observed_intervals?: MetricIntervals | null;
   /** The test set at 0.50, for comparison. */
   at_default: CutoffMetrics;
 }

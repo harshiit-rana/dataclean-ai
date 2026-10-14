@@ -369,6 +369,7 @@ def _operating_point_section(result: dict) -> list[str]:
     observed = point.get("observed") or {}
     expected = point.get("expected") or {}
     default = point.get("at_default") or {}
+    ranges = ((point.get("observed_intervals") or {}).get("metrics")) or {}
     label = point.get("positive_label")
 
     lines = [
@@ -396,9 +397,9 @@ def _operating_point_section(result: dict) -> list[str]:
         "| At this cut-off | Expected (training folds) | Held-out test set | Test set at 0.50 |",
         "| --- | --- | --- | --- |",
         f"| Share of real cases caught (recall) | {_fmt(expected.get('recall'))} | "
-        f"{_fmt(observed.get('recall'))} | {_fmt(default.get('recall'))} |",
+        f"{_fmt_with_interval(observed.get('recall'), ranges.get('recall'))} | {_fmt(default.get('recall'))} |",
         f"| Correct when flagged (precision) | {_fmt(expected.get('precision'))} | "
-        f"{_fmt(observed.get('precision'))} | {_fmt(default.get('precision'))} |",
+        f"{_fmt_with_interval(observed.get('precision'), ranges.get('precision'))} | {_fmt(default.get('precision'))} |",
         f"| Rows flagged | {_fmt(expected.get('flagged'))} of {_fmt(expected.get('rows'))} | "
         f"{_fmt(observed.get('flagged'))} of {_fmt(observed.get('rows'))} | "
         f"{_fmt(default.get('flagged'))} of {_fmt(default.get('rows'))} |",

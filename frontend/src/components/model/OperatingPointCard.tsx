@@ -20,9 +20,20 @@ export function OperatingPointCard({
 }) {
   if (point.objective === "default") return null;
 
-  const rows: { label: string; pick: (m: CutoffMetrics) => string; hint?: string }[] = [
-    { label: "Share of real cases caught", pick: (m) => pct(m.recall), hint: "recall" },
-    { label: "Correct when flagged", pick: (m) => pct(m.precision), hint: "precision" },
+  const rows: {
+    label: string;
+    pick: (m: CutoffMetrics) => string;
+    hint?: string;
+    /** The rate whose range, if there is one, is printed beside the delivered figure. */
+    range?: "precision" | "recall";
+  }[] = [
+    { label: "Share of real cases caught", pick: (m) => pct(m.recall), hint: "recall", range: "recall" },
+    {
+      label: "Correct when flagged",
+      pick: (m) => pct(m.precision),
+      hint: "precision",
+      range: "precision",
+    },
     { label: "Rows flagged", pick: (m) => `${m.flagged.toLocaleString()} of ${m.rows.toLocaleString()}` },
     { label: "Real cases missed", pick: (m) => m.missed.toLocaleString() },
     { label: "False alarms", pick: (m) => m.false_alarms.toLocaleString() },
@@ -30,7 +41,17 @@ export function OperatingPointCard({
 
   const promised = point.expected?.recall;
   const delivered = point.observed.recall;
-  const overPromised = promised != null && promised - delivered > 0.1;
+  // Judged against the range the delivered figure could land in on other rows, not a fixed gap:
+  // ten points on forty positives is well inside it, and a result with no range has no evidence
+  // either way, so it gets no message.
+  const range = point.observed_intervals?.metrics?.recall;
+  const overPromised = promised != null && range != null && promised > range.high;
+  const gapWithinNoise =
+    promised != null &&
+    range != null &&
+    !overPromised &&
+    Math.abs(promised - delivered) > 0.02 &&
+    promised >= range.low;
 
   return (
     <Card className={cn(!point.reachable && "border-amber-500/40 bg-amber-500/5")}>
@@ -99,6 +120,12 @@ export function OperatingPointCard({
                   </td>
                   <td className="py-1.5 pr-3 text-right font-medium tabular-nums">
                     {row.pick(point.observed)}
+                    {row.range && point.observed_intervals?.metrics?.[row.range] && (
+                      <span className="ml-1 text-xs font-normal text-muted-foreground">
+                        ({pct(point.observed_intervals.metrics[row.range]!.low)}–
+                        {pct(point.observed_intervals.metrics[row.range]!.high)})
+                      </span>
+                    )}
                   </td>
                   <td className="py-1.5 text-right tabular-nums text-muted-foreground">
                     {row.pick(point.at_default)}
@@ -111,8 +138,10 @@ export function OperatingPointCard({
 
         <p className="text-xs text-muted-foreground">
           {overPromised
-            ? `The training folds promised ${pct(promised)} caught and the test set delivered ${pct(delivered)}. That gap is what choosing on the training rows costs -- and it is the honest number, because the test set had no say in where the line went.`
-            : "The comparison table above stays at 0.50 so every model is measured the same way. This line applies to the chosen model only, and the downloaded model.joblib does not know about it -- the model card shows how to apply it."}
+            ? `The training folds promised ${pct(promised)} caught and the test set delivered ${pct(delivered)}, with a range of ${pct(range!.low)}–${pct(range!.high)} on other rows: the promise is outside it. That gap is what choosing on the training rows costs -- and it is the honest number, because the test set had no say in where the line went.`
+            : gapWithinNoise
+              ? `The training folds promised ${pct(promised)} caught and the test set delivered ${pct(delivered)}, but on this many test rows the delivered figure could land anywhere from ${pct(range!.low)} to ${pct(range!.high)}, so the gap is not evidence that the line over-promised.`
+              : "The comparison table above stays at 0.50 so every model is measured the same way. This line applies to the chosen model only, and the downloaded model.joblib does not know about it -- the model card shows how to apply it."}
         </p>
       </CardContent>
     </Card>

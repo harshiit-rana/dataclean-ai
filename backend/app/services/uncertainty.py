@@ -294,6 +294,79 @@ def fold_difference(first, second, level: float = LEVEL) -> dict | None:
     }
 
 
+def _rates_at_threshold(weights, y_binary, flagged) -> dict[str, np.ndarray]:
+    """Weighted precision and recall of a fixed cut-off, for a (resamples, rows) weight matrix.
+
+    Undefined is NaN, not 0: a resample in which nothing is flagged has no precision, and calling
+    it 0 would pull the interval down for a reason that has nothing to do with the model. (The
+    point estimate in `operating_point.metrics_at` follows scikit-learn and says 0.)
+    """
+    caught = weights @ (flagged * y_binary)
+    flags = weights @ flagged
+    cases = weights @ y_binary
+    precision = np.full(len(weights), np.nan)
+    recall = np.full(len(weights), np.nan)
+    np.divide(caught, flags, out=precision, where=flags > 0)
+    np.divide(caught, cases, out=recall, where=cases > 0)
+    return {"precision": precision, "recall": recall}
+
+
+def threshold_intervals(
+    y_binary,
+    scores,
+    threshold: float,
+    groups=None,
+    resamples: int | None = None,
+    seed: int = 42,
+    level: float = LEVEL,
+) -> dict:
+    """Intervals for the precision and recall a cut-off delivered on the held-out rows.
+
+    The cut-off is fixed -- it was chosen on the training folds, so the test rows had no say in
+    it -- and the rows are resampled, within each answer so a rare one cannot vanish, or by whole
+    groups for a grouped split. That is the range the delivered figures could plausibly land in
+    on a different set of rows, and it is what the promised figure from the training folds has to
+    be compared with: a ten-point gap on forty positives is well within it.
+
+    A resample in which a rate is undefined (nothing flagged, no real cases) is dropped; a rate
+    undefined in most resamples gets no interval. Returns the same shape as `metric_intervals`.
+    """
+    y = np.asarray(y_binary, dtype=float)
+    flagged = (np.asarray(scores, dtype=float) >= threshold).astype(float)
+    rows = len(y)
+    count = resamples or resample_count(rows)
+    group_array = None if groups is None else np.asarray(groups)
+    strata = y.astype(int).astype(str)
+
+    rng = np.random.default_rng(seed)
+    chunk = max(1, CHUNK_CELLS // max(rows, 1))
+    collected: dict[str, list[np.ndarray]] = {}
+    drawn = 0
+    while drawn < count:
+        size = min(chunk, count - drawn)
+        weights = _weights(rng, rows, size, strata, group_array)
+        for name, values in _rates_at_threshold(weights, y, flagged).items():
+            collected.setdefault(name, []).append(values)
+        drawn += size
+
+    low_q, high_q = (1 - level) / 2 * 100, (1 + level) / 2 * 100
+    intervals = {}
+    for name, parts in collected.items():
+        values = np.concatenate(parts)
+        usable = values[~np.isnan(values)]
+        if len(usable) < 0.5 * count:
+            continue
+        low, high = np.percentile(usable, [low_q, high_q])
+        intervals[name] = {"low": round(float(low), 4), "high": round(float(high), 4)}
+
+    return {
+        "level": level,
+        "resamples": count,
+        "by": "groups" if groups is not None else "rows",
+        "metrics": intervals,
+    }
+
+
 def metric_intervals(
     y_true,
     y_pred,

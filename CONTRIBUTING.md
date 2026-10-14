@@ -380,6 +380,11 @@ are both running locally, you're ready to make changes.
   place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
   does not need this application's class to load. `TestCalibratingTheProbabilities` in
   `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
+- **A promise-versus-delivery message needs a range behind it.** The operating-point card judges
+  "over-promised" by whether the training folds' figure is outside `observed_intervals`, never by
+  a fixed gap; a result without intervals gets no message. `uncertainty.threshold_intervals`
+  resamples at the line the training folds chose (the test rows had no say in it) and drops
+  resamples where a rate is undefined instead of scoring them 0.
 - **A cut-off is chosen on the probabilities it will be applied to.** `train_candidates` passes
   `operating_point.apply` the calibrated estimator factory as `build` when calibration is on, and
   `calibrated_with` so the result and the card say so. Never choose the line on one scale and apply

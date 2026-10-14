@@ -924,6 +924,27 @@ def held_out_predictions(pipeline, X_test, y_test, task: str, positive_label: st
     return predictions, scores
 
 
+def cutoff_interval_report(
+    pipeline, X_test, y_test, threshold: float, positive_label: str, groups=None
+) -> dict | None:
+    """95% intervals for the precision and recall a chosen cut-off delivered, or None.
+
+    Same rules as `interval_report`: nothing below the size at which a verdict can be given, and
+    never raises -- a range around a figure is context, not a reason to lose a finished run.
+    """
+    if len(y_test) < MIN_TEST_ROWS_TO_JUDGE:
+        return None
+    try:
+        _, scores = held_out_predictions(pipeline, X_test, y_test, "classification", positive_label)
+        if scores is None:
+            return None
+        truth = (pd.Series(y_test).astype(str) == str(positive_label)).to_numpy().astype(int)
+        return uncertainty.threshold_intervals(truth, scores, threshold, groups=groups)
+    except Exception:  # noqa: BLE001
+        logger.warning("Could not compute intervals for the cut-off", exc_info=True)
+        return None
+
+
 def baseline_score(y_train, y_test, task: str, positive_label: str | None = None) -> dict:
     """What you get without a model at all -- always guess the most common class, or always
     guess the mean. A model that can't beat this is not doing anything, and that fact is
@@ -1862,6 +1883,13 @@ def train_candidates(
             ordered=split_strategy == "time",
             calibrated_with=applied_calibration["method"] if applied_calibration else None,
         )
+        if chosen_point is not None:
+            # The range the delivered precision and recall could land in on other rows, which
+            # is what the promised figure from the training folds has to be compared with.
+            chosen_point["observed_intervals"] = cutoff_interval_report(
+                best["pipeline"], X_test, y_test, chosen_point["threshold"],
+                best["metrics"]["positive_label"], groups=test_groups,
+            )
 
     return {
         "task": task,

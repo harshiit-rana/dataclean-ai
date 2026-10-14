@@ -320,6 +320,14 @@ cut-off can clear is said outright rather than quietly approximated. The line re
 history, the model card and `train_model.py` as a declared constant — and the card explains
 that `model.joblib` doesn't know about it, because `predict()` answers at 0.50.
 
+The delivered precision and recall carry 95% ranges from a bootstrap over the test rows at the
+chosen line (class-stratified, or whole groups for a grouped split; a resample in which a rate is
+undefined is dropped rather than counted as 0). The card's "over-promised" message used to appear
+for any gap over ten points, which on forty positives is inside what other rows would give; it now
+appears only when the promised recall is outside the delivered range, says so when the gap is
+inside it, and says nothing for a result with no range. The model card's table prints the same
+ranges.
+
 **Thirteen diagnostics**, as interactive charts with a table view behind every one: ROC,
 precision-recall, confusion matrix, per-class breakdown, calibration, threshold trade-off,
 class balance, feature importance, permutation importance, cross-validation spread, learning

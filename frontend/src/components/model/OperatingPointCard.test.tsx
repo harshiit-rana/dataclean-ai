@@ -34,6 +34,10 @@ const POINT: OperatingPointResult = {
   at_default: at({}),
 };
 
+const RANGES = (
+  metrics: Record<string, { low: number; high: number }>
+): OperatingPointResult["observed_intervals"] => ({ level: 0.95, resamples: 1000, by: "rows", metrics });
+
 describe("OperatingPointCard", () => {
   it("says nothing at the default -- there is nothing to explain", () => {
     const { container } = render(<OperatingPointCard point={{ ...POINT, objective: "default" }} />);
@@ -63,13 +67,63 @@ describe("OperatingPointCard", () => {
     expect(screen.getByText(/No cut-off catches 99%/)).toBeInTheDocument();
   });
 
-  it("names the gap when the training folds over-promised", () => {
+  it("names the gap when the promise is outside the range the delivered figure could land in", () => {
     render(
       <OperatingPointCard
-        point={{ ...POINT, expected: at({ recall: 0.95 }), observed: at({ recall: 0.7 }) }}
+        point={{
+          ...POINT,
+          expected: at({ recall: 0.95 }),
+          observed: at({ recall: 0.7 }),
+          observed_intervals: RANGES({ recall: { low: 0.62, high: 0.78 } }),
+        }}
       />
     );
     expect(screen.getByText(/promised 95% caught and the test set delivered 70%/)).toBeInTheDocument();
+    expect(screen.getByText(/the promise is outside it/)).toBeInTheDocument();
+  });
+
+  it("does not call a gap an over-promise when the promise is inside that range", () => {
+    // A ten-point gap on a handful of cases: the old fixed rule would have flagged this.
+    render(
+      <OperatingPointCard
+        point={{
+          ...POINT,
+          expected: at({ recall: 0.8 }),
+          observed: at({ recall: 0.7 }),
+          observed_intervals: RANGES({ recall: { low: 0.45, high: 0.9 } }),
+        }}
+      />
+    );
+    expect(screen.queryByText(/the promise is outside it/)).not.toBeInTheDocument();
+    expect(screen.getByText(/could land anywhere from 45% to 90%, so the gap is not evidence/)).toBeInTheDocument();
+  });
+
+  it("says nothing about a gap when there is no range to judge it by", () => {
+    render(
+      <OperatingPointCard
+        point={{ ...POINT, expected: at({ recall: 0.95 }), observed: at({ recall: 0.5 }), observed_intervals: null }}
+      />
+    );
+    expect(screen.queryByText(/promised 95% caught/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/not evidence/)).not.toBeInTheDocument();
+  });
+
+  it("prints the range beside the delivered recall and precision", () => {
+    render(
+      <OperatingPointCard
+        point={{
+          ...POINT,
+          observed_intervals: RANGES({ recall: { low: 0.8, high: 0.94 }, precision: { low: 0.4, high: 0.63 } }),
+        }}
+      />
+    );
+    expect(screen.getByText(/\(80%–\s*94%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/\(40%–\s*63%\)/)).toBeInTheDocument();
+  });
+
+  it("prints no range for a result that has none", () => {
+    render(<OperatingPointCard point={POINT} />);
+    expect(screen.queryByText(/\d+%–/)).not.toBeInTheDocument();
   });
 
   it("says which column is a training-fold promise and which is a held-out result", () => {
