@@ -1,6 +1,6 @@
 # DataClean AI — what this is, what's built, what's next
 
-Last updated: 1 October 2026 · 48 commits · 630 backend tests, 122 frontend tests
+Last updated: 14 October 2026 · 72 commits · 980 backend tests, 211 frontend tests
 
 ---
 
@@ -42,7 +42,8 @@ useful than one that can say it hasn't got one.
 | LLM | Anthropic or Groq, one config switch | Groq is far cheaper; Anthropic is better verified for structured output |
 | Deploy | Docker Compose, three services | Clone → `docker compose up` → working instance |
 
-**Roughly 8,300 lines of backend, 6,000 of frontend, 3,800 of backend tests.**
+**Roughly 15,500 lines of backend, 8,400 of frontend, 12,400 of backend tests** (comments and
+blank lines counted).
 
 Two architectural decisions worth knowing about:
 
@@ -573,14 +574,17 @@ wrong reason and discards the most informative column in the file.
 ([#1](https://github.com/harshiit-rana/dataclean-ai/issues/1)) lists 117 scoped issues across
 seven workstreams and five milestones -- Evaluation Integrity, Statistical Reliability, AutoML
 Improvements, Reproducibility, Production Readiness -- with priorities, sizes, dependencies and
-a recommended order. The first decision is the evaluation protocol: what counts as a look at the
-test set, and how a fresh holdout is obtained.
+a recommended order.
 
-**The evaluation protocol is decided**, in
-[`docs/decisions/0001-evaluation-protocol.md`](docs/decisions/0001-evaluation-protocol.md): what
+**Milestone 1, Evaluation Integrity, is built** (23 issues): the evaluation protocol is decided in
+[`docs/decisions/0001-evaluation-protocol.md`](docs/decisions/0001-evaluation-protocol.md) — what
 counts as a look at the test set, how looks are counted and what happens as they accumulate
-(warn, never block), and where an honest fresh holdout comes from. The ledger and the rules it
-drives are the next things built.
+(warn, never block), and where an honest fresh holdout comes from — and implemented: dataset
+versions, the look ledger, the reuse rules and the labels that show them, a sealed final holdout,
+new data as a fresh evaluation, copies and timestamps kept on one side of every split, leakage
+checks and diagnostics off the test rows, whole-file fixes no longer proposed for a model input
+(with training-only clipping instead), a property suite that flips every held-out answer, and a
+whole-session HTTP test. Statistical Reliability — confidence intervals first — is next.
 
 The direction below is unchanged; the issues are its concrete form. The end state is an
 *honest* AutoML — not a button that hands back a leaderboard score, but a system that takes a
