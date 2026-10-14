@@ -909,9 +909,16 @@ async def get_model_result(
     if meta is None:
         raise SessionNotFoundError(session_id)
 
-    stored = model_store.load_result(session_dir(settings.upload_dir, session_id))
+    directory = session_dir(settings.upload_dir, session_id)
+    stored = model_store.load_result(directory)
     if stored is None:
         raise NoTrainedModelError()
+    # Looked up at read time, not stored with the run: the model is checked against new files
+    # after it is built, and a stored copy would be stale the moment one arrived.
+    if isinstance(stored.get("evaluation"), dict):
+        stored["evaluation"]["new_data"] = evaluation_ledger.new_data_summary(
+            directory, stored.get("run_id")
+        )
     return stored
 
 

@@ -287,6 +287,20 @@ export interface EvaluationStatus {
   /** Fixes approved while cleaning that worked a value out over every row -- the held-out rows
    * included -- on columns this model uses. Undone fixes and unused columns are left out. */
   whole_file_statistics?: { operation: string; column: string }[];
+  /** How the model has done on rows that did not exist when it was built, shown beside the
+   * held-out score and never in place of it. Looked up when the result is read. */
+  new_data?: {
+    count: number;
+    latest: {
+      at: string | null;
+      apply_id: string | null;
+      rows: number | null;
+      metric: string | null;
+      value: number | null;
+      reported: number | null;
+      overlap_excluded: number;
+    };
+  } | null;
 }
 
 /** One completed training run, small enough to keep twenty of.
@@ -788,6 +802,12 @@ export interface ApplyResult {
     reported: number | null;
     now: number | null;
     headline: string;
+    /** Labelled rows in the file that the model was built from, left out of the check. */
+    overlap_excluded?: number;
+    /** True when this file was recorded as a new independent evaluation of the model. */
+    counted_as_independent?: boolean;
+    /** True when this exact file had already been counted: one piece of evidence, not two. */
+    already_counted?: boolean;
   } | null;
   downloads: { cleaned: string; predictions?: string };
 }

@@ -169,25 +169,89 @@ def _run(directory, session_id: str, new: pd.DataFrame, action_log: list[dict], 
 
     target_column = result.get("target_column")
     if target_column and target_column in applied.frame.columns and len(X_new):
-        response["answers"] = scoring.check_against_answers(
-            pipeline, X_new, applied.frame[target_column], result
+        answers = _check_new_answers(
+            pipeline, X_new, applied.frame[target_column], result, new, original, target_column
         )
-        _record_new_data_evaluation(directory, result, apply_id, response["answers"])
+        response["answers"] = answers
+        if answers is not None:
+            answers["counted_as_independent"] = _record_new_data_evaluation(
+                directory, result, apply_id, answers, model_store.full_fingerprint(new)
+            )
+            if answers.get("overlap_excluded"):
+                notes.append(
+                    f"{answers['overlap_excluded']:,} labelled row"
+                    f"{'s' if answers['overlap_excluded'] != 1 else ''} in this file were already "
+                    f"in the file this model was built from, so they were left out of the check."
+                )
 
     return response
 
 
-def _record_new_data_evaluation(directory, result: dict, apply_id: str, answers: dict | None) -> None:
-    """Writes down that the model was scored on newly uploaded labelled rows.
+def _rows_seen_at_build(new: pd.DataFrame, original: pd.DataFrame, target_column: str) -> set[int]:
+    """Row numbers of the new file whose inputs match a row the model was built from.
+
+    A re-export usually repeats earlier rows, and scoring the model on a row it was trained or
+    tested on is not new evidence. Matched on the inputs alone, by their text: a row whose
+    label has since been revised is still the same row. Columns are compared as the strings
+    pandas read, so a column that is whole numbers in both files matches.
+    """
+    common = [c for c in new.columns if c in original.columns and c != target_column]
+    if not common or new.empty:
+        return set()
+    seen = set(pd.util.hash_pandas_object(original[common].astype(str), index=False).tolist())
+    mine = pd.util.hash_pandas_object(new[common].astype(str), index=False).tolist()
+    return {int(row) for row, h in zip(new.index, mine) if h in seen}
+
+
+def _check_new_answers(pipeline, X_new, y_new, result, new, original, target_column) -> dict | None:
+    """How the model did on the file's real answers, leaving out rows it was built from."""
+    seen = _rows_seen_at_build(new, original, target_column)
+    fresh = [i for i in X_new.index if i not in seen]
+    excluded = int(y_new.loc[[i for i in X_new.index if i in seen]].notna().sum())
+
+    answers = scoring.check_against_answers(pipeline, X_new.loc[fresh], y_new.loc[fresh], result)
+    if answers is None and excluded:
+        key = result.get("primary_metric")
+        best = next(
+            (r for r in result.get("results", []) if r.get("model") == result.get("best_model")), {}
+        )
+        answers = {
+            "rows": 0,
+            "metric": key,
+            "reported": (best.get("metrics") or {}).get(key),
+            "now": None,
+            "headline": f"Every labelled row in this file ({excluded:,}) was already in the file "
+            "this model was built from, so none of them can be used to check it.",
+        }
+    if answers is not None:
+        answers["overlap_excluded"] = excluded
+        if excluded and answers.get("now") is not None:
+            answers["headline"] += (
+                f" ({excluded:,} labelled row{'s' if excluded != 1 else ''} the model was built "
+                f"from {'were' if excluded != 1 else 'was'} left out.)"
+            )
+    return answers
+
+
+def _record_new_data_evaluation(
+    directory, result: dict, apply_id: str, answers: dict | None, upload_fingerprint: str
+) -> bool:
+    """Writes down that the model was scored on newly uploaded labelled rows. Returns whether
+    it counted as a new, independent evaluation.
 
     A different event from a look, deliberately: these rows are not the session's held-out
     rows, so scoring on them neither uses nor uses up that set (decision 0001, section 1). It
-    is recorded so it can be shown, and so a later issue can treat it as a fresh, independent
-    evaluation. Only a score that was actually computed is recorded -- a file with too few
-    answers to judge reports why and leaves no entry.
+    is the cleanest holdout there is -- it did not exist when anything was decided -- and is
+    shown beside the original score, never in place of it.
+
+    Only a score that was actually computed is recorded: a file with too few answers to judge
+    reports why and leaves no entry. And the same file twice is one piece of evidence, not two.
     """
     if not answers or answers.get("now") is None:
-        return
+        return False
+    if evaluation_ledger.already_evaluated(directory, upload_fingerprint, result.get("run_id")):
+        answers["already_counted"] = True
+        return False
     evaluation_ledger.record(
         directory,
         event=evaluation_ledger.NEW_DATA,
@@ -196,8 +260,17 @@ def _record_new_data_evaluation(directory, result: dict, apply_id: str, answers:
         run_id=apply_id,
         version=current_dataset_version_in(directory, ensure=True),
         metrics=answers.get("metrics") or {answers.get("metric"): answers.get("now")},
-        extra={"rows": answers.get("rows"), "metric": answers.get("metric"), "apply_id": apply_id},
+        extra={
+            "rows": answers.get("rows"),
+            "metric": answers.get("metric"),
+            "reported": answers.get("reported"),
+            "apply_id": apply_id,
+            "upload_fingerprint": upload_fingerprint,
+            "model_run_id": result.get("run_id"),
+            "overlap_excluded": answers.get("overlap_excluded", 0),
+        },
     )
+    return True
 
 
 def _jsonable(value):

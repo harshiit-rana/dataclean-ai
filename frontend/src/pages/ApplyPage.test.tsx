@@ -127,6 +127,29 @@ describe("ApplyPage", () => {
     expect(screen.queryByText(/Held-out evaluation/)).not.toBeInTheDocument();
   });
 
+  it("says a file was recorded as an independent check", async () => {
+    await runWith({
+      ...RESULT,
+      answers: {
+        rows: 200, metric: "roc_auc", reported: 0.8, now: 0.78, headline: "Holding up.",
+        counted_as_independent: true, overlap_excluded: 0,
+      },
+    });
+    expect(await screen.findByText(/Recorded as an independent check on this model/)).toBeInTheDocument();
+  });
+
+  it("says an identical file is not counted a second time", async () => {
+    await runWith({
+      ...RESULT,
+      answers: {
+        rows: 200, metric: "roc_auc", reported: 0.8, now: 0.78, headline: "Holding up.",
+        counted_as_independent: false, already_counted: true,
+      },
+    });
+    expect(await screen.findByText(/already been counted for this model/)).toBeInTheDocument();
+    expect(screen.queryByText(/Recorded as an independent check/)).not.toBeInTheDocument();
+  });
+
   it("shows no score label when the file carries no answers", async () => {
     await runWith(RESULT);
     await screen.findByText("59 of 60 rows kept");

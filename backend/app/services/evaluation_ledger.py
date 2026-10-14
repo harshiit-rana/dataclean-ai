@@ -280,6 +280,61 @@ def qualify(assessment: dict | None, evaluation: dict | None) -> dict | None:
     }
 
 
+def new_data_evaluations(directory: Path, run_id: str | None) -> list[dict]:
+    """Evaluations on newly uploaded labelled rows that were made on the model with this run id.
+
+    Tied to the model rather than the session: retraining makes a new model, and an evaluation
+    of the previous one says nothing about it.
+    """
+    return [
+        entry
+        for entry in _read(directory)
+        if entry.get("event") == NEW_DATA
+        and (run_id is None or (entry.get("extra") or {}).get("model_run_id") == run_id)
+    ]
+
+
+def already_evaluated(directory: Path, upload_fingerprint: str | None, run_id: str | None) -> bool:
+    """Whether this exact file has already been counted as a new-data evaluation of this model.
+
+    The same file uploaded twice is one piece of evidence, not two: counting it again would let
+    the number of 'independent' evaluations be inflated by clicking.
+    """
+    if not upload_fingerprint:
+        return False
+    return any(
+        (entry.get("extra") or {}).get("upload_fingerprint") == upload_fingerprint
+        for entry in new_data_evaluations(directory, run_id)
+    )
+
+
+def new_data_summary(directory: Path, run_id: str | None) -> dict | None:
+    """How the model has done on rows that did not exist when it was built, or None.
+
+    Shown beside the held-out score, never in place of it (decision 0001, section 4): the new
+    rows may define the label differently, so this is evidence about the model, not a
+    replacement for the original evaluation.
+    """
+    entries = new_data_evaluations(directory, run_id)
+    if not entries:
+        return None
+    latest = entries[-1]
+    extra = latest.get("extra") or {}
+    metric = extra.get("metric")
+    return {
+        "count": len(entries),
+        "latest": {
+            "at": latest.get("at"),
+            "apply_id": extra.get("apply_id"),
+            "rows": extra.get("rows"),
+            "metric": metric,
+            "value": (latest.get("metrics") or {}).get(metric),
+            "reported": extra.get("reported"),
+            "overlap_excluded": extra.get("overlap_excluded", 0),
+        },
+    }
+
+
 def _readable(split: dict | None) -> dict:
     split = split or {}
     keep = (

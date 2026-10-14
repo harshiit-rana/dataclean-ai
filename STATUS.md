@@ -441,8 +441,13 @@ to choose anything*. Every decision the model path makes was traced to the rows 
   estimate; the second and third carry a note that if anything was changed because of an earlier
   score this one is no longer independent; from the fourth the verdict's headline itself says
   the score is optimistic and points to new labelled rows. Nothing is blocked — a strict limit
-  would make small files unusable. What is not built yet: a holdout sealed before the first
-  look, and counting new labelled rows as a fresh evaluation (#8, #9).
+  would make small files unusable. New labelled rows are the cleanest fresh holdout there is, so
+  "Use this on a new file" records a check on a file's real answers as an independent evaluation
+  of that model — only when there are enough labelled rows to judge, never for the same file
+  twice, and never on rows the model was built from (matched on their inputs, so a revised label
+  does not make an old row new). It is shown beside the original score, never in place of it, and
+  does not use up the held-out rows. What is not built yet: a holdout sealed before the first
+  look (#8).
 
 ### Using a session again
 

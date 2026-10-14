@@ -114,6 +114,38 @@ function HeldOutScores({
   );
 }
 
+/** How the model has done on rows that did not exist when it was built.
+ *
+ * The cleanest check there is, because nothing was decided with those rows. Shown beside the
+ * held-out score and labelled as a different kind of number: the new rows may define the label
+ * a little differently, so this is evidence about the model rather than a replacement for the
+ * original evaluation. Nothing is shown until a file with real answers has been applied. */
+function NewDataCheck({ evaluation }: { evaluation?: ModelResult["evaluation"] }) {
+  const found = evaluation?.new_data;
+  if (!found) return null;
+  const { latest } = found;
+  const label = latest.metric ? (METRIC_LABELS[latest.metric] ?? latest.metric) : "score";
+  const when = latest.at ? new Date(latest.at) : null;
+  return (
+    <div className="mt-3 rounded-md border border-violet-500/40 bg-violet-500/5 p-3 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <ScoreLabel kind="new_data" />
+        <span className="font-medium">
+          Checked on new data {found.count === 1 ? "once" : `${found.count} times`}
+        </span>
+      </div>
+      <p className="mt-1 text-muted-foreground">
+        Latest: {latest.rows?.toLocaleString() ?? "?"} rows that did not exist when this model was
+        built, {label} {latest.value != null ? latest.value.toFixed(3) : "—"}
+        {latest.reported != null && ` (${latest.reported.toFixed(3)} when it was built)`}
+        {when && !Number.isNaN(when.getTime()) && `, ${when.toLocaleDateString()}`}.
+        {latest.overlap_excluded > 0 &&
+          ` ${latest.overlap_excluded.toLocaleString()} rows the model was built from were left out.`}
+      </p>
+    </div>
+  );
+}
+
 const SELECTION_NOTE: Record<NonNullable<ModelResult["selection"]>["method"], string> = {
   cross_validation: "chosen on training folds",
   only_candidate: "the only model trained",
@@ -340,6 +372,7 @@ export function ModelResults({ result }: { result: ModelResult }) {
             </p>
           )}
           <HeldOutUse evaluation={result.evaluation} split={result.split} />
+          <NewDataCheck evaluation={result.evaluation} />
           {(result.evaluation?.whole_file_statistics?.length ?? 0) > 0 && (
             <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
               Trained on data where{" "}

@@ -201,6 +201,11 @@ are both running locally, you're ready to make changes.
   `model_store.clear` (it is deliberately not in `ALL_ARTIFACTS`), keyed by the split rule via
   `split_key` using the *requested* fraction and seed carried on `result["split"]`, and it
   stores the full dataset fingerprint. Writing to it never raises.
+- **New labelled rows are evidence about a model, not rows to learn from or to score on twice.**
+  `routes_apply._check_new_answers` leaves out rows whose inputs match the original upload,
+  `evaluation_ledger.already_evaluated` recognises a file by its content hash, and a
+  `new_data_evaluation` is tied to the model's `run_id` so a retrained model starts clean. It is
+  never counted as a look at the held-out rows and never replaces the original score.
 - **A statistic learned from one file is applied to the next as learned.** Five operations
   read something from the data they run on (`operations.LEARNED_OPERATIONS`: fills and outlier
   limits). When a session is applied to a new file, `replay.freeze` replays the log over

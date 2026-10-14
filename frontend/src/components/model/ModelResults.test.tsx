@@ -293,3 +293,65 @@ describe("ModelResults — whole-file statistics (#12)", () => {
     expect(screen.queryByText(/worked out over every row/)).not.toBeInTheDocument();
   });
 });
+
+describe("ModelResults — checked on new data (#9)", () => {
+  const withNewData = (overrides = {}) =>
+    result({
+      evaluation: {
+        ...EVAL(1, "independent"),
+        new_data: {
+          count: 2,
+          latest: {
+            at: "2026-10-14T10:00:00+00:00",
+            apply_id: "abc",
+            rows: 200,
+            metric: "roc_auc",
+            value: 0.783,
+            reported: 0.81,
+            overlap_excluded: 0,
+            ...overrides,
+          },
+        },
+      },
+    });
+
+  it("shows the latest check beside the held-out score, labelled as new data", () => {
+    render(<ModelResults result={withNewData()} />);
+    expect(screen.getByText(/Checked on new data 2 times/)).toBeInTheDocument();
+    expect(screen.getByText(/Latest: 200 rows that did not exist when this model was built/)).toBeInTheDocument();
+    expect(screen.getByText(/ROC AUC 0.783 \(0.810 when it was built\)/)).toBeInTheDocument();
+    expect(screen.getAllByText("New data").length).toBeGreaterThan(0);
+  });
+
+  it("says once when there has been one check", () => {
+    render(
+      <ModelResults
+        result={result({
+          evaluation: {
+            ...EVAL(1, "independent"),
+            new_data: {
+              count: 1,
+              latest: { at: null, apply_id: null, rows: 50, metric: "roc_auc", value: 0.7, reported: null, overlap_excluded: 0 },
+            },
+          },
+        })}
+      />
+    );
+    expect(screen.getByText(/Checked on new data once/)).toBeInTheDocument();
+  });
+
+  it("says how many rows the model was built from were left out", () => {
+    render(<ModelResults result={withNewData({ overlap_excluded: 100 })} />);
+    expect(screen.getByText(/100 rows the model was built from were left out/)).toBeInTheDocument();
+  });
+
+  it("shows nothing before any file with answers has been applied", () => {
+    render(<ModelResults result={result({ evaluation: EVAL(1, "independent") })} />);
+    expect(screen.queryByText(/Checked on new data/)).not.toBeInTheDocument();
+  });
+
+  it("does not replace the held-out evaluation", () => {
+    render(<ModelResults result={withNewData()} />);
+    expect(screen.getByText(/Evaluated on these held-out rows once/)).toBeInTheDocument();
+  });
+});

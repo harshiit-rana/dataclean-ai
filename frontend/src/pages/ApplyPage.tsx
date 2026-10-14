@@ -221,7 +221,21 @@ export function ApplyPage() {
                 <CardTitle className="text-base">Checked against the real answers in this file</CardTitle>
                 <ScoreLabel kind="new_data" />
               </CardHeader>
-              <CardContent className="text-sm">{result.answers.headline}</CardContent>
+              <CardContent className="flex flex-col gap-2 text-sm">
+                <p>{result.answers.headline}</p>
+                {result.answers.counted_as_independent && (
+                  <p className="text-xs text-muted-foreground">
+                    Recorded as an independent check on this model — these rows did not exist
+                    when it was built — and shown beside its original score.
+                  </p>
+                )}
+                {result.answers.already_counted && (
+                  <p className="text-xs text-muted-foreground">
+                    This exact file has already been counted for this model, so it is not
+                    counted a second time.
+                  </p>
+                )}
+              </CardContent>
             </Card>
           )}
 
