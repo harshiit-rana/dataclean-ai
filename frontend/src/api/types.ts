@@ -239,6 +239,17 @@ export interface SplitOption {
   description: string;
 }
 
+/** What you would get with no model at all: the scores of each naive strategy on every metric
+ * the models report. The main strategy sits at the top level; any others, such as guessing at
+ * random in proportion, are in `others`. */
+export interface BaselineAlternative {
+  strategy: string;
+  [metric: string]: number | string;
+}
+export type Baseline = Record<string, number | string | BaselineAlternative[]> & {
+  others?: BaselineAlternative[];
+};
+
 export interface ModelPlan {
   session_id: string;
   target_column: string;
@@ -299,7 +310,7 @@ export interface SealedEvaluation {
   at: string | null;
   rows: number | null;
   metrics: Record<string, number>;
-  baseline: Record<string, number | string> | null;
+  baseline: Baseline | null;
   assessment: { verdict: string; headline: string } | null;
   primary_metric: string | null;
   rows_seen_in_training: number;
@@ -713,7 +724,7 @@ export interface ModelResult {
     /** Why a sealed holdout was asked for and could not be made. */
     sealed_unavailable_reason?: string;
   };
-  baseline: Record<string, number | string>;
+  baseline: Baseline;
   primary_metric: string;
   results: CandidateResult[];
   best_model: string;

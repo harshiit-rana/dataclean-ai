@@ -210,6 +210,17 @@ range, so the same R² reads differently on 40 rows and on 4,000. On regression 
 signal, 25 of 25 runs with 40 test rows are called guessing, and a clearly learnable problem is
 still useful. A result with no interval (an older one) keeps the fixed cut-offs.
 
+The "no model at all" row used to be one cell wide: accuracy for always answering the commonest
+answer, and a dash under precision, recall, F1 and AUC. On a lopsided target that guesser's F1 is
+0, which flatters every model, since anything beats zero. A classification result now has two
+baseline rows, each with a value under every column the models have: the common-answer guesser,
+scored through scikit-learn's `DummyClassifier("prior")` and `evaluate` exactly as a model is (it is
+the figure the verdict compares accuracy with, unchanged), and a guesser that answers at random in
+proportion to how common each answer is, whose expected scores are computed from the training and
+test shares rather than sampled, so the row is the same every time and gives precision, recall and F1
+a real floor. Both are fitted on the training rows; the test rows are only what they are scored on.
+The page, the sealed final table and the card show both.
+
 There is a fourth verdict before those three: **not enough test data to judge**. Below 30 test
 rows, or 10 in the rarer class, no verdict is given at all — and that includes "this model does
 not work", which is just as much a claim about the test set as "this model works" is. The

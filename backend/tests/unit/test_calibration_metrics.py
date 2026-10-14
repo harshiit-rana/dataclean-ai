@@ -221,8 +221,10 @@ class TestTheCard:
         assert columns.index("Brier score") < columns.index("Calibration error")
         baseline_row = next(line for line in card.splitlines() if line.startswith("| _No model at all"))
         cells = [cell.strip() for cell in baseline_row.strip("|").split("|")]
-        assert cells[columns.index("Brier score")] not in {"", "—"}  # a Brier baseline in its column
-        assert cells[columns.index("Calibration error")] == "—"  # no baseline for the error
+        # Every column has a baseline, including the two about probabilities: what always stating
+        # the training rate scores.
+        assert cells[columns.index("Brier score")] not in {"", "—"}
+        assert cells[columns.index("Calibration error")] not in {"", "—"}
 
     def test_the_glossary_explains_them_in_plain_english(self):
         card = self.card(train(two_class()))

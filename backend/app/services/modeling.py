@@ -964,17 +964,78 @@ def baseline_score(y_train, y_test, task: str, positive_label: str | None = None
             "mae": round(float(sk.mean_absolute_error(y_test, predictions)), 4),
         }
 
-    common = pd.Series(y_train).astype(str).value_counts().index[0]
-    y_true = pd.Series(y_test).astype(str)
-    baseline = {
-        "strategy": f"always answer {common!r}",
-        "accuracy": round(float((y_true == common).mean()), 4),
-    }
-    labels = sorted(y_true.unique())
+    return _classification_baselines(y_train, y_test, positive_label)
+
+
+# The scores a classification baseline reports, in the order the tables show them: every one a
+# model reports, so the baseline row has a value under each column.
+_BASELINE_KEYS = (
+    "accuracy", "precision", "recall", "f1", "roc_auc", "brier_score", "expected_calibration_error"
+)
+
+
+def _classification_baselines(y_train, y_test, positive_label: str | None) -> dict:
+    """Two things to beat, each scored on every metric the models are.
+
+    *Always answer the most common answer.* Scored by actually running scikit-learn's
+    `DummyClassifier("prior")` through `evaluate`, so it is judged exactly as a model is: it
+    answers the commonest label and states the training shares as its probabilities. This is the
+    figure the verdict compares accuracy with. On a lopsided target it scores 0 on F1 whenever
+    the common answer is not the one being hunted, which flatters every model, hence:
+
+    *Guess at random in proportion to how common each answer is.* Its expected scores follow
+    from the training shares and the test shares -- computed, not sampled, so the row is the same
+    every time -- and give precision, recall and F1 a non-trivial floor.
+
+    Both are fitted on the training rows and nothing else; the test rows are only what they are
+    scored on.
+    """
+    from sklearn.dummy import DummyClassifier
+
+    train = pd.Series(y_train).astype(str).reset_index(drop=True)
+    test = pd.Series(y_test).astype(str).reset_index(drop=True)
+    common = train.value_counts().index[0]
+
+    dummy = DummyClassifier(strategy="prior").fit(np.zeros((len(train), 1)), train)
+    measured = evaluate(dummy, np.zeros((len(test), 1)), test, "classification", positive_label)
+    baseline: dict = {"strategy": f"always answer {common!r}"}
+    baseline.update({k: measured[k] for k in _BASELINE_KEYS if isinstance(measured.get(k), float)})
+
+    labels = sorted(test.unique())
+    prior = {label: float((train == label).mean()) for label in labels}
+    share = {label: float((test == label).mean()) for label in labels}
+    accuracy = sum(prior[label] * share[label] for label in labels)
+
+    def harmonic(precision: float, recall: float) -> float:
+        return 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+
     if len(labels) == 2:
         positive = resolve_positive_label(labels, positive_label)
-        rate = float((pd.Series(y_train).astype(str) == positive).mean())
-        baseline["brier_score"] = round(float(((y_true == positive).astype(float) - rate).pow(2).mean()), 4)
+        p, q = prior[positive], share[positive]
+        guess = {
+            "accuracy": accuracy,
+            "precision": q,  # flagging at random, a share q of what it flags is real
+            "recall": p,  # and it flags a share p of the real cases
+            "f1": harmonic(q, p),
+            "roc_auc": 0.5,  # no score ranks anything
+            # Its answers are certain and wrong whenever it is wrong, so the squared error is the
+            # chance of being wrong, and the probabilities it states are off by the same amount.
+            "brier_score": 1.0 - accuracy,
+            "expected_calibration_error": (1 - p) * q + p * (1 - q),
+        }
+    else:
+        guess = {
+            "accuracy": accuracy,
+            "precision": float(np.mean([share[label] for label in labels])),
+            "recall": float(np.mean([prior[label] for label in labels])),
+            "f1": float(np.mean([harmonic(share[label], prior[label]) for label in labels])),
+        }
+    baseline["others"] = [
+        {
+            "strategy": "guess at random, in proportion to how common each answer is",
+            **{k: round(float(v), 4) for k, v in guess.items()},
+        }
+    ]
     return baseline
 
 

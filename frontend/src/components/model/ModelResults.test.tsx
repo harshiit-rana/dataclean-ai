@@ -541,3 +541,74 @@ describe("ModelResults — how honest the probabilities are (#24)", () => {
     expect(screen.queryByText(/lower is better/)).not.toBeInTheDocument();
   });
 });
+
+describe("ModelResults — the no-model rows have a value under every column (#38)", () => {
+  const full = (): ModelResult => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.results[0].metrics = {
+      accuracy: 0.8,
+      precision: 0.62,
+      recall: 0.7,
+      f1: 0.66,
+      roc_auc: 0.81,
+      brier_score: 0.18,
+      expected_calibration_error: 0.06,
+    };
+    r.baseline = {
+      strategy: "always answer 'no'",
+      accuracy: 0.7,
+      precision: 0,
+      recall: 0,
+      f1: 0,
+      roc_auc: 0.5,
+      brier_score: 0.2,
+      expected_calibration_error: 0.01,
+      others: [
+        {
+          strategy: "guess at random, in proportion to how common each answer is",
+          accuracy: 0.58,
+          precision: 0.3,
+          recall: 0.3,
+          f1: 0.3,
+          roc_auc: 0.5,
+          brier_score: 0.42,
+          expected_calibration_error: 0.42,
+        },
+      ],
+    };
+    return r;
+  };
+
+  const baselineRows = () =>
+    screen.getAllByText(/No model at all/).map((cell) => cell.closest("tr") as HTMLElement);
+
+  it("shows both naive strategies, each named", () => {
+    render(<ModelResults result={full()} />);
+    expect(screen.getByText(/No model at all \(always answer 'no'\)/)).toBeInTheDocument();
+    expect(screen.getByText(/No model at all \(guess at random, in proportion/)).toBeInTheDocument();
+  });
+
+  it("leaves no blank in either row", () => {
+    render(<ModelResults result={full()} />);
+    const rows = baselineRows();
+    expect(rows.length).toBe(2);
+    for (const row of rows) {
+      expect(within(row).queryByText("—")).not.toBeInTheDocument();
+    }
+  });
+
+  it("gives the lopsided-target F1 floor that the common-answer guesser cannot", () => {
+    render(<ModelResults result={full()} />);
+    const [common, random] = baselineRows();
+    const f1Column = Array.from(
+      screen.getByRole("columnheader", { name: "F1" }).parentElement!.children
+    ).findIndex((th) => th.textContent === "F1");
+    expect(common.children[f1Column].textContent).toBe("0.000");
+    expect(random.children[f1Column].textContent).toBe("0.300");
+  });
+
+  it("still shows one row for a result from before there were alternatives", () => {
+    render(<ModelResults result={result({ evaluation: EVAL(1, "independent") })} />);
+    expect(baselineRows().length).toBe(1);
+  });
+});

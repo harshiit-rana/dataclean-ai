@@ -28,6 +28,7 @@ import { CalibrationCard } from "@/components/model/CalibrationCard";
 import { OperatingPointCard } from "@/components/model/OperatingPointCard";
 import { HeldOutUse, ScoreLabel } from "@/components/model/ScoreLabel";
 import type {
+  Baseline,
   CalibrationMethod,
   CandidateResult,
   MetricIntervals,
@@ -81,11 +82,44 @@ const VERDICT_STYLES: Record<string, { title: string; className: string }> = {
   },
 };
 
+/** The "no model at all" rows: the main naive strategy, then any others. Every row has a value
+ * under every column the models have one, so a column is never compared with a blank. */
+function BaselineRows({
+  baseline,
+  keys,
+}: {
+  baseline: Baseline | null | undefined;
+  keys: string[];
+}) {
+  const rows: { strategy: unknown; values: Record<string, unknown> }[] = [
+    { strategy: baseline?.strategy, values: baseline ?? {} },
+    ...(baseline?.others ?? []).map((other) => ({ strategy: other.strategy, values: other })),
+  ];
+  return (
+    <>
+      {rows.map((row, index) => (
+        <tr key={index} className="text-muted-foreground">
+          <td className="px-2 py-1.5 italic">
+            No model at all ({String(row.strategy ?? "guessing")})
+          </td>
+          {keys.map((key) => (
+            <td key={key} className="px-2 py-1.5 text-right tabular-nums">
+              {formatMetric(row.values[key])}
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
 const numberOrUndefined = (value: unknown) => (typeof value === "number" ? value : undefined);
 
 function formatMetric(value: unknown): string {
   if (typeof value !== "number") return "—";
-  return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(3);
+  // A rate that happens to be exactly 0 or 1 is still a rate: "0" beside "0.300" reads as a count.
+  // Only a large whole number (an error in the thousands) is printed with separators.
+  return Number.isInteger(value) && Math.abs(value) >= 10 ? value.toLocaleString() : value.toFixed(3);
 }
 
 /** A metric with where it could plausibly land: `0.78 (0.71–0.84)`. The bracket is what lets 60
@@ -164,16 +198,7 @@ function HeldOutScores({
               </td>
             ))}
           </tr>
-          <tr className="text-muted-foreground">
-            <td className="px-2 py-1.5 italic">
-              No model at all ({String(result.baseline.strategy ?? "guessing")})
-            </td>
-            {keys.map((key) => (
-              <td key={key} className="px-2 py-1.5 text-right tabular-nums">
-                {formatMetric(result.baseline[key])}
-              </td>
-            ))}
-          </tr>
+          <BaselineRows baseline={result.baseline} keys={keys} />
         </tbody>
       </table>
     </div>
@@ -388,16 +413,7 @@ function HeldOutTable({ result, keys }: { result: ModelResult; keys: string[] })
             ))}
           </tr>
         ))}
-        <tr className="text-muted-foreground">
-          <td className="px-2 py-1.5 italic">
-            No model at all ({String(result.baseline.strategy ?? "guessing")})
-          </td>
-          {keys.map((key) => (
-            <td key={key} className="px-2 py-1.5 text-right tabular-nums">
-              {formatMetric(result.baseline[key])}
-            </td>
-          ))}
-        </tr>
+        <BaselineRows baseline={result.baseline} keys={keys} />
       </tbody>
     </table>
   );
@@ -515,16 +531,7 @@ function SealedHoldout({
                       </td>
                     ))}
                   </tr>
-                  <tr className="text-muted-foreground">
-                    <td className="px-2 py-1.5 italic">
-                      No model at all ({String(final.baseline?.strategy ?? "guessing")})
-                    </td>
-                    {shown.map((key) => (
-                      <td key={key} className="px-2 py-1.5 text-right tabular-nums">
-                        {formatMetric(final.baseline?.[key])}
-                      </td>
-                    ))}
-                  </tr>
+                  <BaselineRows baseline={final.baseline} keys={shown} />
                 </tbody>
               </table>
             </div>

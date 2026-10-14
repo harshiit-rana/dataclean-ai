@@ -380,6 +380,13 @@ are both running locally, you're ready to make changes.
   place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
   does not need this application's class to load. Nothing may build a fold splitter without the groups -- not even to ask whether folds are possible -- or `test_identical_rows_folds.py` rightly flags it. `TestCalibratingTheProbabilities` in
   `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
+- **A baseline row is complete or it is not a baseline.** `modeling.baseline_score` returns the
+  main strategy at the top level and any others in `others`, each with a value for every metric
+  the models report for that task, and the page, the sealed table and the card loop over both. A
+  naive strategy that leaves a column blank invites comparing a model with nothing, and the common-
+  answer guesser's F1 of 0 on a lopsided target is exactly that. Expected scores of a random
+  strategy are computed, not sampled, so the row is deterministic. The top-level `accuracy` is what
+  `assess_result` compares with; do not change it as a side effect of adding a row.
 - **A promise-versus-delivery message needs a range behind it.** The operating-point card judges
   "over-promised" by whether the training folds' figure is outside `observed_intervals`, never by
   a fixed gap; a result without intervals gets no message. `uncertainty.threshold_intervals`

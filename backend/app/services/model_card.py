@@ -198,12 +198,12 @@ def _held_out_comparison(result: dict, chosen_only: bool = False) -> list[str]:
         )
 
     baseline = result.get("baseline") or {}
-    baseline_cells = [_fmt(baseline.get(k)) for k in present]
-    rows.append(
-        f"| _No model at all ({baseline.get('strategy', 'guessing')})_ | "
-        + " | ".join(baseline_cells)
-        + " |"
-    )
+    for row in [baseline, *(baseline.get("others") or [])]:
+        rows.append(
+            f"| _No model at all ({row.get('strategy', 'guessing')})_ | "
+            + " | ".join(_fmt(row.get(k)) for k in present)
+            + " |"
+        )
     return ["", *rows, ""]
 
 
