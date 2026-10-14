@@ -1079,6 +1079,8 @@ def _open_the_sealed_holdout(df, stored: dict, pipeline) -> dict:
     baseline = modeling.baseline_score(y_train, y_final, task, metrics.get("positive_label"))
     if "brier_score" in metrics and "brier_score" in baseline:
         metrics["brier_baseline"] = baseline["brier_score"]
+    if task == "regression" and (ratio := modeling.relative_error(metrics, baseline)) is not None:
+        metrics["mae_vs_baseline"] = ratio
     assessment = modeling.assess_result(
         metrics,
         baseline,

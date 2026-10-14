@@ -46,6 +46,7 @@ const METRIC_LABELS: Record<string, string> = {
   r2: "R²",
   mae: "Mean error",
   rmse: "RMSE",
+  mae_vs_baseline: "Error vs. median guess",
 };
 
 /** Held-out scores for a classification, in reading order. The last two are about the
@@ -59,11 +60,22 @@ const CLASSIFICATION_KEYS = [
   "brier_score",
   "expected_calibration_error",
 ];
-const LOWER_IS_BETTER = new Set(["brier_score", "expected_calibration_error"]);
+/** Held-out scores for a regression. The last is the MAE as a fraction of always guessing the
+ * median's MAE: the scale an absolute error lacks. */
+const REGRESSION_KEYS = ["r2", "mae", "rmse", "mae_vs_baseline"];
+const LOWER_IS_BETTER = new Set([
+  "brier_score",
+  "expected_calibration_error",
+  "mae",
+  "rmse",
+  "mae_vs_baseline",
+]);
 
 function lowerIsBetterNote(keys: string[]): string {
   return keys.some((key) => LOWER_IS_BETTER.has(key))
-    ? " For Brier score and calibration error, lower is better."
+    ? keys.includes("mae_vs_baseline")
+      ? " For the error columns, lower is better."
+      : " For Brier score and calibration error, lower is better."
     : "";
 }
 
@@ -455,7 +467,7 @@ function SealedHoldout({
   }
 
   const final = result.evaluation?.final;
-  const keys = result.task === "regression" ? ["r2", "mae", "rmse"] : CLASSIFICATION_KEYS;
+  const keys = result.task === "regression" ? REGRESSION_KEYS : CLASSIFICATION_KEYS;
   const shown = keys.filter((key) => typeof final?.metrics?.[key] === "number");
   const late = (split.sealed_after_looks ?? 0) > 0;
 
@@ -565,7 +577,7 @@ export function ModelResults({
   const diagnostics = best?.diagnostics ?? {};
   const deep = result.deep_diagnostics ?? {};
 
-  const metricKeys = result.task === "regression" ? ["r2", "mae", "rmse"] : CLASSIFICATION_KEYS;
+  const metricKeys = result.task === "regression" ? REGRESSION_KEYS : CLASSIFICATION_KEYS;
   const presentKeys = metricKeys.filter((key) =>
     result.results.some((r) => typeof r.metrics[key] === "number")
   );

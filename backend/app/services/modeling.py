@@ -956,13 +956,7 @@ def baseline_score(y_train, y_test, task: str, positive_label: str | None = None
     from sklearn import metrics as sk
 
     if task == "regression":
-        guess = float(pd.Series(y_train).mean())
-        predictions = np.full(len(y_test), guess)
-        return {
-            "strategy": f"always predict the average ({guess:,.2f})",
-            "r2": round(float(sk.r2_score(y_test, predictions)), 4),
-            "mae": round(float(sk.mean_absolute_error(y_test, predictions)), 4),
-        }
+        return _regression_baselines(y_train, y_test)
 
     return _classification_baselines(y_train, y_test, positive_label)
 
@@ -972,6 +966,48 @@ def baseline_score(y_train, y_test, task: str, positive_label: str | None = None
 _BASELINE_KEYS = (
     "accuracy", "precision", "recall", "f1", "roc_auc", "brier_score", "expected_calibration_error"
 )
+
+
+def _regression_baselines(y_train, y_test) -> dict:
+    """Two things to beat: always predict the training average, and always predict the training
+    median.
+
+    On a skewed target -- spend, price -- the median is the stronger naive guess for the typical
+    miss, because a few huge values drag the average away from where most rows are. Both are
+    scored on R-squared, MAE and RMSE, and on `mae_vs_baseline`, the MAE as a fraction of the
+    median guess's MAE, which is the scale an absolute MAE lacks: 0.60 says its typical miss is
+    60% the size of just guessing the middle. Both are fitted on the training rows only.
+    """
+    from sklearn import metrics as sk
+
+    def scored(guess: float, strategy: str) -> dict:
+        predictions = np.full(len(y_test), guess)
+        return {
+            "strategy": strategy,
+            "r2": round(float(sk.r2_score(y_test, predictions)), 4),
+            "mae": round(float(sk.mean_absolute_error(y_test, predictions)), 4),
+            "rmse": round(float(np.sqrt(sk.mean_squared_error(y_test, predictions))), 4),
+        }
+
+    average = float(pd.Series(y_train).mean())
+    middle = float(pd.Series(y_train).median())
+    mean_row = scored(average, f"always predict the average ({average:,.2f})")
+    median_row = scored(middle, f"always predict the middle value, the median ({middle:,.2f})")
+    reference = median_row["mae"]
+    for row in (mean_row, median_row):
+        if reference > 0:
+            row["mae_vs_baseline"] = round(row["mae"] / reference, 4)
+    return {**mean_row, "others": [median_row]}
+
+
+def relative_error(metrics: dict, baseline: dict) -> float | None:
+    """A regression's MAE as a fraction of the median guess's MAE, or None where that has no scale
+    (a target with no spread around its median, so the guess is never wrong)."""
+    reference = ((baseline.get("others") or [{}])[0]).get("mae")
+    mae = metrics.get("mae")
+    if not reference or mae is None:
+        return None
+    return round(float(mae) / float(reference), 4)
 
 
 def _classification_baselines(y_train, y_test, positive_label: str | None) -> dict:
@@ -1822,6 +1858,8 @@ def train_candidates(
         # Beside the candidate's own Brier score, where the history and the card can read it.
         if "brier_score" in entry["metrics"] and "brier_score" in baseline:
             entry["metrics"]["brier_baseline"] = baseline["brier_score"]
+        if task == "regression" and (ratio := relative_error(entry["metrics"], baseline)) is not None:
+            entry["metrics"]["mae_vs_baseline"] = ratio
     # Probability calibration, for the chosen model only and only when asked for. The mapping is
     # fitted on folds of the training rows; the held-out rows are scored once more, with it, so
     # the page can show before and after. The model delivered is the calibrated one, so from here

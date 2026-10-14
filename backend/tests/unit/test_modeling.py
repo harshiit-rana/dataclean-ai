@@ -256,7 +256,7 @@ class TestEvaluation:
             model_names=["linear_regression"],
         )
         metrics = result["results"][0]["metrics"]
-        assert set(metrics) == {"r2", "mae", "rmse"}
+        assert set(metrics) == {"r2", "mae", "rmse", "mae_vs_baseline"}
         assert metrics["r2"] > 0.9  # price is a near-linear function of size
 
     def test_multiclass_is_scored_without_a_positive_label(self):

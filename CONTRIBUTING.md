@@ -386,7 +386,10 @@ are both running locally, you're ready to make changes.
   naive strategy that leaves a column blank invites comparing a model with nothing, and the common-
   answer guesser's F1 of 0 on a lopsided target is exactly that. Expected scores of a random
   strategy are computed, not sampled, so the row is deterministic. The top-level `accuracy` is what
-  `assess_result` compares with; do not change it as a side effect of adding a row.
+  `assess_result` compares with; do not change it as a side effect of adding a row. A regression's
+  second row is the median, and each model's `mae_vs_baseline` is read against it
+  (`modeling.relative_error`); the lower-is-better columns are listed in `LOWER_IS_BETTER` in
+  `ModelResults.tsx`.
 - **A promise-versus-delivery message needs a range behind it.** The operating-point card judges
   "over-promised" by whether the training folds' figure is outside `observed_intervals`, never by
   a fixed gap; a result without intervals gets no message. `uncertainty.threshold_intervals`

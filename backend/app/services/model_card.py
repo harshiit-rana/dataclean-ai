@@ -50,6 +50,12 @@ _METRIC_LABELS = {
     "r2": ("R²", "How much of the variation it explains. 0 is no better than the average."),
     "mae": ("Mean absolute error", "The typical size of a miss, in the target's own units."),
     "rmse": ("RMSE", "Like the above, but punishes large misses more."),
+    "mae_vs_baseline": (
+        "Error vs. the median guess",
+        "Its typical miss as a fraction of the typical miss from always guessing the middle "
+        "value. 1.00 means no better than that guess; 0.60 means misses 60% as large; lower is "
+        "better.",
+    ),
 }
 
 
@@ -164,7 +170,7 @@ def _selection_tables(result: dict) -> list[str]:
 def _held_out_comparison(result: dict, chosen_only: bool = False) -> list[str]:
     task = result.get("task")
     keys = (
-        ["r2", "mae", "rmse"]
+        ["r2", "mae", "rmse", "mae_vs_baseline"]
         if task == "regression"
         else ["accuracy", "precision", "recall", "f1", "roc_auc", "brier_score", "expected_calibration_error"]
     )

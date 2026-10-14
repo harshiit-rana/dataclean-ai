@@ -221,6 +221,14 @@ test shares rather than sampled, so the row is the same every time and gives pre
 a real floor. Both are fitted on the training rows; the test rows are only what they are scored on.
 The page, the sealed final table and the card show both.
 
+A regression gets the same treatment: the training average and the training median as two
+baselines, each scored on R², MAE and RMSE. On a skewed target (spend, price) a few huge values drag
+the average away from where most rows sit, so the median is the stronger naive guess for the typical
+miss and beating only the average flatters a model. Every model also reports `mae_vs_baseline`, its
+MAE as a fraction of the median guess's MAE, which gives an absolute error the scale it lacks: 0.79
+says its typical miss is 79% the size of just guessing the middle. It is in the comparison table, the
+sealed table and the card's glossary, and absent where the target has no spread around its median.
+
 There is a fourth verdict before those three: **not enough test data to judge**. Below 30 test
 rows, or 10 in the rarer class, no verdict is given at all — and that includes "this model does
 not work", which is just as much a claim about the test set as "this model works" is. The

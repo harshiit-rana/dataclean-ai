@@ -612,3 +612,65 @@ describe("ModelResults — the no-model rows have a value under every column (#3
     expect(baselineRows().length).toBe(1);
   });
 });
+
+describe("ModelResults — a median baseline and a relative error for regression (#39)", () => {
+  const regression = (): ModelResult => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.task = "regression";
+    r.primary_metric = "r2";
+    r.selection = { ...r.selection!, metric: "r2" };
+    r.results[0].metrics = { r2: 0.39, mae: 1995.29, rmse: 3976.29, mae_vs_baseline: 0.794 };
+    r.results[1].metrics = { r2: 0.31, mae: 2100.1, rmse: 4100.2, mae_vs_baseline: 0.836 };
+    r.baseline = {
+      strategy: "always predict the average (4,077.38)",
+      r2: -0.0009,
+      mae: 2811.51,
+      rmse: 5102.47,
+      mae_vs_baseline: 1.119,
+      others: [
+        {
+          strategy: "always predict the middle value, the median (2,788.46)",
+          r2: -0.0496,
+          mae: 2513.03,
+          rmse: 5225.25,
+          mae_vs_baseline: 1,
+        },
+      ],
+    };
+    return r;
+  };
+
+  it("adds the relative error as a column, in plain words", () => {
+    render(<ModelResults result={regression()} />);
+    expect(screen.getByRole("columnheader", { name: "Error vs. median guess" })).toBeInTheDocument();
+    expect(screen.getByText("0.794")).toBeInTheDocument();
+  });
+
+  it("shows the average and the median as separate no-model rows", () => {
+    render(<ModelResults result={regression()} />);
+    expect(screen.getByText(/No model at all \(always predict the average/)).toBeInTheDocument();
+    expect(screen.getByText(/No model at all \(always predict the middle value, the median/)).toBeInTheDocument();
+  });
+
+  it("leaves no blank in either, and prints the median row's relative error as exactly 1", () => {
+    render(<ModelResults result={regression()} />);
+    const rows = screen.getAllByText(/No model at all/).map((cell) => cell.closest("tr") as HTMLElement);
+    expect(rows.length).toBe(2);
+    for (const row of rows) expect(within(row).queryByText("—")).not.toBeInTheDocument();
+    expect(within(rows[1]).getByText("1.000")).toBeInTheDocument();
+  });
+
+  it("says the error columns are lower-is-better", () => {
+    render(<ModelResults result={regression()} />);
+    expect(screen.getByText(/For the error columns, lower is better/)).toBeInTheDocument();
+  });
+
+  it("is unchanged for a result saved before the median baseline existed", () => {
+    const old = regression();
+    old.baseline = { strategy: "always predict the average (4,077.38)", r2: -0.0009, mae: 2811.51 };
+    old.results.forEach((r) => delete r.metrics.mae_vs_baseline);
+    render(<ModelResults result={old} />);
+    expect(screen.queryByRole("columnheader", { name: "Error vs. median guess" })).not.toBeInTheDocument();
+    expect(screen.getAllByText(/No model at all/).length).toBe(1);
+  });
+});
