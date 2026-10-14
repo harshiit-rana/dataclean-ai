@@ -239,6 +239,19 @@ findings. On a test file whose answer depends only on the weekday of a date colu
 without them is correctly called **no better than guessing** and the run with them is
 **useful**.
 
+**Extreme values, tamed where they cannot leak.** Cleaning no longer proposes capping outliers
+when a target is named — it computes the limit over every row, test rows included — so the model
+plan offers the same job inside the pipeline. Ticking a column adds an `IQRClipper` step before
+the imputer and scaler: it learns each column's limits (1.5 × the interquartile range) from the
+training fold only, pulls values beyond them back to the limit, and loses no row. It is offered
+only where some value lies past 3 × the range — a bell-shaped column puts a few values past 1.5
+by chance, and a list padded with columns that have nothing to clip teaches people to tick
+without reading — described by the values found, off until ticked, and it survives "Improve it"
+and a page refresh. The exported script carries the app's own class source rather than a second
+copy, and a test runs it and compares the score. Because the class is not scikit-learn's, a
+`model.joblib` with this step needs the class to be defined before loading; the model card and
+the script say so.
+
 **You watch it work.** The search used to be a single blocking request, and the page showed a
 paragraph of explanation next to a spinner for anything from twenty seconds to a few minutes.
 It now streams: a line as each round *starts* (the settings search alone can outlast anyone's

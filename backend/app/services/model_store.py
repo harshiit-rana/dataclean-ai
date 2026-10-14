@@ -111,6 +111,9 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
             + len(result.get("features", {}).get("categorical", []))
             + len(result.get("features", {}).get("frequent", [])),
             "excluded_columns": result.get("features", {}).get("excluded", []),
+            # Which inputs had their extreme values clipped. A run that differs only here is
+            # the comparison "did taming the outliers help?" needs to be able to show.
+            "clipped_columns": result.get("features", {}).get("clipped", []),
             # Which derived inputs this run used. Two runs on the same columns with different
             # derived inputs are the comparison the fourth round of the loop exists to make.
             "feature_recipes": [

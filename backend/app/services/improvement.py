@@ -108,6 +108,7 @@ def improve(
     on_progress: Callable[[Round], None] | None = None,
     feature_recipes_wanted: list[str] | None = None,
     on_stage: Callable[[str, str], None] | None = None,
+    clip_outliers: list[str] | None = None,
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
 
@@ -150,7 +151,9 @@ def improve(
 
     def inputs_for(which: str) -> tuple[dict, list[str]]:
         chosen, frame = frames[which]
-        classified = modeling.classify_features(frame, target_column, withheld, chosen)
+        classified = modeling.classify_features(
+            frame, target_column, withheld, chosen, clip_outliers
+        )
         return classified, classified["numeric"] + classified["categorical"] + classified["frequent"]
 
     features, used = inputs_for("current")
@@ -214,7 +217,11 @@ def improve(
 
         def factory():
             pipeline = modeling.build_pipeline(
-                name, feats["numeric"], feats["categorical"], frequent=feats["frequent"]
+                name,
+                feats["numeric"],
+                feats["categorical"],
+                frequent=feats["frequent"],
+                clip=feats.get("clipped"),
             )
             if params:
                 pipeline.set_params(**params)

@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from app.services import features as feature_recipes
+from app.services import clipping, features as feature_recipes
 from app.services.modeling import (
     DEFAULT_TEST_SIZE,
     MODELS,
@@ -28,11 +28,17 @@ def _literal(value) -> str:
 
 
 def _preprocessing_block(
-    numeric: list[str], categorical: list[str], frequent: list[str] | None = None
+    numeric: list[str],
+    categorical: list[str],
+    frequent: list[str] | None = None,
+    clipped: list[str] | None = None,
 ) -> tuple[list[str], list[str]]:
-    """Returns (transformer entries, notes). Mirrors modeling.build_pipeline exactly."""
+    """Returns (transformer entries, notes). Mirrors modeling.build_pipeline exactly, in the
+    same order, so the fitted model has its columns laid out the same way as the app's."""
     entries: list[str] = []
-    if numeric:
+    clipped = [c for c in (clipped or []) if c in set(numeric)]
+    plain = [c for c in numeric if c not in set(clipped)]
+    if plain:
         entries.append(
             "        (\n"
             '            "numeric",\n'
@@ -40,7 +46,19 @@ def _preprocessing_block(
             '                ("impute", SimpleImputer(strategy="median")),\n'
             '                ("scale", StandardScaler()),\n'
             "            ]),\n"
-            "            NUMERIC_FEATURES,\n"
+            "            [c for c in NUMERIC_FEATURES if c not in CLIPPED_FEATURES],\n"
+            "        ),"
+        )
+    if clipped:
+        entries.append(
+            "        (\n"
+            '            "numeric_clipped",\n'
+            "            Pipeline([\n"
+            '                ("clip", IQRClipper()),\n'
+            '                ("impute", SimpleImputer(strategy="median")),\n'
+            '                ("scale", StandardScaler()),\n'
+            "            ]),\n"
+            "            CLIPPED_FEATURES,\n"
             "        ),"
         )
     if categorical:
@@ -194,13 +212,18 @@ def build_training_script(result: dict, *, file_name: str = "cleaned.csv") -> st
         f"{k} {v}" for k, v in metrics.items() if isinstance(v, (int, float))
     ) or "not recorded"
 
-    entries, _notes = _preprocessing_block(numeric, categorical, frequent)
+    clipped = [c for c in features.get("clipped", []) if c in set(numeric)]
+    entries, _notes = _preprocessing_block(numeric, categorical, frequent, clipped)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     dropped_note = "\n".join(
         f"#   - {d['column']}: {d['reason']}" for d in features.get("dropped", [])
     ) or "#   (none)"
 
+    clipper_imports = "import numpy as np\n" if clipped else ""
+    base_import = (
+        "from sklearn.base import BaseEstimator, TransformerMixin\n" if clipped else ""
+    )
     encodes = bool(categorical or frequent)
     encoder_import = (
         "from sklearn.preprocessing import OneHotEncoder, StandardScaler"
@@ -244,18 +267,19 @@ Columns left out of the model, and why:
 import sys
 
 import joblib
-import pandas as pd
-from sklearn.compose import ColumnTransformer
+{clipper_imports}import pandas as pd
+{base_import}from sklearn.compose import ColumnTransformer
 from sklearn.impute import SimpleImputer
 {encoder_import}{split_import}
 from sklearn.pipeline import Pipeline
 {_metric_imports(task)}
 {spec.import_line}
-
+{_clipper_block(clipped)}
 TARGET = {_literal(target)}
 NUMERIC_FEATURES = {_literal(numeric)}
 CATEGORICAL_FEATURES = {_literal(categorical)}
 FREQUENT_FEATURES = {_literal(frequent)}
+CLIPPED_FEATURES = {_literal(clipped)}
 EXCLUDED_BY_CHOICE = {_literal(excluded)}
 {_threshold_constants(point) if has_point else ""}
 path = sys.argv[1] if len(sys.argv) > 1 else {_literal(file_name)}
@@ -282,8 +306,36 @@ pipeline.fit(X_train, y_train)
 
 joblib.dump(pipeline, "model.joblib")
 print("\\nSaved the fitted pipeline to model.joblib")
-print("Load it later with: pipeline = joblib.load('model.joblib')")
+print("Load it later with: pipeline = joblib.load('model.joblib')"){_clipper_load_note(clipped)}
 '''
+
+
+def _clipper_block(clipped: list[str]) -> str:
+    """The clipping step as source, when a run used it.
+
+    Copied from `clipping.IQRClipper` itself rather than rewritten, so the script cannot drift
+    from the app: a second copy by hand is how "reproduces the app's numbers" stops being true.
+    It needs numpy and scikit-learn, both already required.
+    """
+    if not clipped:
+        return ""
+    return (
+        "\n# --- Clipping extreme values, learned from the training rows ------------------------\n"
+        "# Offered in the app for inputs with values far outside the rest. The limits are\n"
+        "# learned in fit(), so inside the pipeline they come from the training fold only.\n"
+        "# This is the same class the app used.\n\n"
+        + clipping.source().rstrip()
+        + "\n"
+    )
+
+
+def _clipper_load_note(clipped: list[str]) -> str:
+    if not clipped:
+        return ""
+    return (
+        "\nprint(\"This model contains the IQRClipper step defined at the top of this file; \"\n"
+        "      \"define or import that class before calling joblib.load.\")"
+    )
 
 
 def _derived_block(recipes: list) -> str:
@@ -346,9 +398,16 @@ def build_prediction_snippet(result: dict) -> str:
         if any(r.get("outputs") for r in features.get("derived", []))
         else ""
     )
+    clip_note = (
+        "\n# This model contains an IQRClipper step. Copy that class from train_model.py (it\n"
+        "# needs numpy and scikit-learn only) into this file before loading, or joblib cannot\n"
+        "# find it.\n"
+        if features.get("clipped")
+        else ""
+    )
     return f'''import joblib
 import pandas as pd
-
+{clip_note}
 pipeline = joblib.load("model.joblib")
 {derived_note}
 # Column names and order must match training. The pipeline handles the rest -- missing

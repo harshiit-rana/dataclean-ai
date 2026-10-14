@@ -144,6 +144,10 @@ class ModelPlanResponse(BaseModel):
     suggested_features: list[dict] = []
     # The recipe ids the last run used, so the form comes back showing what was chosen.
     feature_recipes: list[str] = []
+    # Numeric inputs with values far outside the rest, each with the evidence. Offered, never
+    # ticked: clipping changes what the model sees, and a change is the user's to opt into.
+    # What the last run clipped is in `features.clipped`.
+    suggested_clipping: list[dict] = []
 
 
 class SetRulesRequest(BaseModel):
@@ -199,6 +203,9 @@ class TrainRequest(BaseModel):
     # the data server-side rather than trusted, so an id for a column that no longer supports
     # the recipe is dropped instead of failing the run.
     feature_recipes: list[str] = []
+    # Numeric inputs whose extreme values are clipped to limits learned from the training rows,
+    # inside the pipeline. Off unless ticked; names that are not numeric inputs are ignored.
+    clip_outliers: list[str] = []
 
 
 class ImproveRequest(TrainRequest):

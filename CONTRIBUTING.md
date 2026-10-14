@@ -227,6 +227,13 @@ are both running locally, you're ready to make changes.
   they drift, `train_model.py` silently builds different inputs from the ones that were
   scored and every number in the app becomes unreproducible. To add a kind, add a branch to
   both -- never an escape hatch that computes an expression.
+- **Anything that learns from the data goes in the pipeline, and the export carries its source.**
+  `clipping.IQRClipper` learns its limits in `fit`, so inside `build_pipeline` it sees the
+  training fold only. `model_export` copies the class with `inspect.getsource` instead of keeping
+  a second hand-written version, so the app and `train_model.py` cannot drift; a test runs the
+  script and compares its accuracy with the app's. A custom estimator pickles by reference, so
+  `model.joblib` needs the class importable to load: say so wherever the joblib is offered, and
+  prefer scikit-learn's own classes when one will do the job.
 - **A proposal never reads the target.** `features.propose` runs over the whole file, test rows
   included, so what it offers must not depend on the answers. `TestProposalsNeverReadTheTarget`
   replaces the target with shuffles, a constant, another vocabulary and a column of blanks and

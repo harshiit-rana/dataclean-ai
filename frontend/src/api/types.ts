@@ -181,6 +181,28 @@ export interface FeatureBreakdown {
   excluded?: string[];
   /** The derived inputs this run used. */
   derived?: FeatureRecipe[];
+  /** Numeric inputs whose extreme values were clipped to limits learned from the training
+   * rows. Empty unless the user ticked them. */
+  clipped?: string[];
+}
+
+/** A numeric input with values far outside the rest, offered for clipping. A proposal only:
+ * nothing is clipped until the column is ticked and sent back as `clip_outliers`. */
+export interface ClippingOffer {
+  column: string;
+  /** Written from the values in the column -- how many, the largest, where the rest sit. */
+  reason: string;
+  evidence: {
+    far_out: number;
+    count: number;
+    share: number;
+    low: number;
+    high: number;
+    lowest: number | null;
+    highest: number | null;
+    typical_min: number;
+    typical_max: number;
+  };
 }
 
 /** One derived input: a column the model could not use, turned into one it can.
@@ -242,6 +264,8 @@ export interface ModelPlan {
   suggested_features?: FeatureRecipe[];
   /** The recipe ids the last run used, so the form reopens showing what was chosen. */
   feature_recipes?: string[];
+  /** Numeric inputs with extreme values, each with the evidence. Offered, never pre-ticked. */
+  suggested_clipping?: ClippingOffer[];
 }
 
 /** One completed training run, small enough to keep twenty of.
@@ -279,6 +303,8 @@ export interface ModelRun {
   /** Which derived inputs this run used -- two runs on the same columns with different
    * derived inputs are the comparison the loop's fourth round exists to make. */
   feature_recipes?: string[];
+  /** Which inputs had their extreme values clipped. */
+  clipped_columns?: string[];
   /** Where the cut-off sat. Two runs with the same AUC and different recall are the same
    * model at different lines, and the table has to be able to say so. */
   operating_point?: {
@@ -324,6 +350,9 @@ export interface TrainRequest {
   operating_point?: OperatingPointRequest | null;
   /** Ids from the plan's suggested_features. Re-proposed server-side rather than trusted. */
   feature_recipes?: string[];
+  /** Numeric inputs to clip to limits learned from the training rows, inside the pipeline.
+   * Names that are not numeric inputs are ignored by the server. */
+  clip_outliers?: string[];
 }
 
 /** The confusion matrix at one cut-off, as counts and rates. */

@@ -54,6 +54,7 @@ export function requestFromResult(result: ModelResult): TrainRequest {
           }
         : null,
     feature_recipes: (result.features.derived ?? []).map((recipe) => recipe.id),
+    clip_outliers: result.features.clipped ?? [],
   };
 }
 
@@ -151,6 +152,9 @@ export function ModelPage() {
       // The loop's fourth round may add these or drop them; what it is handed is where it
       // starts from, not what it has to end with.
       feature_recipes: base?.feature_recipes ?? plan?.feature_recipes ?? [],
+      // Part of what is being improved, not something the loop searches over: a run that
+      // clipped its inputs should be improved with them clipped.
+      clip_outliers: base?.clip_outliers ?? plan?.features.clipped ?? [],
       include_deep_diagnostics: true,
       goal: target,
     };

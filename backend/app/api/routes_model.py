@@ -33,6 +33,7 @@ from app.core.errors import AppError, SessionNotFoundError, UnparseableCSVError
 from app.models.api_schemas import ImproveRequest, ModelPlanResponse, TrainRequest
 from app.models.graph_state import GoalContext
 from app.services import (
+    clipping,
     diagnostics,
     features as feature_recipes,
     improvement,
@@ -384,6 +385,15 @@ async def get_model_plan(
         else []
     )
 
+    previously_clipped = stored.get("features", {}).get("clipped", []) if stored else []
+    classified = modeling.classify_features(
+        df,
+        target,
+        previously_excluded,
+        [r for r in proposed_features if r.id in set(chosen_features)],
+        previously_clipped,
+    )
+
     return ModelPlanResponse(
         session_id=session_id,
         target_column=target,
@@ -393,12 +403,8 @@ async def get_model_plan(
         # this next to the Train button, and printing len(df) there repeated the readiness
         # bug on a second surface: "4,407 rows" under a button that would train on 58.
         trainable_row_count=int(df[target].notna().sum()) if target in df.columns else 0,
-        features=modeling.classify_features(
-            df,
-            target,
-            previously_excluded,
-            [r for r in proposed_features if r.id in set(chosen_features)],
-        ),
+        features=classified,
+        suggested_clipping=_clipping_offers(df, classified["numeric"]),
         suggested_exclusions=suggestions,
         exclusions_basis=exclusions_basis,
         excluded_columns=previously_excluded,
@@ -447,6 +453,40 @@ async def get_model_plan(
         suggested_features=[r.as_dict() for r in proposed_features],
         feature_recipes=chosen_features,
     )
+
+
+def _clipping_offers(df: pd.DataFrame, numeric_inputs: list[str]) -> list[dict]:
+    """Numeric inputs that have values far outside the rest, each with what was found.
+
+    Read from the column alone, never the answers. Described by the values in the column --
+    how many, the largest, where the ordinary ones sit -- and never by the fence that found
+    them, for the reason `profiling._describe_outliers` gives.
+    """
+    offers = []
+    for column in numeric_inputs:
+        found = clipping.outliers_in(df[column])
+        if found is None:
+            continue
+        parts = []
+        if found["high"]:
+            parts.append(
+                f"{found['high']} unusually high ({'largest ' + format(found['highest'], 'g')})"
+            )
+        if found["low"]:
+            parts.append(
+                f"{found['low']} unusually low ({'smallest ' + format(found['lowest'], 'g')})"
+            )
+        offers.append(
+            {
+                "column": column,
+                "reason": f"{' and '.join(parts)}, while the rest run from "
+                f"{format(found['typical_min'], 'g')} to {format(found['typical_max'], 'g')}. "
+                "Clipping pulls those back to the edge of the usual range, which the model "
+                "learns from the training rows only. No row is lost.",
+                "evidence": found,
+            }
+        )
+    return offers
 
 
 def _refuse_if_the_data_cannot_support_a_model(df, goal, rules=None) -> str:
@@ -509,6 +549,7 @@ async def train_model(
             include_deep_diagnostics=request.include_deep_diagnostics,
             point=point,
             feature_recipes_wanted=request.feature_recipes,
+            clip_outliers=request.clip_outliers,
         )
 
     try:
@@ -571,6 +612,7 @@ def _improve_and_save(
         feature_recipes_wanted=request.feature_recipes,
         on_progress=on_progress,
         on_stage=on_stage,
+        clip_outliers=request.clip_outliers,
     )
     best = found["best"]
     # Plain constructor names, not the `model__`-prefixed pipeline paths the search uses.
@@ -603,6 +645,7 @@ def _improve_and_save(
         # loop is allowed to add the derived inputs or drop them, and the rebuild has to
         # be the configuration that won rather than the one that started.
         feature_recipes_wanted=best.get("feature_recipes", []),
+        clip_outliers=request.clip_outliers,
     )
     rebuilt["improvement"] = {
         "rounds": found["rounds"],

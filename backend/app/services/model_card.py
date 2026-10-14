@@ -288,6 +288,41 @@ def _derived_section(result: dict) -> list[str]:
     return lines
 
 
+def _clipping_section(result: dict) -> list[str]:
+    """Which inputs had their extreme values pulled back, and to what.
+
+    The limits are real numbers learned from the training rows, and a reader checking the
+    model against their own spreadsheet needs them: a value of 4,200 in the file entered the
+    model as something much smaller.
+    """
+    features = result.get("features") or {}
+    clipped = features.get("clipped") or []
+    if not clipped:
+        return []
+    limits = features.get("clip_limits") or {}
+
+    def bound(value) -> str:
+        return "no limit" if value is None else f"{value:g}"
+
+    lines = [
+        "",
+        "## Extreme values clipped",
+        "",
+        "Before fitting, values in these inputs beyond a limit were pulled back to it. The "
+        "limits were learned from the training rows only, so the held-out rows had no say in "
+        "them, and no row was removed. `train_model.py` does the same.",
+        "",
+        "| Column | Lowest value kept | Highest value kept |",
+        "| --- | --- | --- |",
+    ]
+    for column in clipped:
+        entry = limits.get(column) or {}
+        lines.append(
+            f"| `{column}` | {bound(entry.get('lower'))} | {bound(entry.get('upper'))} |"
+        )
+    return lines
+
+
 def _excluded_section(result: dict) -> list[str]:
     features = result.get("features", {})
     dropped = features.get("dropped", [])
@@ -514,6 +549,7 @@ def build_model_card(
     lines += _error_by_range_table(diagnostics)
     lines += _importance_table(best)
     lines += _derived_section(result)
+    lines += _clipping_section(result)
     lines += _excluded_section(result)
     lines += _trust_section(result)
 

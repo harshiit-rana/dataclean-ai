@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { ClipOutliers } from "@/components/model/ClipOutliers";
 import { DerivedFeatures } from "@/components/model/DerivedFeatures";
 import {
   OperatingPointForm,
@@ -31,6 +32,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
   const [models, setModels] = useState<string[]>(plan.candidate_models.map((m) => m.name));
   const [splitStrategy, setSplitStrategy] = useState<"random" | "time" | "group">("random");
   const [recipes, setRecipes] = useState<string[]>(plan.feature_recipes ?? []);
+  const [clip, setClip] = useState<string[]>(plan.features.clipped ?? []);
   const [timeColumn, setTimeColumn] = useState<string>(plan.date_columns[0] ?? "");
   // Defaults to the most-repeated column, which is the one the readiness panel names.
   const [groupColumn, setGroupColumn] = useState<string>(plan.group_columns?.[0] ?? "");
@@ -58,6 +60,12 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
     (recipe) => !excluded.includes(recipe.column)
   );
   const liveRecipes = recipes.filter((id) => offeredRecipes.some((r) => r.id === id));
+
+  // Same rule for clipping: a column left out of the model has nothing to clip.
+  const offeredClipping = (plan.suggested_clipping ?? []).filter(
+    (offer) => !excluded.includes(offer.column)
+  );
+  const liveClip = clip.filter((column) => offeredClipping.some((o) => o.column === column));
 
   const usable = [
     ...plan.features.numeric,
@@ -248,6 +256,8 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
 
       <DerivedFeatures recipes={offeredRecipes} chosen={liveRecipes} onChange={setRecipes} />
 
+      <ClipOutliers offers={offeredClipping} chosen={liveClip} onChange={setClip} />
+
       {twoClass && (
         <OperatingPointForm
           classLabels={plan.class_labels ?? []}
@@ -268,6 +278,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
               include_deep_diagnostics: true,
               operating_point: twoClass ? operatingPoint : null,
               feature_recipes: liveRecipes,
+              clip_outliers: liveClip,
             })
           }
           disabled={training || models.length === 0 || blocked || !tradeOffReady}
@@ -276,7 +287,8 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
         </Button>
         <span className="text-sm text-muted-foreground">
           {usable.length - excluded.filter((c) => usable.includes(c)).length} columns in
-          {liveRecipes.length > 0 && ` plus ${liveRecipes.length} derived`},{" "}
+          {liveRecipes.length > 0 && ` plus ${liveRecipes.length} derived`}
+          {liveClip.length > 0 && `, ${liveClip.length} clipped`},{" "}
           {/* Rows that can be trained on, not rows in the file. Printing the file size here
               said "4,407 rows" under a button that would have fitted on 58. Where the two
               differ, both are shown -- the gap is the point. */}

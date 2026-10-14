@@ -185,6 +185,7 @@ def classify_features(
     target_column: str,
     excluded: list[str] | None = None,
     recipes: list[feature_recipes.Recipe] | None = None,
+    clip: list[str] | None = None,
 ) -> dict:
     """Splits the columns into what the model can actually use.
 
@@ -199,6 +200,10 @@ def classify_features(
     `recipes` are the derived inputs in force (see features.py). A date or text column that
     one of them replaces is dropped with that as the reason; a `frequent_categories` column
     goes into its own bucket for the pipeline to encode.
+
+    `clip` names numeric inputs to clip to training-learned limits (see clipping.py). Only
+    columns that are numeric inputs are kept -- a name that is not one is ignored rather than
+    failing the run, the same way a stale recipe id is.
     """
     excluded = set(excluded or [])
     recipes = list(recipes or [])
@@ -294,6 +299,7 @@ def classify_features(
         "numeric": numeric,
         "categorical": categorical,
         "frequent": frequent,
+        "clipped": [c for c in dict.fromkeys(clip or []) if c in numeric],
         "dropped": dropped,
         "derived": [r.as_dict() for r in recipes],
     }
@@ -441,6 +447,7 @@ def build_pipeline(
     categorical: list[str],
     model_params: dict | None = None,
     frequent: list[str] | None = None,
+    clip: list[str] | None = None,
 ):
     """Assembles preprocessing + model into one Pipeline.
 
@@ -452,6 +459,10 @@ def build_pipeline(
     `frequent` are high-cardinality columns kept under a `frequent_categories` recipe: the
     most common values get an input each and the rest are pooled. Which values are common is
     learned, so it is learned here, on the training fold.
+
+    `clip` are numeric inputs whose extreme values are pulled back to limits learned from the
+    training fold, before the imputer and scaler so the statistics they learn describe the
+    clipped values. Cleaning offers the same fix computed over the whole file, which leaks.
     """
     from sklearn.compose import ColumnTransformer
     from sklearn.impute import SimpleImputer
@@ -462,8 +473,13 @@ def build_pipeline(
     if spec is None:
         raise ModelingError(f"Unknown model: {model_name}")
 
+    from app.services.clipping import IQRClipper
+
+    clipped = [c for c in (clip or []) if c in set(numeric)]
+    plain = [c for c in numeric if c not in set(clipped)]
+
     transformers = []
-    if numeric:
+    if plain:
         transformers.append(
             (
                 "numeric",
@@ -473,7 +489,21 @@ def build_pipeline(
                         ("scale", StandardScaler()),
                     ]
                 ),
-                numeric,
+                plain,
+            )
+        )
+    if clipped:
+        transformers.append(
+            (
+                "numeric_clipped",
+                Pipeline(
+                    [
+                        ("clip", IQRClipper()),
+                        ("impute", SimpleImputer(strategy="median")),
+                        ("scale", StandardScaler()),
+                    ]
+                ),
+                clipped,
             )
         )
     if categorical:
@@ -966,6 +996,30 @@ def choose_on_training_folds(
     }
 
 
+def clip_limits(pipeline, clipped: list[str]) -> dict[str, dict]:
+    """The limits the fitted clipping step learned, by column, for the card to quote.
+
+    A limit that could not be formed (a column with no spread) is None: that column was passed
+    through untouched, and the card says so rather than printing infinity.
+    """
+    try:
+        step = (
+            pipeline.named_steps["prepare"]
+            .named_transformers_["numeric_clipped"]
+            .named_steps["clip"]
+        )
+    except (KeyError, AttributeError):
+        return {}
+
+    def finite(value) -> float | None:
+        return round(float(value), 6) if np.isfinite(value) else None
+
+    return {
+        column: {"lower": finite(lower), "upper": finite(upper)}
+        for column, lower, upper in zip(clipped, step.lower_, step.upper_)
+    }
+
+
 def train_candidates(
     df: pd.DataFrame,
     *,
@@ -980,6 +1034,7 @@ def train_candidates(
     model_params: dict[str, dict] | None = None,
     point: operating_point.OperatingPoint | None = None,
     feature_recipes_wanted: list[str] | None = None,
+    clip_outliers: list[str] | None = None,
 ) -> dict:
     """Trains each requested model on the same split and returns everything needed to compare
     them. A model that fails to fit is reported rather than aborting the others.
@@ -995,7 +1050,10 @@ def train_candidates(
     `feature_recipes_wanted` are the ids of the derived inputs the user ticked. They are
     re-proposed from the data rather than trusted, and the stateless ones are added to the
     frame before the split -- a row's weekday does not depend on any other row, so nothing
-    leaks. See features.py."""
+    leaks. See features.py.
+
+    `clip_outliers` are numeric inputs to clip to limits learned from the training fold, inside
+    the pipeline. See clipping.py."""
     point = point or operating_point.OperatingPoint()
     if target_column not in df.columns:
         raise ModelingError(f"'{target_column}' is not in the data.")
@@ -1011,7 +1069,7 @@ def train_candidates(
     recipes = feature_recipes.select(df, target_column, withheld, feature_recipes_wanted)
     df = feature_recipes.apply(df, recipes)
 
-    features = classify_features(df, target_column, withheld, recipes)
+    features = classify_features(df, target_column, withheld, recipes, clip_outliers)
     if not features["numeric"] and not features["categorical"] and not features["frequent"]:
         raise ModelingError(
             "There are no usable columns left to predict from. Every other column was "
@@ -1037,7 +1095,12 @@ def train_candidates(
         tuned = (model_params or {}).get(name)
         try:
             pipeline = build_pipeline(
-                name, features["numeric"], features["categorical"], tuned, features["frequent"]
+                name,
+                features["numeric"],
+                features["categorical"],
+                tuned,
+                features["frequent"],
+                clip=features.get("clipped"),
             )
             pipeline.fit(X_train, y_train)
             scores = evaluate(pipeline, X_test, y_test, task, point.positive_label)
@@ -1098,6 +1161,7 @@ def train_candidates(
                 features["categorical"],
                 (model_params or {}).get(name),
                 features["frequent"],
+                clip=features.get("clipped"),
             )
         ),
         X_train,
@@ -1107,6 +1171,8 @@ def train_candidates(
         ordered=split_strategy == "time",
     )
     best = next(r for r in trained if r["model"] == selection["chosen"])
+    if features.get("clipped"):
+        features["clip_limits"] = clip_limits(best["pipeline"], features["clipped"])
     for entry in results:
         scored = selection["scores"].get(entry["model"])
         entry["cv_score"] = scored["score"] if scored else None
@@ -1125,6 +1191,7 @@ def train_candidates(
                 features["categorical"],
                 (model_params or {}).get(best["model"]),
                 features["frequent"],
+                clip=features.get("clipped"),
             ),
             best["pipeline"],
             X_train,
@@ -1154,6 +1221,7 @@ def train_candidates(
                 features["categorical"],
                 (model_params or {}).get(best["model"]),
                 features["frequent"],
+                clip=features.get("clipped"),
             ),
             pipeline=best["pipeline"],
             X_train=X_train,
