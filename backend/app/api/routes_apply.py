@@ -34,9 +34,13 @@ from app.core.errors import (
 )
 from app.dependencies import get_graph
 from app.graph.checkpointer import thread_config
-from app.services import drift, model_store, replay, scoring
+from app.services import drift, evaluation_ledger, model_store, replay, scoring
 from app.services.encoding import read_csv_bytes
-from app.services.session_store import read_session_meta, session_dir
+from app.services.session_store import (
+    current_dataset_version_in,
+    read_session_meta,
+    session_dir,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -174,8 +178,32 @@ def _run(directory, session_id: str, new: pd.DataFrame, action_log: list[dict], 
         response["answers"] = scoring.check_against_answers(
             pipeline, X_new, applied.frame[target_column], result
         )
+        _record_new_data_evaluation(directory, result, apply_id, response["answers"])
 
     return response
+
+
+def _record_new_data_evaluation(directory, result: dict, apply_id: str, answers: dict | None) -> None:
+    """Writes down that the model was scored on newly uploaded labelled rows.
+
+    A different event from a look, deliberately: these rows are not the session's held-out
+    rows, so scoring on them neither uses nor uses up that set (decision 0001, section 1). It
+    is recorded so it can be shown, and so a later issue can treat it as a fresh, independent
+    evaluation. Only a score that was actually computed is recorded -- a file with too few
+    answers to judge reports why and leaves no entry.
+    """
+    if not answers or answers.get("now") is None:
+        return
+    evaluation_ledger.record(
+        directory,
+        event=evaluation_ledger.NEW_DATA,
+        split=result.get("split"),
+        route="apply_answers",
+        run_id=apply_id,
+        version=current_dataset_version_in(directory, ensure=True),
+        metrics=answers.get("metrics") or {answers.get("metric"): answers.get("now")},
+        extra={"rows": answers.get("rows"), "metric": answers.get("metric"), "apply_id": apply_id},
+    )
 
 
 def _jsonable(value):

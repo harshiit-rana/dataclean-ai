@@ -168,6 +168,50 @@ class TestWithAModel:
         assert body["answers"]["now"] is None
         assert "isn't enough" in body["answers"]["headline"]
 
+    def test_scoring_new_answers_is_recorded_but_is_not_a_look_at_the_held_out_rows(
+        self, graph_slot
+    ):
+        from app.config import get_settings
+        from app.services import evaluation_ledger as ledger
+        from app.services.session_store import session_dir
+
+        app.state.graph = FakeGraph(LOG)
+        session_id = _session()
+        directory = session_dir(get_settings().upload_dir, session_id)
+        looks_before = ledger.look_count(directory, None, None)  # the training run's own look
+
+        body = _apply(session_id, _frame(200, 11)).json()
+
+        entries = ledger.looks(directory)
+        new_data = [e for e in entries if e["event"] == ledger.NEW_DATA]
+        assert len(new_data) == 1
+        assert new_data[0]["route"] == "apply_answers"
+        assert new_data[0]["run_id"] == body["apply_id"]
+        assert new_data[0]["extra"]["rows"] == 200
+        assert ledger.look_count(directory, None, None) == looks_before  # not counted
+
+    def test_too_few_answers_leave_no_entry(self, graph_slot):
+        from app.config import get_settings
+        from app.services import evaluation_ledger as ledger
+        from app.services.session_store import session_dir
+
+        app.state.graph = FakeGraph(LOG)
+        session_id = _session()
+        _apply(session_id, _frame(12, 11))
+        directory = session_dir(get_settings().upload_dir, session_id)
+        assert [e for e in ledger.looks(directory) if e["event"] == ledger.NEW_DATA] == []
+
+    def test_a_file_with_no_answers_leaves_no_entry(self, graph_slot):
+        from app.config import get_settings
+        from app.services import evaluation_ledger as ledger
+        from app.services.session_store import session_dir
+
+        app.state.graph = FakeGraph(LOG)
+        session_id = _session()
+        _apply(session_id, _new_rows())
+        directory = session_dir(get_settings().upload_dir, session_id)
+        assert [e for e in ledger.looks(directory) if e["event"] == ledger.NEW_DATA] == []
+
     def test_a_missing_input_is_refused_by_name(self, graph_slot):
         app.state.graph = FakeGraph(LOG)
         response = _apply(_session(), _new_rows().drop(columns=["signal"]))

@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import uuid
 from collections.abc import AsyncIterator
 
 import pandas as pd
@@ -35,6 +36,7 @@ from app.models.graph_state import GoalContext
 from app.services import (
     clipping,
     diagnostics,
+    evaluation_ledger,
     features as feature_recipes,
     improvement,
     ml_readiness,
@@ -46,7 +48,11 @@ from app.services import (
 )
 from app.api.routes_rules import stored_rules
 from app.api.sse import sse_response
-from app.services.session_store import read_session_meta, session_dir
+from app.services.session_store import (
+    current_dataset_version_in,
+    read_session_meta,
+    session_dir,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -523,6 +529,40 @@ def _refuse_if_the_data_cannot_support_a_model(df, goal, rules=None) -> str:
     return task
 
 
+def _save_and_record(directory, result: dict, df, *, route: str) -> dict:
+    """Saves a finished run and records the look at the held-out rows that it was.
+
+    Every route that fits a model and returns its held-out score ends here, so there is one
+    place that decides what counts: a *successful* run, once. A refused or failed request never
+    reaches this function, and a stored result being read again does not either (decision
+    0001, section 1). The look is recorded after the result is saved -- a record of a score
+    nobody can see would be worse than none -- and recording never raises, so a ledger problem
+    cannot lose a finished run.
+
+    The run id is made here so the saved result, the run history and the ledger all name the
+    same run.
+    """
+    result["run_id"] = uuid.uuid4().hex[:12]
+    payload = model_store.save_result(
+        directory, result, fingerprint=model_store.fingerprint_frame(df)
+    )
+    best = next(
+        (r for r in payload.get("results", []) if r.get("model") == payload.get("best_model")),
+        {},
+    )
+    evaluation_ledger.record(
+        directory,
+        event=evaluation_ledger.LOOK,
+        split=payload.get("split"),
+        route=route,
+        run_id=payload["run_id"],
+        version=current_dataset_version_in(directory, ensure=True),
+        metrics=best.get("metrics"),
+        extra={"primary_metric": payload.get("primary_metric"), "model": payload.get("best_model")},
+    )
+    return payload
+
+
 @router.post("/api/model/{session_id}/train")
 async def train_model(
     session_id: str,
@@ -565,9 +605,7 @@ async def train_model(
     # Recorded so the plan can show what was excluded last time and the model card can say
     # which columns were deliberately withheld.
     result["features"]["excluded"] = list(request.excluded_columns)
-    return model_store.save_result(
-        directory, result, fingerprint=model_store.fingerprint_frame(df)
-    )
+    return _save_and_record(directory, result, df, route="train")
 
 
 def _improve_and_save(
@@ -578,6 +616,7 @@ def _improve_and_save(
     request: ImproveRequest,
     point,
     directory,
+    route: str = "improve",
     on_progress=None,
     on_stage=None,
 ) -> dict:
@@ -657,9 +696,9 @@ def _improve_and_save(
         "settings": best["params"],
     }
     rebuilt["features"]["excluded"] = list(request.excluded_columns)
-    return model_store.save_result(
-        directory, rebuilt, fingerprint=model_store.fingerprint_frame(df)
-    )
+    # One look, however many rounds the search ran: the rounds are scored on training folds and
+    # never open the held-out rows. Only this final rebuild does, once.
+    return _save_and_record(directory, rebuilt, df, route=route)
 
 
 @router.post("/api/model/{session_id}/improve")
@@ -758,6 +797,7 @@ async def improve_model_stream(
                 request=request,
                 point=point,
                 directory=directory,
+                route="improve_stream",
                 on_progress=on_progress,
                 on_stage=on_stage,
             )

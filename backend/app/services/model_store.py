@@ -93,7 +93,9 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
 
     return _jsonable(
         {
-            "run_id": uuid.uuid4().hex[:12],
+            # Assigned by whoever saves the run when it has to be known elsewhere too -- the
+            # test-set ledger names the run a look belongs to -- and made here otherwise.
+            "run_id": result.get("run_id") or uuid.uuid4().hex[:12],
             "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "data_fingerprint": fingerprint,
             "target_column": result.get("target_column"),

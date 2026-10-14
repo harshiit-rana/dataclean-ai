@@ -180,6 +180,30 @@ def current_dataset_version(upload_dir: str, session_id: str) -> Optional[dict]:
     return versions[-1] if versions else None
 
 
+def current_dataset_version_in(directory: Path, *, ensure: bool = False) -> Optional[dict]:
+    """The latest dataset version of the session in `directory`.
+
+    `ensure=True` is for the moment something is about to be attached to a version -- a look
+    at the held-out rows, say. A session that predates versioning has none, and attaching to
+    "no version" would leave that look unable to say what data it was taken on, so the list is
+    started first (see `record_dataset_version_in`) and read again. Never raises.
+    """
+
+    def latest() -> Optional[dict]:
+        try:
+            meta = json.loads((directory / "meta.json").read_text())
+        except (OSError, ValueError):
+            return None
+        versions = meta.get("dataset_versions") or []
+        return versions[-1] if versions else None
+
+    version = latest()
+    if version is None and ensure:
+        record_dataset_version_in(directory, "first_seen")
+        version = latest()
+    return version
+
+
 def _last_touched(directory: Path) -> float:
     """Newest mtime anywhere in the session folder. The directory's own mtime is not enough:
     on some filesystems rewriting cleaned.csv in place doesn't bump it, and a session someone
