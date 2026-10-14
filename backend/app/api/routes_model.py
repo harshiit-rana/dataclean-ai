@@ -420,9 +420,10 @@ async def get_model_plan(
             {
                 "value": "time",
                 "label": "Split by date",
-                "description": "Trains on older rows and tests on the most recent ones. Use "
-                "this if predictions will be made about the future -- a random split lets "
-                "the model learn from the future to predict the past, which flatters it.",
+                "description": "Trains on older rows and tests on the most recent ones; rows "
+                "sharing a date stay on the same side. Use this if predictions will be made "
+                "about the future -- a random split lets the model learn from the future to "
+                "predict the past, which flatters it.",
             },
             {
                 "value": "group",

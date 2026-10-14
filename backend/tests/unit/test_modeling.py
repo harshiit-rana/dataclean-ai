@@ -168,6 +168,16 @@ class TestSplitting:
                 strategy="time", time_column="region",
             )
 
+    def test_time_split_stays_deterministic_when_rows_arrive_shuffled(self, classification_df):
+        shuffled = classification_df.sample(frac=1.0, random_state=3)
+        a = modeling.split_data(
+            classification_df, "outcome", "classification", strategy="time", time_column="joined"
+        )
+        b = modeling.split_data(
+            shuffled, "outcome", "classification", strategy="time", time_column="joined"
+        )
+        assert set(a[1].index) == set(b[1].index)
+
     def test_too_few_labelled_rows_is_refused_with_an_explanation(self):
         df = pd.DataFrame({"a": range(20), "target": ["yes", "no"] * 10})
         with pytest.raises(ModelingError, match="too few"):
@@ -645,3 +655,101 @@ class TestGroupedSplit:
             modeling.split_data(
                 df, "churned", "classification", strategy="group", group_column="customer_id"
             )
+
+
+class TestTimeSplitKeepsATimestampWhole:
+    """A cut at a row count lands wherever the count lands. On daily data that is usually in the
+    middle of a day: the model trains on part of a day and is tested on the rest of it, which
+    is not predicting the future."""
+
+    @staticmethod
+    def _daily(rows_per_day: list[int]) -> pd.DataFrame:
+        days = np.repeat(
+            pd.date_range("2024-01-01", periods=len(rows_per_day), freq="D"), rows_per_day
+        )
+        rng = np.random.default_rng(1)
+        n = len(days)
+        return pd.DataFrame(
+            {
+                "day": days.astype(str),
+                "x": rng.normal(0, 1, n),
+                "outcome": rng.choice(["yes", "no"], n),
+            }
+        )
+
+    @staticmethod
+    def _uneven_days() -> pd.DataFrame:
+        sizes = np.random.default_rng(4).integers(5, 16, 40).tolist()
+        return TestTimeSplitKeepsATimestampWhole._daily(sizes)
+
+    def _split(self, df, **kwargs):
+        return modeling.split_data(
+            df, "outcome", "classification", strategy="time", time_column="day", **kwargs
+        )
+
+    def test_no_date_appears_on_both_sides(self):
+        df = self._uneven_days()
+        # The fixture must be able to fail: the old cut, a plain row count, lands mid-day.
+        old_cut = int(len(df) * 0.8)
+        assert df["day"].iloc[old_cut - 1] == df["day"].iloc[old_cut]
+
+        X_train, X_test, _, _ = self._split(df)
+        assert not set(X_train["day"]) & set(X_test["day"])
+        assert X_train["day"].max() < X_test["day"].min()
+
+    def test_the_cut_moves_to_the_nearest_boundary(self):
+        df = self._uneven_days()
+        X_train, X_test, _, _ = self._split(df)
+        target = int(len(df) * 0.8)
+        boundaries = [i for i in range(1, len(df)) if df["day"].iloc[i] != df["day"].iloc[i - 1]]
+        nearest = min(boundaries, key=lambda b: (abs(b - target), -b))
+        assert len(X_train) == nearest
+
+    def test_the_result_reports_the_adjusted_fraction(self):
+        df = self._uneven_days()
+        result = modeling.train_candidates(
+            df, target_column="outcome", task="classification",
+            model_names=["logistic_regression"], include_deep_diagnostics=False,
+            split_strategy="time", time_column="day",
+        )
+        split = result["split"]
+        assert split["train_rows"] + split["test_rows"] == len(df)
+        assert split["test_fraction"] == pytest.approx(split["test_rows"] / len(df), abs=1e-4)
+        assert split["test_fraction"] != 0.2  # the cut genuinely moved
+
+    def test_a_timestamp_holding_over_half_the_rows_is_refused(self):
+        df = self._daily([70, 10, 10, 10])
+        with pytest.raises(ModelingError, match=r"70 of the 100 rows share the timestamp"):
+            self._split(df)
+
+    def test_exactly_half_is_still_a_split(self):
+        df = self._daily([50, 50])
+        X_train, X_test, _, _ = self._split(df)
+        assert len(X_train) == 50 and len(X_test) == 50
+
+    def test_timestamps_that_never_tie_cut_at_the_plain_row_count(self):
+        n = 200
+        df = pd.DataFrame(
+            {
+                "day": pd.date_range("2024-01-01", periods=n, freq="s").astype(str),
+                "x": np.arange(n, dtype=float),
+                "outcome": ["yes", "no"] * (n // 2),
+            }
+        )
+        X_train, X_test, _, _ = self._split(df)
+        assert len(X_train) == int(n * 0.8)
+
+    def test_unreadable_dates_travel_together(self):
+        df = self._daily([8] * 25)
+        df.loc[[3, 77, 150, 199], "day"] = "not a date"
+        X_train, X_test, _, _ = self._split(df)
+        unreadable = lambda frame: (frame["day"] == "not a date").sum()  # noqa: E731
+        assert unreadable(X_train) == 0 or unreadable(X_test) == 0
+
+    def test_a_tie_between_two_boundaries_keeps_the_larger_training_side(self):
+        days = ["2024-01-01"] * 5 + ["2024-01-02"] * 2 + ["2024-01-03"] * 2 + ["2024-01-04"] * 3
+        times = pd.Series(pd.to_datetime(days))
+        # 12 rows, boundaries at 5, 7 and 9. A target of 9 is itself a boundary.
+        assert modeling.time_cut(times, 0.25) == 9
+        # A target of 6 is one row from 5 and one from 7: the larger training side wins.
+        assert modeling.time_cut(times, 0.5) == 7

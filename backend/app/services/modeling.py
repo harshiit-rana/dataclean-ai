@@ -302,6 +302,40 @@ def classify_features(
 # --- splitting ----------------------------------------------------------------------------
 
 
+def time_cut(times: pd.Series, test_size: float, column: str = "the date column") -> int:
+    """Where to cut rows already sorted by time, so no timestamp is on both sides.
+
+    A cut at a row count falls wherever the count lands. On daily data, or records loaded in
+    batches, that is usually in the middle of a day: the model trains on part of a day and is
+    tested on the rest of it, which is not predicting the future. So the cut moves to the
+    nearest point where the timestamp changes -- the one that leaves the test fraction closest
+    to the one asked for, the larger training side on a tie. Unreadable dates, which sort last,
+    count as one timestamp.
+
+    If a single timestamp holds more than half the rows there is no honest split by time
+    ("everything happened on the same day"), and it is refused rather than approximated.
+
+    `model_export._split_block` writes these same few lines into `train_model.py`; a test runs
+    the script and compares the partitions.
+    """
+    rows = len(times)
+    starts = [i for i, repeat in enumerate(times.duplicated().tolist()) if not repeat]
+    sizes = [end - start for start, end in zip(starts, starts[1:] + [rows])]
+    biggest = max(sizes)
+    if biggest * 2 > rows:
+        crowded = sizes.index(biggest)
+        when = times.iloc[starts[crowded]]
+        label = "an unreadable date" if pd.isna(when) else str(when)
+        raise ModelingError(
+            f"{biggest:,} of the {rows:,} rows share the timestamp {label} in '{column}', so "
+            f"they cannot be kept together and still leave a before and an after. Use a "
+            f"column with more distinct dates, or a random split."
+        )
+    boundaries = [start for start in starts if 0 < start < rows]
+    target = int(rows * (1 - test_size))
+    return min(boundaries, key=lambda boundary: (abs(boundary - target), -boundary))
+
+
 def split_data(
     df: pd.DataFrame,
     target_column: str,
@@ -314,7 +348,8 @@ def split_data(
 ):
     """Holds out a test set. Returns (X_train, X_test, y_train, y_test).
 
-    `strategy="time"` sorts by `time_column` and takes the most recent rows as the test set.
+    `strategy="time"` sorts by `time_column` and takes the most recent rows as the test set,
+    cutting at a timestamp boundary so rows sharing a timestamp stay together (see `time_cut`).
     When the data has a time dimension a random split lets the model learn from the future to
     predict the past, which inflates the score and can't happen in production.
 
@@ -344,8 +379,8 @@ def split_data(
             raise ModelingError(
                 f"'{time_column}' could not be read as dates for enough rows to order by."
             )
-        ranked = order.sort_values().index
-        cut = int(len(ranked) * (1 - test_size))
+        ranked = order.sort_values(kind="stable").index
+        cut = time_cut(order.loc[ranked], test_size, time_column)
         train_idx, test_idx = ranked[:cut], ranked[cut:]
         return (
             features.loc[train_idx],
@@ -1142,6 +1177,9 @@ def train_candidates(
             "group_column": group_column if split_strategy == "group" else None,
             "train_rows": int(len(X_train)),
             "test_rows": int(len(X_test)),
+            # The fraction actually held out. A time split moves its cut to a timestamp
+            # boundary, so this can differ from the 20% asked for.
+            "test_fraction": round(len(X_test) / (len(X_train) + len(X_test)), 4),
             "test_rows_seen_in_training": test_rows_seen_in_training(X_train, X_test, y_train, y_test),
             # How many entities ended up on each side. The row counts alone hide the thing
             # that matters about a grouped split: 800 training rows drawn from 4 customers is

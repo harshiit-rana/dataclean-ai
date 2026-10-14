@@ -135,7 +135,11 @@ are both running locally, you're ready to make changes.
   tuning, the improvement loop, the cut-off, the cross-validation spread, the learning curve --
   so each chunk is validated on a model trained only on rows before it. Rows arrive in time
   order from `split_data`; keep it that way. The cut-off uses an explicit fold loop rather than
-  `cross_val_predict`, which refuses folds that don't cover every row.
+  `cross_val_predict`, which refuses folds that don't cover every row. The train/test cut itself
+  is `modeling.time_cut`, which moves to the nearest point where the timestamp changes so a day
+  is never split across the two; `model_export._split_block` writes the same lines into
+  `train_model.py`, and a test executes that block against the app's split. Change one, change
+  both.
 - **A grouped split has to be grouped all the way down.** Choosing `split_strategy="group"`
   changes four things, not one: the train/test split uses `GroupShuffleSplit`, cross-validation
   uses `GroupKFold`, the improvement loop's search folds are grouped, and the grouping column

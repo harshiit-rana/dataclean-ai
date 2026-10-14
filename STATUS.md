@@ -354,6 +354,13 @@ to choose anything*. Every decision the model path makes was traced to the rows 
   now counted, shown on the results page and cautioned in the model card.
 - **`drop_outlier_rows` wasn't warned about** alongside the other fixes that read a statistic
   from the whole file before any split.
+- **A date-based split could cut a day in half.** The cut was a row count, so on daily data, or
+  records loaded in batches, it usually fell mid-day: the model trained on part of a day and was
+  tested on the rest, which is not predicting the future. The cut now moves to the nearest point
+  where the timestamp changes (the larger training side on a tie), the result reports the
+  fraction actually held out, `train_model.py` reproduces it, and a column where one timestamp
+  holds more than half the rows is refused with the count rather than approximated. Forward-in-
+  time folds inside the training rows still cut by row count; that is a separate issue (#21).
 - **The cross-validation spread and the learning curve were scored with the test rows inside
   their folds.** They sit on the results page as the independent check on the test score, and
   were computed over training and test rows joined together. Both now use the training rows

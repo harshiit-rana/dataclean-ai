@@ -77,8 +77,14 @@ def _split_block(split: dict, task: str) -> str:
 # A random split here would let the model learn from the future to predict the past,
 # which inflates every score and cannot happen once it is deployed.
 order = pd.to_datetime(labelled[{_literal(split["time_column"])}], errors="coerce", format="mixed")
-ranked = order.sort_values().index
-cut = int(len(ranked) * {1 - DEFAULT_TEST_SIZE})
+ranked = order.sort_values(kind="stable").index
+# Rows sharing a timestamp stay on one side: the cut moves to the nearest point where the
+# timestamp changes, rather than falling in the middle of a day.
+times = order.loc[ranked]
+starts = [i for i, repeat in enumerate(times.duplicated().tolist()) if not repeat]
+boundaries = [start for start in starts if 0 < start < len(ranked)]
+target = int(len(ranked) * {1 - DEFAULT_TEST_SIZE})
+cut = min(boundaries, key=lambda boundary: (abs(boundary - target), -boundary))
 X_train, X_test = features.loc[ranked[:cut]], features.loc[ranked[cut:]]
 y_train, y_test = labels.loc[ranked[:cut]], labels.loc[ranked[cut:]]'''
 

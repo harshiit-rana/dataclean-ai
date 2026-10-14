@@ -381,3 +381,64 @@ class TestDerivedInputsReachTheScript:
         ast.parse(snippet)
         assert "derived" in snippet
         assert "when__weekday" in snippet
+
+
+class TestTimeSplitWithSharedTimestampsIsExported:
+    """The adjusted cut is part of the split the script has to reproduce. A script that cut at
+    the plain row count would train on part of a day the app tested on, and print a different
+    number from the one reported."""
+
+    @staticmethod
+    def _daily() -> pd.DataFrame:
+        sizes = np.random.default_rng(4).integers(5, 16, 40).tolist()
+        days = np.repeat(pd.date_range("2024-01-01", periods=len(sizes), freq="D"), sizes)
+        rng = np.random.default_rng(9)
+        n = len(days)
+        signal = rng.normal(0, 1, n)
+        return pd.DataFrame(
+            {
+                "day": days.astype(str),
+                "signal": signal.round(4),
+                "outcome": np.where(rng.random(n) < 1 / (1 + np.exp(-2 * signal)), "yes", "no"),
+            }
+        )
+
+    def _result(self, df: pd.DataFrame) -> dict:
+        result = modeling.train_candidates(
+            df, target_column="outcome", task="classification",
+            model_names=["logistic_regression"], include_deep_diagnostics=False,
+            split_strategy="time", time_column="day",
+        )
+        result["features"]["excluded"] = []
+        return result
+
+    def test_the_script_cuts_where_the_app_cut(self):
+        df = self._daily()
+        result = self._result(df)
+        block = model_export._split_block(result["split"], "classification")
+
+        labelled = df[df["outcome"].notna()]
+        namespace = {
+            "pd": pd,
+            "labelled": labelled,
+            "features": labelled.drop(columns=["outcome"]),
+            "labels": labelled["outcome"],
+        }
+        exec(block, namespace)  # noqa: S102 -- the block is generated text under test
+
+        _, X_test, _, _ = modeling.split_data(
+            df, "outcome", "classification", strategy="time", time_column="day"
+        )
+        assert list(namespace["X_test"].index) == list(X_test.index)
+        assert not set(namespace["X_train"]["day"]) & set(namespace["X_test"]["day"])
+
+    def test_the_script_runs_and_reproduces_the_metrics(self, tmp_path):
+        df = self._daily()
+        result = self._result(df)
+        output = TestScriptActuallyRuns()._run(tmp_path, df, result)
+
+        match = re.search(r"Accuracy:\s+([0-9.]+)", output)
+        assert match, f"no accuracy line in the script's output:\n{output}"
+        assert float(match.group(1)) == pytest.approx(
+            result["results"][0]["metrics"]["accuracy"], abs=1e-4
+        )
