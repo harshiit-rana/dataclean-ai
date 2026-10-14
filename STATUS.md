@@ -354,6 +354,11 @@ to choose anything*. Every decision the model path makes was traced to the rows 
   now counted, shown on the results page and cautioned in the model card.
 - **`drop_outlier_rows` wasn't warned about** alongside the other fixes that read a statistic
   from the whole file before any split.
+- **The plan's leakage suggestions read the test rows' answers.** Which columns to pre-untick as
+  giving away the answer was measured over every labelled row. It is now measured on the training
+  rows of the default split, and the plan says so; a file too small to split falls back to every
+  row and says that instead. A test flips every held-out answer, on a file where doing so hides
+  the leak from a whole-file check, and asserts the suggestions do not move.
 
 **Known, and left as they are:**
 
@@ -362,10 +367,11 @@ to choose anything*. Every decision the model path makes was traced to the rows 
   gone, so the pipeline's own training-only imputer has nothing left to do. The effect is small
   for a median — but it is a leak, and the honest fix is to not offer these when a model is the
   goal, and let the pipeline do it.
-- **The leakage check and the suggested exclusions read the whole file**, test answers
-  included, to decide which columns to leave out. It only flags columns that predict the answer
-  near-perfectly, where 80% or 100% of the rows give the same verdict, so the influence is
-  negligible — but it is a decision informed by the test set.
+- **The profiling-stage leakage cards still read the whole file.** The cards raised while
+  cleaning, before any split exists, warn about a column that predicts the answer near-perfectly.
+  They propose nothing that drops a column on its own, and no split exists yet to measure
+  against, so they are left as a data-quality statement. The model plan's suggested exclusions —
+  the ones that actually pre-untick a column — are the part that was fixed.
 - **You can look at the test set as often as you like.** Every retrain reports its test score
   and the run history lines them up, so "change a column, retrain, look" is selection on the
   test set by hand. This is the largest remaining gap and the next thing to build: count the

@@ -125,6 +125,9 @@ class ModelPlanResponse(BaseModel):
     trainable_row_count: int  # rows carrying an answer -- what will actually be fitted on
     features: dict  # numeric / categorical / dropped-with-reasons
     suggested_exclusions: list[dict]  # column + why the app thinks it should be left out
+    # Which rows the leakage suggestions were measured on. Always the training rows of the
+    # default split when the file can be split -- never the held-out ones.
+    exclusions_basis: str = ""
     excluded_columns: list[str]  # what was excluded on the last run, if any
     candidate_models: list[dict]
     split_options: list[dict]

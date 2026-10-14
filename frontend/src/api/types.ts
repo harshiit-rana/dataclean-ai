@@ -223,6 +223,7 @@ export interface ModelPlan {
   trainable_row_count: number; // rows carrying an answer -- what will be fitted on
   features: FeatureBreakdown;
   suggested_exclusions: SuggestedExclusion[];
+  exclusions_basis?: string;
   excluded_columns: string[];
   candidate_models: CandidateModel[];
   split_options: SplitOption[];

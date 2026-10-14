@@ -82,6 +82,9 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
             Everything is included unless you say otherwise. Columns we think should be left
             out are already unticked, with the reason — untick our suggestion if you disagree.
           </p>
+          {plan.exclusions_basis && plan.suggested_exclusions.length > 0 && (
+            <p className="text-xs text-muted-foreground">{plan.exclusions_basis}</p>
+          )}
         </CardHeader>
         <CardContent className="flex flex-col gap-2">
           {candidates.map((column) => {

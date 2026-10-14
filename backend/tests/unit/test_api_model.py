@@ -16,7 +16,7 @@ from fastapi.testclient import TestClient
 
 from app.config import get_settings
 from app.main import app
-from app.services import model_store
+from app.services import ml_readiness, model_store, modeling
 from app.services.session_store import session_dir
 
 client = TestClient(app)
@@ -195,6 +195,74 @@ class TestPlan:
 
     def test_unknown_session_is_404(self):
         assert client.get("/api/model/not-a-session/plan").status_code == 404
+
+
+class TestLeakageIsMeasuredOnTrainingRows:
+    """Whether a column gives away the answer is read from the answers, so it must not be
+    read from the held-out ones. Flipping every held-out answer is the test the rest of the
+    suite uses for this rule: if a decision moves, it was reading them."""
+
+    @staticmethod
+    def _held_out_rows(payload: bytes):
+        df = pd.read_csv(io.BytesIO(payload))
+        _, X_test, _, _ = modeling.split_data(df, "outcome", "classification")
+        return df, X_test.index
+
+    @staticmethod
+    def _csv(df: pd.DataFrame) -> bytes:
+        buffer = io.StringIO()
+        df.to_csv(buffer, index=False)
+        return buffer.getvalue().encode()
+
+    def test_flipping_every_held_out_answer_changes_no_suggestion(self, monkeypatch):
+        payload = _learnable_csv(with_leak=True)
+        honest_df, test_index = self._held_out_rows(payload)
+        flipped_df = honest_df.copy()
+        flipped_df.loc[test_index, "outcome"] = flipped_df.loc[test_index, "outcome"].map(
+            {"yes": "no", "no": "yes"}
+        )
+
+        # Flipping labels re-rolls a stratified split, which would compare two different
+        # partitions. Pin the partition so the only thing that differs is the held-out answers.
+        def fixed_partition(df, target, task, **_kwargs):
+            labelled = df[df[target].notna()]
+            train_index = labelled.index.difference(test_index)
+            features = labelled.drop(columns=[target])
+            return (
+                features.loc[train_index],
+                features.loc[test_index],
+                labelled.loc[train_index, target],
+                labelled.loc[test_index, target],
+            )
+
+        monkeypatch.setattr(modeling, "split_data", fixed_partition)
+
+        honest = client.get(f"/api/model/{_session(payload)}/plan").json()
+        rigged = client.get(f"/api/model/{_session(self._csv(flipped_df))}/plan").json()
+
+        assert [s["column"] for s in honest["suggested_exclusions"]] == [
+            s["column"] for s in rigged["suggested_exclusions"]
+        ]
+        assert "exit_note" in rigged["excluded_columns"]
+        # The patch has to bite: measured on every row, the flipped file hides the leak. If
+        # this stops being true the fixture no longer proves anything.
+        assert ml_readiness.detect_leakage(flipped_df, "outcome", "classification") == []
+
+    def test_a_column_that_leaks_on_the_training_rows_is_still_suggested(self):
+        plan = client.get(f"/api/model/{_session(_learnable_csv(with_leak=True))}/plan").json()
+        assert "exit_note" in [s["column"] for s in plan["suggested_exclusions"]]
+
+    def test_the_plan_says_which_rows_the_check_read(self):
+        plan = client.get(f"/api/model/{_session(_learnable_csv(with_leak=True))}/plan").json()
+        assert "240 training rows" in plan["exclusions_basis"]
+        assert "held-out rows are not read" in plan["exclusions_basis"]
+
+    def test_a_file_too_small_to_split_falls_back_to_every_row_and_says_so(self):
+        """Failing the plan would hide the reason the file cannot be trained on."""
+        plan = client.get(f"/api/model/{_session(_learnable_csv(n=30, with_leak=True))}/plan").json()
+        assert "every row" in plan["exclusions_basis"]
+        assert "too small" in plan["exclusions_basis"]
+        assert plan["blockers"] or plan["warnings"]
 
 
 class TestABlockedVerdictBinds:

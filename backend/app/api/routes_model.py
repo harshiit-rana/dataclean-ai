@@ -123,17 +123,54 @@ def _load_session(
     return df, goal, directory, stored_rules(meta)
 
 
-def _suggested_exclusions(df: pd.DataFrame, goal: GoalContext, task: str) -> list[dict]:
+def _leakage_rows(df: pd.DataFrame, target: str, task: str) -> tuple[pd.DataFrame, str]:
+    """The rows leakage may be measured on, and a sentence saying which they are.
+
+    Whether a column predicts the answer too well to be legitimate is read from the answers,
+    and the answers on the held-out rows are exactly what no decision may be informed by. So
+    the measurement is made on the training rows of the split a run would make, not on every
+    labelled row. The effect is small -- only near-perfect predictors are flagged, and they
+    are near-perfect on any sample -- but "small" is a judgement about the consequence, and
+    the rule is about the inputs.
+
+    A file too small to split falls back to every row, and says so. Failing the plan over it
+    would stop the user reading why the file cannot be trained on, which `blockers` already
+    explains.
+    """
+    try:
+        X_train, _, _, _ = modeling.split_data(df, target, task)
+    except modeling.ModelingError:
+        return df, (
+            "Computed on every row, because the file is too small to set a test set aside."
+        )
+    return df.loc[X_train.index], (
+        f"Leakage checked on the {len(X_train):,} training rows of the default random "
+        "split; the held-out rows are not read. A different split would hold out different "
+        "rows, so these suggestions are for the default."
+    )
+
+
+def _suggested_exclusions(
+    df: pd.DataFrame,
+    goal: GoalContext,
+    task: str,
+    leakage_rows: pd.DataFrame | None = None,
+) -> list[dict]:
     """Columns the app thinks shouldn't be model inputs, each with the reason.
 
     Suggestions, not decisions -- the plan hands them to the user pre-ticked and they can
     untick any of them. A leaky column is sometimes legitimately available at prediction
     time, and only the person who owns the data knows that.
+
+    `leakage_rows` is what the leakage check reads; the name and identifier checks read only
+    the columns themselves and use the whole frame.
     """
     target = goal.target_column or ""
     suggestions: list[dict] = []
 
-    for issue in ml_readiness.detect_leakage(df, target, task):
+    for issue in ml_readiness.detect_leakage(
+        leakage_rows if leakage_rows is not None else df, target, task
+    ):
         if issue.column_name in {s["column"] for s in suggestions}:
             continue
         suggestions.append(
@@ -323,7 +360,8 @@ async def get_model_plan(
         )
 
     readiness = ml_readiness.assess_readiness(df, goal, rules=rules)
-    suggestions = _suggested_exclusions(df, goal, task)
+    leakage_rows, exclusions_basis = _leakage_rows(df, target, task)
+    suggestions = _suggested_exclusions(df, goal, task, leakage_rows)
 
     stored = model_store.load_result(directory)
     previously_excluded = (
@@ -362,6 +400,7 @@ async def get_model_plan(
             [r for r in proposed_features if r.id in set(chosen_features)],
         ),
         suggested_exclusions=suggestions,
+        exclusions_basis=exclusions_basis,
         excluded_columns=previously_excluded,
         candidate_models=[
             {

@@ -249,3 +249,27 @@ describe("ModelPlanForm — personal details", () => {
     expect(screen.getByRole("checkbox", { name: /last_name/ })).not.toBeChecked();
   });
 });
+
+describe("ModelPlanForm — what the suggestions were measured on", () => {
+  const leaky: Partial<ModelPlan> = {
+    features: { numeric: ["signal"], categorical: [], dropped: [] },
+    suggested_exclusions: [
+      { column: "outcome_code", reason: "Gives away the answer.", kind: "leakage", severity: "high" },
+    ],
+    excluded_columns: ["outcome_code"],
+  };
+
+  it("says which rows the leakage check read", () => {
+    renderForm({
+      ...leaky,
+      exclusions_basis: "Leakage checked on the 960 training rows of the default random split.",
+    });
+    expect(screen.getByText(/checked on the 960 training rows/)).toBeInTheDocument();
+  });
+
+  it("says nothing when there is nothing suggested", () => {
+    renderForm({ exclusions_basis: "Leakage checked on the 960 training rows." });
+    expect(screen.queryByText(/training rows of/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/checked on the 960/)).not.toBeInTheDocument();
+  });
+});
