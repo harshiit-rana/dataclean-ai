@@ -1245,6 +1245,10 @@ def train_candidates(
             "group_column": group_column if split_strategy == "group" else None,
             "train_rows": int(len(X_train)),
             "test_rows": int(len(X_test)),
+            # The rule that held the rows out, as requested: what the test-set ledger keys a
+            # look on. Not derived from the row counts, which move with the data.
+            "requested_test_size": DEFAULT_TEST_SIZE,
+            "seed": RANDOM_STATE,
             # The fraction actually held out. A time split moves its cut to a timestamp
             # boundary, so this can differ from the 20% asked for.
             "test_fraction": round(len(X_test) / (len(X_train) + len(X_test)), 4),

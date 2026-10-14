@@ -30,6 +30,12 @@ PIPELINE_FILENAME = "model.joblib"
 CARD_FILENAME = "model_card.md"
 SCRIPT_FILENAME = "train_model.py"
 HISTORY_FILENAME = "model_history.json"
+# The record of every look at the held-out rows (evaluation_ledger.py). Deliberately not in
+# ALL_ARTIFACTS, for the reason the run history is not: `clear` fires when the data changes
+# underneath a model, and that is exactly when the record matters most -- cleaning after a look
+# is the commonest way to select on the test set by hand. A ledger that a cleaning change wiped
+# would hand every user a fresh "independent" score after one undo.
+LEDGER_FILENAME = "test_set_ledger.json"
 
 ALL_ARTIFACTS = (RESULT_FILENAME, PIPELINE_FILENAME, CARD_FILENAME, SCRIPT_FILENAME)
 

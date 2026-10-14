@@ -175,7 +175,11 @@ are both running locally, you're ready to make changes.
   independent → reused (looks 2–3) → exhausted (4+) and never blocks, and that a fresh holdout is
   new labelled rows or a holdout sealed *before* the first look — never a re-split. **A new route
   that returns held-out performance adds a row to that ADR's table and a case to the
-  property suite (`test_evaluation_integrity.py`).**
+  property suite (`test_evaluation_integrity.py`).** The record lives in
+  `services/evaluation_ledger.py` (`test_set_ledger.json`): never truncated, kept across
+  `model_store.clear` (it is deliberately not in `ALL_ARTIFACTS`), keyed by the split rule via
+  `split_key` using the *requested* fraction and seed carried on `result["split"]`, and it
+  stores the full dataset fingerprint. Writing to it never raises.
 - **A statistic learned from one file is applied to the next as learned.** Five operations
   read something from the data they run on (`operations.LEARNED_OPERATIONS`: fills and outlier
   limits). When a session is applied to a new file, `replay.freeze` replays the log over
