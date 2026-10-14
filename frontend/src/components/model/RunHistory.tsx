@@ -32,6 +32,16 @@ function describeSetup(run: ModelRun): string {
   if (run.clipped_columns?.length) {
     parts.push(`${run.clipped_columns.length} clipped`);
   }
+  // How many times the held-out rows had been used when this ran. A run from before the
+  // ledger has no count, and is shown as such: reading it as the first look would present a
+  // score of unknown history as an independent one.
+  parts.push(
+    run.evaluation
+      ? run.evaluation.status === "independent"
+        ? "first look at the test rows"
+        : `look ${run.evaluation.look_count} at the test rows (${run.evaluation.status})`
+      : "test-row use not recorded"
+  );
   // Two runs with the same AUC and different recall are the same model at different lines.
   if (run.operating_point && run.operating_point.objective !== "default" && run.operating_point.threshold != null) {
     parts.push(`cut-off ${run.operating_point.threshold.toFixed(2)}`);

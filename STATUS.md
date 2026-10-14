@@ -408,10 +408,15 @@ to choose anything*. Every decision the model path makes was traced to the rows 
   They propose nothing that drops a column on its own, and no split exists yet to measure
   against, so they are left as a data-quality statement. The model plan's suggested exclusions —
   the ones that actually pre-untick a column — are the part that was fixed.
-- **You can look at the test set as often as you like.** Every retrain reports its test score
-  and the run history lines them up, so "change a column, retrain, look" is selection on the
-  test set by hand. This is the largest remaining gap and the next thing to build: count the
-  looks per data version, and require a fresh holdout once a result has been used to decide.
+- **You can still look at the test set as often as you like — but the app now counts, and says
+  so.** "Change a column, retrain, look" is selection on the test set by hand, and nothing
+  automatic can stop a person. Every successful train and improvement is recorded in a ledger
+  (per split rule, across data versions, never truncated). The first look is an independent
+  estimate; the second and third carry a note that if anything was changed because of an earlier
+  score this one is no longer independent; from the fourth the verdict's headline itself says
+  the score is optimistic and points to new labelled rows. Nothing is blocked — a strict limit
+  would make small files unusable. What is not built yet: a holdout sealed before the first
+  look, and counting new labelled rows as a fresh evaluation (#8, #9).
 
 ### Using a session again
 

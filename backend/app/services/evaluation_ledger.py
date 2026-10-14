@@ -192,6 +192,94 @@ def looks_on_other_splits(directory: Path, split: dict | None) -> int:
     )
 
 
+INDEPENDENT = "independent"
+REUSED = "reused"
+EXHAUSTED = "exhausted"
+
+
+def _times(n: int) -> str:
+    return "once" if n == 1 else f"{n} times"
+
+
+def evaluation_status(directory: Path, split: dict | None) -> dict:
+    """What the user is told about the look that is about to be recorded.
+
+    Computed from the ledger *before* the current look is written, then the look is recorded,
+    so the first run of a split reads `independent` and the second `reused`. `look_count` is
+    the number this look will be, counting itself -- "these rows have now been used N times".
+
+    The wording is fixed by decision 0001, section 3, and is text rather than a template the
+    caller fills in: the ADR quotes it verbatim and a test holds the two together. Nothing is
+    ever blocked here; a limit would make small files unusable and only teach people to work
+    around it.
+
+    `looks_on_other_splits` is looks taken under a different split rule. Changing the rule
+    starts a new count -- it is a different held-out set -- but those rows overlap, so the
+    count is not a clean slate and the message says so.
+    """
+    prior = look_count(directory, None, split)
+    this = prior + 1
+    other = looks_on_other_splits(directory, split)
+
+    if this <= INDEPENDENT_LOOKS:
+        status, qualification = INDEPENDENT, ""
+    elif this < EXHAUSTED_AT_LOOK:
+        status = REUSED
+        qualification = (
+            f"These held-out rows have now been used to evaluate a model {_times(this)} in "
+            "this session. If you changed anything because of an earlier score, this one is "
+            "no longer an independent estimate."
+        )
+    else:
+        status = EXHAUSTED
+        qualification = (
+            f"These held-out rows have been used {_times(this)}, and the choices made between "
+            "runs were informed by them, so this score is optimistic. Treat it as a "
+            "development figure, not an independent one. For an independent estimate, use the "
+            "model on new labelled rows ('Use this on a new file')."
+        )
+
+    message = qualification
+    if other:
+        overlap = (
+            f"This session has also evaluated {other} model{'s' if other != 1 else ''} under a "
+            "different split rule. Those held-out rows overlap these, so this is not a clean "
+            "slate."
+        )
+        message = f"{qualification} {overlap}".strip()
+
+    return {
+        "look_count": this,
+        # The last look that is still only "reused"; the next one is exhausted.
+        "limit": EXHAUSTED_AT_LOOK - 1,
+        "status": status,
+        "message": message,
+        "qualification": qualification,
+        "looks_on_other_splits": other,
+    }
+
+
+def qualify(assessment: dict | None, evaluation: dict | None) -> dict | None:
+    """The verdict with its headline qualified by how the held-out rows have been used.
+
+    The headline has to carry it: a verdict that reads "this model works" with the caveat in a
+    panel somewhere else is a verdict that gets quoted without the caveat. Qualified exactly
+    when the status is not `independent`; the verdict itself is never changed, because
+    loosening or tightening it is a separate decision from saying how much to trust the number
+    it was made from.
+    """
+    if not assessment or not evaluation or evaluation.get("status") == INDEPENDENT:
+        return assessment
+    qualification = evaluation.get("qualification") or ""
+    if not qualification:
+        return assessment
+    return {
+        **assessment,
+        "headline": f"{assessment.get('headline', '')} {qualification}".strip(),
+        "qualified_by_reuse": True,
+    }
+
+
 def _readable(split: dict | None) -> dict:
     split = split or {}
     keep = (

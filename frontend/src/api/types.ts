@@ -268,6 +268,18 @@ export interface ModelPlan {
   suggested_clipping?: ClippingOffer[];
 }
 
+/** How the held-out rows had been used when a run was made (decision 0001). */
+export interface EvaluationStatus {
+  /** What number of look this was, counting itself. */
+  look_count: number;
+  /** The last look that is still only "reused"; the one after it is "exhausted". */
+  limit: number;
+  status: "independent" | "reused" | "exhausted";
+  /** The qualification the user is shown, including any note about other split rules. */
+  message: string;
+  looks_on_other_splits: number;
+}
+
 /** One completed training run, small enough to keep twenty of.
  *
  * Not a stored result — there is no restoring an old run, and it deliberately holds only what
@@ -305,6 +317,9 @@ export interface ModelRun {
   feature_recipes?: string[];
   /** Which inputs had their extreme values clipped. */
   clipped_columns?: string[];
+  /** How many times the held-out rows had been used, and what that made the score. Absent
+   * on runs from before the ledger existed: shown as "not recorded", never "independent". */
+  evaluation?: { look_count: number; status: "independent" | "reused" | "exhausted" } | null;
   /** Where the cut-off sat. Two runs with the same AUC and different recall are the same
    * model at different lines, and the table has to be able to say so. */
   operating_point?: {
@@ -530,7 +545,13 @@ export interface ModelResult {
   assessment: {
     verdict: "useful" | "marginal" | "no_better_than_guessing" | "not_enough_test_data";
     headline: string;
+    /** True when the headline carries a note that the held-out rows have been reused. */
+    qualified_by_reuse?: boolean;
   };
+  /** Names this run in the saved result, the run history and the test-set ledger. */
+  run_id?: string;
+  /** How the held-out rows had been used when this was made. Absent on older results. */
+  evaluation?: EvaluationStatus;
   deep_diagnostics: {
     skipped?: string | null;
     cross_validation?: CrossValidation | null;

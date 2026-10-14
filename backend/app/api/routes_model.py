@@ -543,6 +543,13 @@ def _save_and_record(directory, result: dict, df, *, route: str) -> dict:
     same run.
     """
     result["run_id"] = uuid.uuid4().hex[:12]
+    # Worked out from the ledger *before* this look is written, so the first run of a split
+    # reads independent, and carried on the result so the page, the card and the history all
+    # say the same thing. The headline is qualified here rather than where the verdict is made:
+    # the verdict knows about the numbers, not about how often the rows have been looked at.
+    evaluation = evaluation_ledger.evaluation_status(directory, result.get("split"))
+    result["evaluation"] = evaluation
+    result["assessment"] = evaluation_ledger.qualify(result.get("assessment"), evaluation)
     payload = model_store.save_result(
         directory, result, fingerprint=model_store.fingerprint_frame(df)
     )

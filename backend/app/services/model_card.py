@@ -398,6 +398,17 @@ def _trust_section(result: dict) -> list[str]:
     return lines
 
 
+def _looks_cell(result: dict) -> str:
+    """A run made before the ledger existed has no count, and says so. Reading that as one
+    look would present a score of unknown history as an independent one."""
+    evaluation = result.get("evaluation")
+    if not evaluation:
+        return "not recorded"
+    count = evaluation.get("look_count")
+    status = evaluation.get("status")
+    return f"{count} ({status})"
+
+
 def _deterministic_cautions(result: dict, best: dict) -> list[str]:
     """Warnings derived from the evaluation rather than written by the model, so they appear
     whether or not the LLM call succeeded."""
@@ -405,6 +416,10 @@ def _deterministic_cautions(result: dict, best: dict) -> list[str]:
     split = result.get("split", {})
     test_rows = split.get("test_rows", 0)
     diagnostics = best.get("diagnostics", {})
+
+    evaluation = result.get("evaluation") or {}
+    if evaluation.get("message"):
+        cautions.append(evaluation["message"])
 
     if test_rows and test_rows < 100:
         cautions.append(
@@ -538,6 +553,7 @@ def build_model_card(
         f"| Rows trained on | {_fmt(split.get('train_rows'))} |",
         f"| Rows held back for testing | {_fmt(split.get('test_rows'))} |",
         f"| How the data was split | {_split_description(split)} |",
+        f"| Times these held-out rows have been used | {_looks_cell(result)} |",
     ]
 
     lines += ["", "## Results", ""]

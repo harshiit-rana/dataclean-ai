@@ -106,6 +106,17 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
             "primary_metric": result.get("primary_metric"),
             "metrics": best.get("metrics", {}),
             "baseline": result.get("baseline", {}),
+            # How many times the held-out rows had been used when this run was made, and what
+            # that made the score. Absent on runs from before the ledger existed, which are
+            # shown as "not recorded" -- never as "independent".
+            "evaluation": (
+                {
+                    "look_count": evaluation.get("look_count"),
+                    "status": evaluation.get("status"),
+                }
+                if (evaluation := result.get("evaluation"))
+                else None
+            ),
             "verdict": (result.get("assessment") or {}).get("verdict"),
             "headline": (result.get("assessment") or {}).get("headline"),
             "split": {

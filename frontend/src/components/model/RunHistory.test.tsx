@@ -119,3 +119,27 @@ describe("RunHistory — the cut-off is part of the setup", () => {
     expect(screen.queryByText(/cut-off 0.50/)).not.toBeInTheDocument();
   });
 });
+
+describe("RunHistory — how the held-out rows had been used", () => {
+  it("never calls a run from before the ledger independent", () => {
+    renderHistory([run(), run()]);
+    expect(screen.getAllByText(/test-row use not recorded/).length).toBe(2);
+    expect(screen.queryByText(/first look/)).not.toBeInTheDocument();
+  });
+
+  it("says a first run was the first look", () => {
+    renderHistory([
+      run({ evaluation: { look_count: 2, status: "reused" } }),
+      run({ evaluation: { look_count: 1, status: "independent" } }),
+    ]);
+    expect(screen.getByText(/first look at the test rows/)).toBeInTheDocument();
+  });
+
+  it("says which look a reused run was, and what that made it", () => {
+    renderHistory([
+      run({ evaluation: { look_count: 4, status: "exhausted" } }),
+      run({ evaluation: { look_count: 1, status: "independent" } }),
+    ]);
+    expect(screen.getByText(/look 4 at the test rows \(exhausted\)/)).toBeInTheDocument();
+  });
+});
