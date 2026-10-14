@@ -286,6 +286,23 @@ class TestOverTheApi:
         assert plan["identical_rows"] is None
         assert plan["keep_identical_rows_together"] is False
 
+    def test_copies_are_counted_on_the_plans_own_inputs_not_on_a_recomputed_guess(self):
+        """Two rows that differ only in an identifier the app leaves out are, to the model, copies."""
+        df = continuous_with_copies()
+        df["row_id"] = [f"R{i:05d}" for i in range(len(df))]  # unique per row, and not an input
+        plan = client.get(f"/api/model/{_session(df)}/plan").json()
+        assert "row_id" in plan["excluded_columns"]
+        assert plan["identical_rows"]["copies"] > 0
+
+    def test_a_numeric_target_is_counted_too(self):
+        rng = np.random.default_rng(5)
+        base = pd.DataFrame({"x": rng.normal(0, 1, 200).round(4), "z": rng.normal(0, 1, 200).round(4)})
+        base["y"] = (base["x"] * 3 + rng.normal(0, 0.3, 200)).round(3)
+        df = pd.concat([base, base.sample(50, random_state=1)], ignore_index=True)
+        plan = client.get(f"/api/model/{_session(df)}/plan").json()
+        assert plan["task_type"] == "regression"
+        assert plan["identical_rows"]["copies"] == 50
+
     def test_training_with_it_leaves_no_copies_in_the_test_set(self):
         session_id = _session(continuous_with_copies())
         body = client.post(

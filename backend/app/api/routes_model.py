@@ -471,25 +471,15 @@ async def get_model_plan(
     )
 
 
-def _identical_rows(df: pd.DataFrame, target: str, classified_inputs=None) -> dict | None:
+def _identical_rows(df: pd.DataFrame, target: str, columns: list[str]) -> dict | None:
     """Rows that are exact copies of another row -- the model's inputs and the answer -- or None.
 
-    Counted on the inputs the plan starts with (everything but the target and the columns the
-    app suggests leaving out); the train request recomputes it on whatever the user finally
-    chooses. A copy that lands in the test set is a question the model has already been shown
-    the answer to, and flatters the score.
+    Counted on the inputs the plan starts with; the train request recomputes it on whatever the
+    user finally chooses. A copy that lands in the test set is a question the model has already
+    been shown the answer to, and flatters the score.
     """
     labelled = df[df[target].notna()]
-    if labelled.empty:
-        return None
-    columns = [str(c) for c in labelled.columns if c != target]
-    suggestions = {
-        s["column"] for s in _suggested_exclusions(labelled, GoalContext(
-            use_case="ml_training", expected_output="", target_column=target
-        ), "classification")
-    }
-    columns = [c for c in columns if c not in suggestions]
-    if not columns:
+    if labelled.empty or not columns:
         return None
     ids = modeling.identical_row_ids(labelled, columns, target)
     copies = int(len(ids) - ids.nunique())
