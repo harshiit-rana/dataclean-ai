@@ -345,6 +345,17 @@ history, and the sealed final evaluation carries its own. A test shows that the 
 estimates equal `evaluate`'s to the last digit, and that on a problem with a known AUC a 95%
 interval contains it close to 95% of the time.
 
+**A change between two runs is only coloured when it is real.** The run history painted any
+difference above 0.0005 green or red, so +0.01 on a few hundred test rows -- well inside what
+those rows could produce by chance -- read as "this helped". Each run now keeps the predictions
+it made on the test rows (`run_predictions/<run>.npz`, removed when the run falls off the
+history), and two runs trained on the same data under the same split are compared row for row: a
+paired bootstrap scores both on the same resampled rows, which cancels what they share and is far
+more sensitive than comparing two separate intervals. A difference whose 95% range excludes zero
+is coloured and shows that range; one that straddles zero says "within the noise". Runs that
+cannot be paired (an older run, a different split) fall back to comparing their stored intervals,
+and a run with neither gets no verdict and no colour rather than the old fixed threshold.
+
 **Every number says what kind it is.** The app shows three kinds of score that are not
 interchangeable — fold scores on the training rows (*exploratory*), the one-time score on rows
 nothing was chosen against (*held-out evaluation*), and a score on newly uploaded rows (*new

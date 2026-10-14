@@ -174,6 +174,70 @@ def point_estimates(y_true, y_pred, scores, task: str, positive_label: str | Non
     return {name: float(v[0]) for name, v in values.items() if not np.isnan(v[0])}
 
 
+def paired_difference(
+    y_true,
+    first: dict,
+    second: dict,
+    task: str,
+    metric: str,
+    positive_label: str | None = None,
+    groups=None,
+    resamples: int | None = None,
+    seed: int = 42,
+    level: float = LEVEL,
+) -> dict | None:
+    """How much better the first set of predictions is than the second on the *same* rows.
+
+    Two independent intervals ask whether two ranges overlap, and ranges overlap long after the
+    two models stopped being the same: most of what makes a test set easy or hard is shared by
+    both. Resampling the rows once and scoring both prediction sets on every resample cancels
+    that shared part, so the interval is on the *difference* and is far narrower. That is what
+    lets "this change helped" be said when it did, and "within the noise" when it did not.
+
+    `first` and `second` are `{"called": predictions, "scores": P(positive) or None}` for the
+    same rows in the same order. Returns `{"difference", "low", "high"}`, or None if the metric
+    cannot be computed from both.
+    """
+    truth, called_a, strata = _prepare(task, y_true, first["called"], positive_label)
+    _, called_b, _ = _prepare(task, y_true, second["called"], positive_label)
+    rows = len(truth)
+    label = _resolve_label(task, truth, positive_label)
+    scores_a = None if first.get("scores") is None else np.asarray(first["scores"], dtype=float)
+    scores_b = None if second.get("scores") is None else np.asarray(second["scores"], dtype=float)
+    group_array = None if groups is None else np.asarray(groups)
+
+    ones = np.ones((1, rows))
+    a0 = _metrics(ones, task, truth, called_a, scores_a, label).get(metric)
+    b0 = _metrics(ones, task, truth, called_b, scores_b, label).get(metric)
+    if a0 is None or b0 is None or np.isnan(a0[0]) or np.isnan(b0[0]):
+        return None
+
+    count = resamples or resample_count(rows)
+    rng = np.random.default_rng(seed)
+    chunk = max(1, CHUNK_CELLS // max(rows, 1))
+    deltas: list[np.ndarray] = []
+    drawn = 0
+    while drawn < count:
+        size = min(chunk, count - drawn)
+        weights = _weights(rng, rows, size, strata, group_array)
+        a = _metrics(weights, task, truth, called_a, scores_a, label)[metric]
+        b = _metrics(weights, task, truth, called_b, scores_b, label)[metric]
+        deltas.append(a - b)
+        drawn += size
+
+    values = np.concatenate(deltas)
+    usable = values[~np.isnan(values)]
+    if len(usable) < 0.5 * count:
+        return None
+    low_q, high_q = (1 - level) / 2 * 100, (1 + level) / 2 * 100
+    low, high = np.percentile(usable, [low_q, high_q])
+    return {
+        "difference": round(float(a0[0] - b0[0]), 4),
+        "low": round(float(low), 4),
+        "high": round(float(high), 4),
+    }
+
+
 def metric_intervals(
     y_true,
     y_pred,

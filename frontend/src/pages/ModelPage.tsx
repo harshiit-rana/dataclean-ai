@@ -414,7 +414,11 @@ export function ModelPage() {
       )}
 
       {history && !training && !improving && (
-        <RunHistory runs={history.runs} currentFingerprint={history.current_fingerprint} />
+        <RunHistory
+          runs={history.runs}
+          currentFingerprint={history.current_fingerprint}
+          comparisons={history.comparisons}
+        />
       )}
 
       {result && !training && !improving && (

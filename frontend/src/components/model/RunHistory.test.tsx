@@ -151,3 +151,80 @@ describe("RunHistory — what the Score column is", () => {
     expect(header).toHaveTextContent("Held-out evaluation");
   });
 });
+
+describe("RunHistory — a change is only coloured when it is real", () => {
+  const withVerdicts = (comparisons: Record<string, import("@/api/types").RunComparison>, runs: ModelRun[]) =>
+    render(<RunHistory runs={runs} currentFingerprint="aaa" comparisons={comparisons} />);
+
+  const pair = (newScore: number, oldScore = 0.8) => {
+    const newer = run({ run_id: "new", metrics: { roc_auc: newScore } });
+    const older = run({ run_id: "old", metrics: { roc_auc: oldScore } });
+    return [newer, older];
+  };
+
+  it("colours a change green when it is clearly outside the noise", () => {
+    withVerdicts(
+      { new: { method: "paired", verdict: "better", difference: 0.02, low: 0.006, high: 0.034 } },
+      pair(0.82)
+    );
+    expect(screen.getByText("+0.0200")).toHaveClass("text-emerald-600");
+  });
+
+  it("colours a clear drop red", () => {
+    withVerdicts(
+      { new: { method: "paired", verdict: "worse", difference: -0.05, low: -0.08, high: -0.02 } },
+      pair(0.75)
+    );
+    expect(screen.getByText("-0.0500")).toHaveClass("text-destructive");
+  });
+
+  it("leaves a change inside the noise uncoloured and says so", () => {
+    // +0.01 used to read as an improvement because it was above the old 0.0005 line.
+    withVerdicts(
+      { new: { method: "paired", verdict: "within_the_noise", difference: 0.01, low: -0.02, high: 0.04 } },
+      pair(0.81)
+    );
+    const delta = screen.getByText("+0.0100");
+    expect(delta).not.toHaveClass("text-emerald-600");
+    expect(delta).not.toHaveClass("text-destructive");
+    expect(screen.getByText("within the noise")).toBeInTheDocument();
+  });
+
+  it("shows the paired range so the size of the doubt is visible", () => {
+    withVerdicts(
+      { new: { method: "paired", verdict: "within_the_noise", difference: 0.01, low: -0.02, high: 0.04 } },
+      pair(0.81)
+    );
+    expect(screen.getByText(/95% range -0\.020 to \+0\.040/)).toBeInTheDocument();
+  });
+
+  it("shows no range when the verdict came from comparing two intervals", () => {
+    withVerdicts({ new: { method: "intervals", verdict: "within_the_noise" } }, pair(0.81));
+    expect(screen.getByText("within the noise")).toBeInTheDocument();
+    expect(screen.queryByText(/95% range/)).not.toBeInTheDocument();
+  });
+
+  it("does not colour a run it has no evidence about, however large the difference", () => {
+    withVerdicts({ new: { method: null, verdict: null } }, pair(0.9));
+    const delta = screen.getByText("+0.1000");
+    expect(delta).not.toHaveClass("text-emerald-600");
+    expect(screen.queryByText("within the noise")).not.toBeInTheDocument();
+  });
+
+  it("does not colour runs from a server that sent no comparisons at all", () => {
+    renderHistory(pair(0.9));
+    expect(screen.getByText("+0.1000")).not.toHaveClass("text-emerald-600");
+  });
+
+  it("never judges two runs it already refuses to compare", () => {
+    withVerdicts(
+      { new: { method: "paired", verdict: "better", difference: 0.1, low: 0.05, high: 0.15 } },
+      [
+        run({ run_id: "new", metrics: { roc_auc: 0.9 }, data_fingerprint: "bbb" }),
+        run({ run_id: "old", metrics: { roc_auc: 0.8 }, data_fingerprint: "aaa" }),
+      ]
+    );
+    expect(screen.getByText("not comparable")).toBeInTheDocument();
+    expect(screen.queryByText(/95% range/)).not.toBeInTheDocument();
+  });
+});

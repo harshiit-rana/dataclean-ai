@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScoreLabel } from "@/components/model/ScoreLabel";
 import { cn } from "@/lib/utils";
-import type { ModelRun } from "@/api/types";
+import type { ModelRun, RunComparison } from "@/api/types";
 
 /** What has been tried in this session, and whether it helped.
  *
@@ -70,9 +70,12 @@ const VERDICT_TEXT: Record<string, string> = {
 export function RunHistory({
   runs,
   currentFingerprint,
+  comparisons,
 }: {
   runs: ModelRun[];
   currentFingerprint: string;
+  /** Whether each run's change from the one before is real; see `RunComparison`. */
+  comparisons?: Record<string, RunComparison>;
 }) {
   // One run is not a comparison, and a table of one row implies there is something to compare.
   if (runs.length < 2) return null;
@@ -113,6 +116,8 @@ export function RunHistory({
                   previous.data_fingerprint === run.data_fingerprint &&
                   previous.primary_metric === run.primary_metric;
                 const delta = comparable ? score - previousScore : null;
+                const comparison = comparisons?.[run.run_id];
+                const verdict = comparable ? (comparison?.verdict ?? null) : null;
                 const stale =
                   Boolean(currentFingerprint) &&
                   Boolean(run.data_fingerprint) &&
@@ -150,16 +155,36 @@ export function RunHistory({
                           {previous ? "not comparable" : "first run"}
                         </span>
                       ) : (
-                        <span
-                          className={cn(
-                            "font-medium",
-                            delta > 0.0005 && "text-emerald-600 dark:text-emerald-400",
-                            delta < -0.0005 && "text-destructive"
+                        <>
+                          {/* Coloured only when the change is outside what the test rows could
+                              produce by chance. A difference inside the noise used to read as
+                              "this change helped" or "hurt" -- the one question this table is
+                              for -- and a run with nothing to judge it by gets no colour. */}
+                          <span
+                            className={cn(
+                              "font-medium",
+                              verdict === "better" && "text-emerald-600 dark:text-emerald-400",
+                              verdict === "worse" && "text-destructive"
+                            )}
+                          >
+                            {delta > 0 ? "+" : ""}
+                            {delta.toFixed(4)}
+                          </span>
+                          {verdict === "within_the_noise" && (
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                              within the noise
+                            </span>
                           )}
-                        >
-                          {delta > 0 ? "+" : ""}
-                          {delta.toFixed(4)}
-                        </span>
+                          {comparison?.method === "paired" &&
+                            comparison.low != null &&
+                            comparison.high != null && (
+                              <span className="mt-0.5 block text-xs text-muted-foreground">
+                                95% range {comparison.low >= 0 ? "+" : ""}
+                                {comparison.low.toFixed(3)} to {comparison.high >= 0 ? "+" : ""}
+                                {comparison.high.toFixed(3)}
+                              </span>
+                            )}
+                        </>
                       )}
                     </td>
                     <td className="py-2 text-xs">

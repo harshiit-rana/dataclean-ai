@@ -628,6 +628,7 @@ def _save_and_record(directory, result: dict, df, *, route: str, action_log=None
     same run.
     """
     result["run_id"] = uuid.uuid4().hex[:12]
+    result["split_key"] = evaluation_ledger.split_key(result.get("split"))
     # Worked out from the ledger *before* this look is written, so the first run of a split
     # reads independent, and carried on the result so the page, the card and the history all
     # say the same thing. The headline is qualified here rather than where the verdict is made:
@@ -1218,11 +1219,33 @@ async def get_model_history(
     except Exception:  # noqa: BLE001 -- history is still worth serving without it
         logger.warning("Could not fingerprint the current data for session %s", session_id)
 
+    runs = model_store.load_history(directory)
     return {
         "session_id": session_id,
-        "runs": model_store.load_history(directory),
+        "runs": runs,
         "current_fingerprint": current,
+        "comparisons": _history_comparisons(directory, runs),
     }
+
+
+def _history_comparisons(directory, runs: list[dict]) -> dict[str, dict]:
+    """For each run, whether the change from the run before it is real, by run id.
+
+    Only between runs that can be compared at all -- the same data and the same metric; a run
+    from before a cleaning change keeps its own label on the page. The verdict is "better",
+    "worse", "within_the_noise" or None when there is no evidence either way, in which case the
+    page shows the difference without colouring it.
+    """
+    found: dict[str, dict] = {}
+    for index, run in enumerate(runs[:-1]):
+        previous = runs[index + 1]
+        if (
+            run.get("primary_metric") != previous.get("primary_metric")
+            or run.get("data_fingerprint") != previous.get("data_fingerprint")
+        ):
+            continue
+        found[run["run_id"]] = model_store.compare_runs(directory, run, previous)
+    return found
 
 
 @router.get("/api/model/{session_id}/card")

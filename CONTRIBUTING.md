@@ -122,6 +122,13 @@ are both running locally, you're ready to make changes.
   so a run from before the change is *labelled* rather than deleted or silently compared.
   History bookkeeping must never fail a training run — losing a result that exists because its
   record couldn't be written is the worst outcome available.
+- **Run-to-run verdicts need the same rows.** `model_store.compare_runs` pairs two runs only when
+  `split_key` (strategy, columns, seed, sizes) and `data_fingerprint` match; the history entry
+  stores `split_key` and the run's predictions are kept in `run_predictions/`, aligned by row id
+  because the two runs need not have listed the test rows in the same order. Do not colour a
+  difference in the UI from a fixed threshold -- take `comparisons[run_id].verdict`, and treat
+  `null` as "no evidence", not "no change". The predictions file is deleted with the history
+  entry it belongs to; keep the two in step if you touch the history trimming.
 - **An artifact the export promises is built on demand, not as a side effect.** `train_model.py`
   used to reach disk only when someone generated the model card, so "Export everything" after
   skipping the write-up produced an archive without the script — the one artifact the model

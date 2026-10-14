@@ -399,11 +399,24 @@ export interface ModelRun {
   } | null;
 }
 
+/** Whether the change from the run before is real. `paired` resamples the shared held-out rows
+ * once and scores both runs on every resample; `intervals` compares the two stored intervals;
+ * null means there is no evidence either way, and the page shows the difference uncoloured. */
+export interface RunComparison {
+  method: "paired" | "intervals" | null;
+  verdict: "better" | "worse" | "within_the_noise" | null;
+  difference?: number;
+  low?: number;
+  high?: number;
+}
+
 export interface ModelHistory {
   session_id: string;
   /** Newest first. */
   runs: ModelRun[];
   current_fingerprint: string;
+  /** By run id: the change from the run before it. Absent for runs that cannot be compared. */
+  comparisons?: Record<string, RunComparison>;
 }
 
 /** Where the cut-off should sit, stated as a trade-off rather than a number.

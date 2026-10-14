@@ -889,20 +889,29 @@ def interval_report(
     if len(y_test) < MIN_TEST_ROWS_TO_JUDGE:
         return None
     try:
-        predictions = pipeline.predict(X_test)
-        scores = None
-        if task != "regression" and pd.Series(y_test).nunique() == 2:
-            scores = diagnostics._positive_scores(
-                pipeline, X_test, positive_label or resolve_positive_label(
-                    sorted(pd.Series(y_test).astype(str).unique()), None
-                )
-            )
+        predictions, scores = held_out_predictions(pipeline, X_test, y_test, task, positive_label)
         return uncertainty.metric_intervals(
             y_test, predictions, scores, task, positive_label, groups=groups
         )
     except Exception:  # noqa: BLE001
         logger.warning("Could not compute intervals for the held-out metrics", exc_info=True)
         return None
+
+
+def held_out_predictions(pipeline, X_test, y_test, task: str, positive_label: str | None = None):
+    """What one fitted model said about the held-out rows: its answers, and for two classes
+    P(positive) for each. The raw material for intervals, and kept per run so two runs can be
+    compared on exactly the same rows."""
+    predictions = pipeline.predict(X_test)
+    scores = None
+    if task != "regression" and pd.Series(y_test).nunique() == 2:
+        scores = diagnostics._positive_scores(
+            pipeline,
+            X_test,
+            positive_label
+            or resolve_positive_label(sorted(pd.Series(y_test).astype(str).unique()), None),
+        )
+    return predictions, scores
 
 
 def baseline_score(y_train, y_test, task: str) -> dict:
@@ -1563,18 +1572,36 @@ def train_candidates(
     # How far the headline held-out numbers could move on different rows. For the chosen model
     # only: it is the one whose score is reported, and the candidates' fold scores already
     # carry their own spread.
+    test_groups = (
+        df.loc[list(X_test.index), group_column]
+        if split_strategy == "group" and group_column
+        else None
+    )
     best["metrics_intervals"] = interval_report(
         best["pipeline"],
         X_test,
         y_test,
         task,
         best["metrics"].get("positive_label"),
-        groups=(
-            df.loc[list(X_test.index), group_column]
-            if split_strategy == "group" and group_column
-            else None
-        ),
+        groups=test_groups,
     )
+    # What the chosen model said about each held-out row, kept so that a later run on the same
+    # rows can be compared with this one row for row. Private: it is written to a side file by
+    # `model_store.save_result` and never serialised into the result.
+    try:
+        called, called_scores = held_out_predictions(
+            best["pipeline"], X_test, y_test, task, best["metrics"].get("positive_label")
+        )
+        best["_held_out"] = {
+            "row_ids": np.asarray(X_test.index),
+            "truth": np.asarray(y_test),
+            "called": np.asarray(called),
+            "scores": None if called_scores is None else np.asarray(called_scores),
+            "groups": None if test_groups is None else np.asarray(test_groups),
+            "positive_label": best["metrics"].get("positive_label"),
+        }
+    except Exception:  # noqa: BLE001 -- a comparison nicety must never fail a finished run
+        logger.warning("Could not keep the held-out predictions", exc_info=True)
 
     # The expensive tier, for the chosen model only. `build` hands back an *unfitted*
     # pipeline each time, because cross-validation and the learning curve must fit from

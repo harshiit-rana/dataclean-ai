@@ -41,6 +41,11 @@ LEDGER_FILENAME = "test_set_ledger.json"
 # done, and the moment it matters most is after the data has been changed.
 SEALED_FILENAME = "sealed_holdout.json"
 
+# What each run said about its held-out rows, one small file per run, so two runs can be compared
+# on exactly the same rows. Not in ALL_ARTIFACTS for the reason the history is not: it is part of
+# the record, and the moment it is wanted is after the data has changed.
+PREDICTIONS_DIR = "run_predictions"
+
 ALL_ARTIFACTS = (RESULT_FILENAME, PIPELINE_FILENAME, CARD_FILENAME, SCRIPT_FILENAME)
 
 # Runs kept per session. Long enough that a working session of "try it, change something, try
@@ -67,6 +72,12 @@ def _jsonable(value: Any) -> Any:
 
 def strip_pipelines(result: dict) -> dict:
     """Removes the fitted estimator objects so what's left can be serialized and sent."""
+    result = {
+        **result,
+        "results": [
+            {k: v for k, v in entry.items() if k != "_held_out"} for entry in result.get("results", [])
+        ],
+    }
     cleaned = dict(result)
     cleaned["results"] = [
         {key: value for key, value in entry.items() if key != "pipeline"}
@@ -108,6 +119,9 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
             "run_id": result.get("run_id") or uuid.uuid4().hex[:12],
             "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "data_fingerprint": fingerprint,
+            # Which rows were held out, by the rule that held them. Two runs can be compared on
+            # the same rows only if this matches as well as the data.
+            "split_key": result.get("split_key"),
             "target_column": result.get("target_column"),
             "task": result.get("task"),
             "best_model": result.get("best_model"),
@@ -193,8 +207,12 @@ def append_history(directory: Path, entry: dict) -> list[dict]:
     """
     try:
         entries = [entry] + load_history(directory)
+        dropped = entries[MAX_HISTORY_ENTRIES:]
         entries = entries[:MAX_HISTORY_ENTRIES]
         (directory / HISTORY_FILENAME).write_text(json.dumps(entries), encoding="utf-8")
+        for old in dropped:
+            # A run that has left the history can no longer be compared with, so its rows go too.
+            (directory / PREDICTIONS_DIR / f"{old.get('run_id')}.npz").unlink(missing_ok=True)
         return entries
     except OSError:
         logger.warning("Run history could not be written", exc_info=True)
@@ -230,8 +248,126 @@ def save_result(directory: Path, result: dict, *, fingerprint: str = "") -> dict
         except Exception:  # noqa: BLE001
             logger.exception("Fitted pipeline could not be saved; results were still written")
 
-    append_history(directory, summarise(payload, fingerprint=fingerprint))
+    entry = summarise(payload, fingerprint=fingerprint)
+    if best and best.get("_held_out"):
+        save_run_predictions(directory, entry["run_id"], best["_held_out"])
+    append_history(directory, entry)
     return payload
+
+
+def save_run_predictions(directory: Path, run_id: str, held_out: dict) -> None:
+    """Keeps what a run said about each held-out row. Never fails the run it describes."""
+    try:
+        folder = directory / PREDICTIONS_DIR
+        folder.mkdir(parents=True, exist_ok=True)
+        arrays = {
+            "row_ids": np.asarray(held_out["row_ids"]),
+            "truth": np.asarray(held_out["truth"]).astype(str),
+            "called": np.asarray(held_out["called"]).astype(str),
+            "positive_label": np.asarray(str(held_out.get("positive_label") or "")),
+        }
+        for key in ("scores", "groups"):
+            if held_out.get(key) is not None:
+                arrays[key] = np.asarray(held_out[key])
+        np.savez_compressed(folder / f"{run_id}.npz", **arrays)
+    except Exception:  # noqa: BLE001
+        logger.warning("Could not keep the held-out predictions of run %s", run_id, exc_info=True)
+
+
+def load_run_predictions(directory: Path, run_id: str) -> Optional[dict]:
+    path = directory / PREDICTIONS_DIR / f"{run_id}.npz"
+    if not path.exists():
+        return None
+    try:
+        with np.load(path, allow_pickle=False) as data:
+            return {key: data[key] for key in data.files}
+    except Exception:  # noqa: BLE001
+        logger.warning("Could not read the held-out predictions at %s", path, exc_info=True)
+        return None
+
+
+def compare_runs(directory: Path, newer: dict, older: dict) -> dict:
+    """Did the change between two consecutive runs help, hurt, or fall inside the noise?
+
+    A difference of 0.003 on a test set that cannot tell 0.78 from 0.71 is not a result, and the
+    history used to colour it green or red anyway. Preferred: a *paired* comparison, resampling
+    the shared held-out rows once and scoring both runs on every resample, which is far more
+    sensitive than comparing two independent intervals. That needs both runs to have been scored
+    on the same rows (same data, same split rule) and to have kept their predictions. Otherwise
+    the two stored intervals are compared, and "better" or "worse" is said only when they do not
+    overlap. With neither, no verdict at all -- never the old fixed threshold.
+
+    Returns `{"method": "paired" | "intervals" | None, "verdict": "better" | "worse" |
+    "within_the_noise" | None, ...}`.
+    """
+    metric = newer.get("primary_metric")
+    paired = _paired_comparison(directory, newer, older, metric)
+    if paired is not None:
+        return paired
+
+    now = newer.get("metric_interval")
+    before = older.get("metric_interval")
+    if now and before and now.get("metric") == before.get("metric") == metric:
+        if now["low"] > before["high"]:
+            verdict = "better"
+        elif now["high"] < before["low"]:
+            verdict = "worse"
+        else:
+            verdict = "within_the_noise"
+        return {"method": "intervals", "verdict": verdict}
+    return {"method": None, "verdict": None}
+
+
+def _paired_comparison(directory: Path, newer: dict, older: dict, metric: str | None) -> dict | None:
+    from app.services import uncertainty
+
+    same_rows = (
+        metric
+        and newer.get("split_key")
+        and newer.get("split_key") == older.get("split_key")
+        and newer.get("data_fingerprint")
+        and newer.get("data_fingerprint") == older.get("data_fingerprint")
+    )
+    if not same_rows:
+        return None
+    a = load_run_predictions(directory, newer["run_id"])
+    b = load_run_predictions(directory, older["run_id"])
+    if a is None or b is None:
+        return None
+    try:
+        # The same rows, possibly in a different order: line the older run up with the newer.
+        position = pd.Index(b["row_ids"]).get_indexer(a["row_ids"])
+        if len(a["row_ids"]) != len(b["row_ids"]) or (position < 0).any():
+            return None
+        task = newer.get("task") or "classification"
+        label = str(a["positive_label"]) or None
+        found = uncertainty.paired_difference(
+            a["truth"] if task != "regression" else a["truth"].astype(float),
+            {
+                "called": a["called"] if task != "regression" else a["called"].astype(float),
+                "scores": a.get("scores"),
+            },
+            {
+                "called": b["called"][position] if task != "regression" else b["called"][position].astype(float),
+                "scores": None if b.get("scores") is None else b["scores"][position],
+            },
+            task,
+            metric,
+            positive_label=label,
+            groups=a.get("groups"),
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Paired comparison of two runs failed", exc_info=True)
+        return None
+    if found is None:
+        return None
+    if found["low"] > 0:
+        verdict = "better"
+    elif found["high"] < 0:
+        verdict = "worse"
+    else:
+        verdict = "within_the_noise"
+    return {"method": "paired", "verdict": verdict, **found}
 
 
 def load_result(directory: Path) -> Optional[dict]:
