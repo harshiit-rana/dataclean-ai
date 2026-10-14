@@ -36,6 +36,10 @@ HISTORY_FILENAME = "model_history.json"
 # is the commonest way to select on the test set by hand. A ledger that a cleaning change wiped
 # would hand every user a fresh "independent" score after one undo.
 LEDGER_FILENAME = "test_set_ledger.json"
+# Which rows were sealed as a final holdout, and how many looks had already been taken when they
+# were. Kept for the same reason as the ledger: it is evidence about how the evaluation was
+# done, and the moment it matters most is after the data has been changed.
+SEALED_FILENAME = "sealed_holdout.json"
 
 ALL_ARTIFACTS = (RESULT_FILENAME, PIPELINE_FILENAME, CARD_FILENAME, SCRIPT_FILENAME)
 

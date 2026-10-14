@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
@@ -326,7 +327,148 @@ function HeldOutTable({ result, keys }: { result: ModelResult; keys: string[] })
   );
 }
 
-export function ModelResults({ result }: { result: ModelResult }) {
+interface ModelResultsProps {
+  result: ModelResult;
+  /** Opens the sealed final holdout. Present only where the page can do it. */
+  onFinalise?: () => void;
+  finalising?: boolean;
+  finaliseError?: string | null;
+  /** Said when the rows were opened earlier, for a different model. */
+  finaliseNote?: string | null;
+}
+
+/** The sealed final holdout: rows set aside before anything was decided and never scored while
+ * iterating. Opened once, by an explicit action, because a score on rows nothing was chosen
+ * against is the only number here that has not been through a selection. */
+function SealedHoldout({
+  result,
+  onFinalise,
+  finalising,
+  finaliseError,
+  finaliseNote,
+}: ModelResultsProps) {
+  const split = result.split;
+  if (!split.sealed) {
+    if (!split.sealed_unavailable_reason) return null;
+    return (
+      <p className="rounded-md border border-border bg-muted p-3 text-sm text-muted-foreground">
+        A sealed final holdout was asked for but could not be made: {split.sealed_unavailable_reason}{" "}
+        The ordinary split was used instead.
+      </p>
+    );
+  }
+
+  const final = result.evaluation?.final;
+  const keys =
+    result.task === "regression"
+      ? ["r2", "mae", "rmse"]
+      : ["accuracy", "precision", "recall", "f1", "roc_auc"];
+  const shown = keys.filter((key) => typeof final?.metrics?.[key] === "number");
+  const late = (split.sealed_after_looks ?? 0) > 0;
+
+  return (
+    <Card className="border-violet-500/30">
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+        <CardTitle className="text-base">Sealed final holdout</CardTitle>
+        <ScoreLabel kind="held_out" />
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3 text-sm">
+        <p>
+          {split.final_rows?.toLocaleString()} rows were set aside and have never been scored. Every
+          number above was measured on other rows, so nothing you changed while iterating could have
+          been tuned to these.
+        </p>
+        {late && (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
+            Sealed after {split.sealed_after_looks} {split.sealed_after_looks === 1 ? "look" : "looks"}.
+            These rows are still unopened, but until now they were training or development rows, so
+            they shaped decisions made before the seal. A holdout sealed before the first look is
+            cleaner.
+          </p>
+        )}
+
+        {!final ? (
+          <div className="flex flex-col gap-2">
+            {finaliseNote && (
+              <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
+                {finaliseNote}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Opening them scores the current model on them, once. After that they are used up: a
+              second model scored on the same rows would not be an independent evaluation, because
+              this result may already have shaped it.
+            </p>
+            <div>
+              <Button size="sm" onClick={onFinalise} disabled={!onFinalise || finalising}>
+                {finalising ? "Opening…" : "Open the sealed rows (once)"}
+              </Button>
+            </div>
+            {finaliseError && <p className="text-xs text-destructive">{finaliseError}</p>}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {final.assessment && <p className="font-medium">{final.assessment.headline}</p>}
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
+                <caption className="pb-1 text-left text-xs text-muted-foreground">
+                  Scored once on the {final.rows?.toLocaleString()} sealed rows.
+                </caption>
+                <thead>
+                  <tr>
+                    <th className="border-b border-border px-2 py-1.5 text-left font-medium">&nbsp;</th>
+                    {shown.map((key) => (
+                      <th key={key} className="border-b border-border px-2 py-1.5 text-right font-medium">
+                        {METRIC_LABELS[key] ?? key}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="bg-muted/50">
+                    <td className="px-2 py-1.5 font-medium">Final evaluation</td>
+                    {shown.map((key) => (
+                      <td key={key} className="px-2 py-1.5 text-right tabular-nums">
+                        {formatMetric(final.metrics[key])}
+                      </td>
+                    ))}
+                  </tr>
+                  <tr className="text-muted-foreground">
+                    <td className="px-2 py-1.5 italic">
+                      No model at all ({String(final.baseline?.strategy ?? "guessing")})
+                    </td>
+                    {shown.map((key) => (
+                      <td key={key} className="px-2 py-1.5 text-right tabular-nums">
+                        {formatMetric(final.baseline?.[key])}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+            {final.rows_seen_in_training > 0 && (
+              <p className="text-xs text-muted-foreground">
+                {final.rows_seen_in_training.toLocaleString()} of these rows match a training row on
+                the model&apos;s inputs and answer, so this score is slightly flattered.
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">
+              These rows are now used up. Treat this number as the one to report.
+            </p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+export function ModelResults({
+  result,
+  onFinalise,
+  finalising,
+  finaliseError,
+  finaliseNote,
+}: ModelResultsProps) {
   const best = result.results.find((r) => r.model === result.best_model);
   const verdict = VERDICT_STYLES[result.assessment.verdict] ?? VERDICT_STYLES.marginal;
   const diagnostics = best?.diagnostics ?? {};
@@ -403,6 +545,14 @@ export function ModelResults({ result }: { result: ModelResult }) {
       </Card>
 
       <ModelComparison result={result} keys={presentKeys} />
+
+      <SealedHoldout
+        result={result}
+        onFinalise={onFinalise}
+        finalising={finalising}
+        finaliseError={finaliseError}
+        finaliseNote={finaliseNote}
+      />
 
       {(result.features.derived?.length ?? 0) > 0 && (
         <Card>

@@ -16,6 +16,7 @@ import {
   fetchModelHistory,
   fetchModelPlan,
   fetchModelResult,
+  finaliseModel,
   trainModel,
 } from "@/api/client";
 import { streamImprove } from "@/api/sse";
@@ -56,6 +57,7 @@ export function requestFromResult(result: ModelResult): TrainRequest {
     feature_recipes: (result.features.derived ?? []).map((recipe) => recipe.id),
     clip_outliers: result.features.clipped ?? [],
     keep_identical_rows_together: result.split.keep_duplicates_together ?? false,
+    sealed_holdout: result.split.sealed ?? false,
   };
 }
 
@@ -113,6 +115,28 @@ export function ModelPage() {
     void load();
   }, [load]);
 
+  // Opening the sealed holdout is an explicit act, done at most once per model, so it has its
+  // own small state rather than riding on training's.
+  const [finalising, setFinalising] = useState(false);
+  const [finaliseError, setFinaliseError] = useState<string | null>(null);
+  const [finaliseNote, setFinaliseNote] = useState<string | null>(null);
+
+  const handleFinalise = async () => {
+    if (!sessionId) return;
+    setFinalising(true);
+    setFinaliseError(null);
+    try {
+      const opened = await finaliseModel(sessionId);
+      setFinaliseNote(opened.for_this_model ? null : (opened.note ?? null));
+      const refreshed = await fetchModelResult(sessionId).catch(() => null);
+      if (refreshed) setResult(refreshed);
+    } catch (err) {
+      setFinaliseError(err instanceof ApiError ? err.detail : String((err as Error)?.message ?? err));
+    } finally {
+      setFinalising(false);
+    }
+  };
+
   const handleTrain = async (request: TrainRequest) => {
     if (!sessionId) return;
     setTraining(true);
@@ -158,6 +182,7 @@ export function ModelPage() {
       clip_outliers: base?.clip_outliers ?? plan?.features.clipped ?? [],
       keep_identical_rows_together:
         base?.keep_identical_rows_together ?? plan?.keep_identical_rows_together ?? false,
+      sealed_holdout: base?.sealed_holdout ?? plan?.sealed_holdout ?? false,
       include_deep_diagnostics: true,
       goal: target,
     };
@@ -378,7 +403,15 @@ export function ModelPage() {
         <ImprovementTrail trail={result.improvement} />
       )}
 
-      {result && !training && !improving && <ModelResults result={result} />}
+      {result && !training && !improving && (
+        <ModelResults
+          result={result}
+          onFinalise={handleFinalise}
+          finalising={finalising}
+          finaliseError={finaliseError}
+          finaliseNote={finaliseNote}
+        />
+      )}
 
       {history && !training && !improving && (
         <RunHistory runs={history.runs} currentFingerprint={history.current_fingerprint} />

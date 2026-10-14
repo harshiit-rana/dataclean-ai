@@ -213,6 +213,12 @@ are both running locally, you're ready to make changes.
   `evaluation_ledger.already_evaluated` recognises a file by its content hash, and a
   `new_data_evaluation` is tied to the model's `run_id` so a retrained model starts clean. It is
   never counted as a look at the held-out rows and never replaces the original score.
+- **Only `finalise` reads the sealed rows.** `split_with_sealed_holdout` takes them first, by
+  `sealed_holdout_rows` -- a function of the data, the seed and the split rule, never of the
+  inputs, models or settings -- and the ordinary split divides what is left. `train_candidates` and
+  `improvement.improve` never see them, and `test_sealed_holdout.py` and the integrity suite flip
+  their answers and require every decision and every development-set report to stay put. If you add
+  a route that could touch them, it belongs in that test.
 - **A statistic learned from one file is applied to the next as learned.** Five operations
   read something from the data they run on (`operations.LEARNED_OPERATIONS`: fills and outlier
   limits). When a session is applied to a new file, `replay.freeze` replays the log over

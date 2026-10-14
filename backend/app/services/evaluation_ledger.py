@@ -280,6 +280,46 @@ def qualify(assessment: dict | None, evaluation: dict | None) -> dict | None:
     }
 
 
+def find_final(directory: Path, version: dict | None, split: dict | None) -> Optional[dict]:
+    """The time the sealed final holdout was opened for this data version and split rule, if it
+    has been. The sealed rows can be opened once per (version, split): opening them again for a
+    second model would be a second look at rows the first result may already have informed."""
+    key = split_key(split)
+    number = (version or {}).get("version")
+    for entry in _read(directory):
+        if (
+            entry.get("event") == FINAL
+            and entry.get("split_key") == key
+            and entry.get("dataset_version") == number
+        ):
+            return entry
+    return None
+
+
+def final_openings(directory: Path, split: dict | None) -> int:
+    """How many times the sealed holdout has been opened under this split rule, on any version."""
+    key = split_key(split)
+    return sum(1 for e in _read(directory) if e.get("event") == FINAL and e.get("split_key") == key)
+
+
+def final_summary(directory: Path, run_id: str | None) -> dict | None:
+    """The sealed final evaluation of the model with this run id, or None if it has not been
+    opened. Looked up when a result is read, as the new-data checks are."""
+    for entry in reversed(_read(directory)):
+        if entry.get("event") == FINAL and entry.get("run_id") == run_id:
+            extra = entry.get("extra") or {}
+            return {
+                "at": entry.get("at"),
+                "rows": extra.get("rows"),
+                "metrics": entry.get("metrics") or {},
+                "baseline": extra.get("baseline"),
+                "assessment": extra.get("assessment"),
+                "primary_metric": extra.get("primary_metric"),
+                "rows_seen_in_training": extra.get("rows_seen_in_training", 0),
+            }
+    return None
+
+
 def new_data_evaluations(directory: Path, run_id: str | None) -> list[dict]:
     """Evaluations on newly uploaded labelled rows that were made on the model with this run id.
 

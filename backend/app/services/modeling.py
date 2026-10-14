@@ -372,6 +372,177 @@ def split_keeping_identical_rows_together(labels, groups, classification, test_s
     return next(splitter.split(positions, labels, groups=groups))
 
 
+# A sealed final holdout takes this much of the labelled rows out before anything else happens
+# to them, and the development evaluation set (what train and improve report on) this much of
+# the whole. 70 / 15 / 15 on a file that can afford it. See docs/decisions/0001-evaluation-
+# protocol.md for why it is opt-in, and why it is offered only when both held-out parts are big
+# enough to be judged.
+SEALED_FINAL_SIZE = 0.15
+SEALED_DEV_SIZE = 0.15
+
+
+def sealed_holdout_rows(
+    labelled,
+    target_column,
+    classification,
+    strategy,
+    time_column,
+    group_column,
+    final_size,
+    seed,
+    copy_columns=None,
+):
+    """The index labels of the rows to seal as a final holdout.
+
+    Written to stand alone, like `split_keeping_identical_rows_together`: it imports what it
+    needs, and `model_export` copies its source verbatim into `train_model.py` so the script
+    seals the same rows the app did. It depends only on the data, the seed, the strategy and
+    the fraction -- never on which columns were chosen as inputs, which models were tried or
+    what the improvement loop found -- so the sealed rows stay the same however the rest of the
+    work changes. That is what makes them sealed: nothing done during development can move them.
+
+    The same guarantees the ordinary split gives, applied first: a date split seals the most
+    recent rows, cutting where the timestamp changes; a grouped split seals whole entities; a
+    random split of a classification target is stratified; and with `copy_columns`, exact copies
+    of a row go together. Raises ValueError when no honest seal exists (one timestamp holding
+    over half the rows).
+    """
+    import numpy as np
+    import pandas as pd
+    from sklearn.model_selection import GroupShuffleSplit, train_test_split
+
+    rows = len(labelled)
+    if strategy == "time":
+        order = pd.to_datetime(labelled[time_column], errors="coerce", format="mixed")
+        ranked = order.sort_values(kind="stable").index
+        times = order.loc[ranked]
+        starts = [i for i, repeat in enumerate(times.duplicated().tolist()) if not repeat]
+        sizes = [end - start for start, end in zip(starts, starts[1:] + [rows])]
+        if max(sizes) * 2 > rows:
+            raise ValueError(
+                f"{max(sizes):,} of the {rows:,} rows share one timestamp in '{time_column}', so "
+                "there is no way to seal the most recent rows without splitting them."
+            )
+        boundaries = [start for start in starts if 0 < start < rows]
+        target = int(rows * (1 - final_size))
+        cut = min(boundaries, key=lambda boundary: (abs(boundary - target), -boundary))
+        return ranked[cut:]
+
+    if strategy == "group":
+        groups = labelled[group_column]
+        splitter = GroupShuffleSplit(n_splits=1, test_size=final_size, random_state=seed)
+        _, final_positions = next(splitter.split(labelled, groups=groups))
+        return labelled.index[final_positions]
+
+    labels = labelled[target_column]
+    if copy_columns:
+        ids = pd.util.hash_pandas_object(labelled[[*copy_columns, target_column]], index=False)
+        if ids.nunique() < len(ids):
+            _, final_positions = split_keeping_identical_rows_together(
+                labels, ids.to_numpy(), classification, final_size, seed
+            )
+            return labelled.index[final_positions]
+    stratify = labels if classification and labels.value_counts().min() >= 2 else None
+    _, final_positions = train_test_split(
+        np.arange(rows), test_size=final_size, random_state=seed, stratify=stratify
+    )
+    return labelled.index[final_positions]
+
+
+def sealed_rows_hash(index) -> str:
+    """A short fingerprint of which rows were sealed, so the sealing can be checked later."""
+    import hashlib
+
+    return hashlib.sha256(",".join(str(i) for i in sorted(index)).encode("utf-8")).hexdigest()[:16]
+
+
+def split_with_sealed_holdout(
+    df: pd.DataFrame,
+    target_column: str,
+    task: str,
+    *,
+    strategy: str = "random",
+    time_column: str | None = None,
+    group_column: str | None = None,
+    duplicate_columns: list[str] | None = None,
+    copy_columns: list[str] | None = None,
+    final_size: float = SEALED_FINAL_SIZE,
+    dev_size: float = SEALED_DEV_SIZE,
+):
+    """Training, development and sealed-final partitions.
+
+    The sealed rows are taken first (`sealed_holdout_rows`), and the ordinary split then
+    divides what is left into training and development, so every guarantee the ordinary split
+    gives -- forward in time, whole entities, copies together -- holds between all three.
+    Returns `(X_train, X_dev, X_final, y_train, y_dev, y_final)`; `X_dev` is what `/train` and
+    `/improve` report on, the role the test set has always had.
+
+    `duplicate_columns` are the model's inputs, for keeping copies together between training
+    and development. `copy_columns` are what copies are judged on when sealing: all the file's
+    own columns, not the model's inputs, so that the sealed rows do not move when someone
+    changes the inputs.
+    """
+    labelled = df[df[target_column].notna()]
+    if len(labelled) < MIN_ROWS_TO_TRAIN:
+        raise ModelingError(
+            f"Only {len(labelled)} rows have a value for '{target_column}'. That is too few "
+            f"to train a model and still hold back a test set worth trusting."
+        )
+    if strategy == "time" and (not time_column or time_column not in labelled.columns):
+        raise ModelingError("A time-based split needs a date column to order the rows by.")
+    if strategy == "group" and (not group_column or group_column not in labelled.columns):
+        raise ModelingError(
+            "A grouped split needs the column that says which rows belong to the same thing."
+        )
+
+    try:
+        final_index = sealed_holdout_rows(
+            labelled, target_column, task == "classification", strategy, time_column,
+            group_column, final_size, RANDOM_STATE,
+            copy_columns if strategy == "random" else None,
+        )
+    except ValueError as exc:
+        raise ModelingError(str(exc)) from exc
+
+    X_train, X_dev, y_train, y_dev = split_data(
+        df.drop(index=final_index),
+        target_column,
+        task,
+        strategy=strategy,
+        time_column=time_column,
+        group_column=group_column,
+        test_size=dev_size / (1 - final_size),
+        duplicate_columns=duplicate_columns,
+    )
+    final_index = sorted(final_index)
+    return (
+        X_train,
+        X_dev,
+        labelled.drop(columns=[target_column]).loc[final_index],
+        y_train,
+        y_dev,
+        labelled.loc[final_index, target_column],
+    )
+
+
+def sealed_unavailable_reason(y_dev, y_final, task: str) -> str | None:
+    """Why a three-way split cannot be offered here, or None when it can.
+
+    Each held-out part has to be big enough for a score on it to mean anything -- the app's own
+    bar, the one `assess_result` applies. A sealed holdout that cannot support a verdict is a
+    way of spending data and learning nothing, so it is withheld with the reason rather than
+    offered and left to disappoint.
+    """
+    for name, y in (("development", y_dev), ("final", y_final)):
+        counts = (
+            pd.Series(y).astype(str).value_counts().tolist() if task == "classification" else None
+        )
+        problem = _too_small_to_judge(int(len(y)), counts)
+        if problem is not None:
+            return f"The {name} part would be too small to judge. {problem['headline']}"
+    return None
+
+
 def identical_row_ids(df: pd.DataFrame, columns: list[str], target_column: str) -> pd.Series:
     """One id per distinct (model inputs, answer) among the rows that have an answer.
 
@@ -1100,6 +1271,7 @@ def train_candidates(
     feature_recipes_wanted: list[str] | None = None,
     clip_outliers: list[str] | None = None,
     keep_identical_rows_together: bool = False,
+    sealed_holdout: bool = False,
 ) -> dict:
     """Trains each requested model on the same split and returns everything needed to compare
     them. A model that fails to fit is reported rather than aborting the others.
@@ -1122,7 +1294,12 @@ def train_candidates(
 
     `keep_identical_rows_together` puts exact copies (the model's inputs and the answer) on one
     side of a random split, so none of the test rows is a question the model has already been
-    shown the answer to. See `split_data`."""
+    shown the answer to. See `split_data`.
+
+    `sealed_holdout` takes a final partition out before anything else happens to the data, for
+    the user to open once with an explicit action. The "test" set this function reports on is
+    then the development partition. When the file is too small for both held-out parts to be
+    judged, the ordinary two-way split is used and the result says why."""
     point = point or operating_point.OperatingPoint()
     if target_column not in df.columns:
         raise ModelingError(f"'{target_column}' is not in the data.")
@@ -1136,6 +1313,9 @@ def train_candidates(
         withheld.append(group_column)
 
     recipes = feature_recipes.select(df, target_column, withheld, feature_recipes_wanted)
+    # What the sealed rows are judged on when copies are kept together: the file's own columns,
+    # captured before derived inputs are added, so a ticked recipe cannot move them.
+    seal_columns = [str(c) for c in df.columns if c != target_column]
     df = feature_recipes.apply(df, recipes)
 
     features = classify_features(df, target_column, withheld, recipes, clip_outliers)
@@ -1147,15 +1327,40 @@ def train_candidates(
 
     used = features["numeric"] + features["categorical"] + features["frequent"]
     duplicate_columns = used if keep_identical_rows_together and split_strategy == "random" else None
-    X_train, X_test, y_train, y_test = split_data(
-        df,
-        target_column,
-        task,
-        strategy=split_strategy,
-        time_column=time_column,
-        group_column=group_column,
-        duplicate_columns=duplicate_columns,
-    )
+    sealed_info: dict = {"sealed": False}
+    parts = None
+    if sealed_holdout:
+        try:
+            parts = split_with_sealed_holdout(
+                df, target_column, task, strategy=split_strategy, time_column=time_column,
+                group_column=group_column, duplicate_columns=duplicate_columns,
+                copy_columns=seal_columns if keep_identical_rows_together else None,
+            )
+            reason = sealed_unavailable_reason(parts[4], parts[5], task)
+        except ModelingError as exc:
+            parts, reason = None, str(exc)
+        if reason is not None:
+            parts = None
+            sealed_info["sealed_unavailable_reason"] = reason
+    if parts is not None:
+        X_train, X_test, X_final, y_train, y_test, y_final = parts
+        sealed_info = {
+            "sealed": True,
+            "final_rows": int(len(X_final)),
+            "final_fraction": SEALED_FINAL_SIZE,
+            "sealed_rows_hash": sealed_rows_hash(X_final.index),
+            "seal_key_columns": seal_columns if keep_identical_rows_together else None,
+        }
+    else:
+        X_train, X_test, y_train, y_test = split_data(
+            df,
+            target_column,
+            task,
+            strategy=split_strategy,
+            time_column=time_column,
+            group_column=group_column,
+            duplicate_columns=duplicate_columns,
+        )
     # Whether copies were actually kept together: asking for it on a file with no copies is the
     # ordinary split, and the ledger should key it as one.
     kept_together = False
@@ -1328,9 +1533,10 @@ def train_candidates(
             "test_rows": int(len(X_test)),
             # The rule that held the rows out, as requested: what the test-set ledger keys a
             # look on. Not derived from the row counts, which move with the data.
-            "requested_test_size": DEFAULT_TEST_SIZE,
+            "requested_test_size": SEALED_DEV_SIZE if sealed_info["sealed"] else DEFAULT_TEST_SIZE,
             "seed": RANDOM_STATE,
             "keep_duplicates_together": kept_together,
+            **sealed_info,
             # The fraction actually held out. A time split moves its cut to a timestamp
             # boundary, so this can differ from the 20% asked for.
             "test_fraction": round(len(X_test) / (len(X_train) + len(X_test)), 4),

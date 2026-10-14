@@ -186,6 +186,34 @@ at the point the headline becomes qualified.
 - Users who iterate legitimately will see warnings quickly. The messages say what to do next,
   not only what is wrong.
 
+## As built
+
+Decisions the record left open, settled when the sealed holdout (#8) and the new-data check (#9)
+were built:
+
+- **Sizes.** 70 / 15 / 15: `SEALED_FINAL_SIZE` and `SEALED_DEV_SIZE` in `modeling.py`. The
+  development partition is what `/train` and `/improve` report on, the role the test set has
+  always had; `/finalise` is the only route that reads the sealed one.
+- **What fixes the sealed rows.** Only the data, the seed, the split strategy and its column, and
+  (when copies are kept together) the file's own columns. Never the inputs chosen, the models
+  tried, the derived inputs ticked or anything the improvement loop finds, so nothing done while
+  iterating can move them. A hash of the sealed rows is stored and checked at `finalise`; if the
+  data no longer produces those rows the evaluation is refused rather than done on others.
+- **Once per (data version, split rule).** A second call returns the stored result with a note. A
+  *different model* asking for the same rows gets that stored result too, with the reason: scoring
+  a second model on rows the first result may already have informed is not independent. If the
+  data changes, a new version may open its own sealed rows, and the response says how many times
+  the rule has been opened on earlier versions — those rows overlap, so it is never presented as a
+  clean slate.
+- **Sealed late.** `sealed_after_looks` records how many looks had been taken when the seal was
+  first made, and the first record for a (data, split rule) wins. A seal taken after looks is still
+  unopened but is shown as "sealed after N looks", since the rows informed earlier decisions as
+  training or development rows.
+- **New data (#9).** A check on a file's real answers is recorded only when a score was computed,
+  once per distinct file (by content hash), against the model that was current, excluding rows
+  whose inputs match the original upload. It is shown beside the original score, never in place
+  of it, and does not count as a look.
+
 ## What would change this
 
 - **The owner prefers blocking** after a limit. The ledger and statuses are the same; only the

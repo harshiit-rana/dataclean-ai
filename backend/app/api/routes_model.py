@@ -23,6 +23,7 @@ import asyncio
 import json
 import logging
 import uuid
+from datetime import datetime, timezone
 from collections.abc import AsyncIterator
 
 import pandas as pd
@@ -91,6 +92,30 @@ class BadOperatingPointError(AppError):
 
     def __init__(self, detail: str):
         super().__init__("Cut-off trade-off not understood", detail)
+
+
+class NoSealedHoldoutError(AppError):
+    status_code = 409
+
+    def __init__(self, reason: str | None = None):
+        super().__init__(
+            "There is no sealed holdout to open",
+            "This model was trained without a sealed final holdout"
+            + (f" ({reason})" if reason else "")
+            + ". Tick \"keep a sealed final holdout\" in the plan and train again; it has to "
+            "be taken before the first look to be worth anything.",
+        )
+
+
+class SealedRowsChangedError(AppError):
+    status_code = 409
+
+    def __init__(self):
+        super().__init__(
+            "The sealed rows are not what was sealed",
+            "The data no longer produces the rows that were set aside, so opening them would "
+            "not be the evaluation that was promised. Train again to seal a new holdout.",
+        )
 
 
 def _operating_point(request: TrainRequest) -> operating_point.OperatingPoint:
@@ -421,6 +446,8 @@ async def get_model_plan(
         keep_identical_rows_together=(
             bool(stored["split"].get("keep_duplicates_together")) if stored else bool(identical_rows)
         ),
+        sealed_holdout_offer=_sealed_offer(df, target, task),
+        sealed_holdout=bool(stored["split"].get("sealed")) if stored else False,
         suggested_exclusions=suggestions,
         exclusions_basis=exclusions_basis,
         excluded_columns=previously_excluded,
@@ -469,6 +496,33 @@ async def get_model_plan(
         suggested_features=[r.as_dict() for r in proposed_features],
         feature_recipes=chosen_features,
     )
+
+
+def _sealed_offer(df: pd.DataFrame, target: str, task: str) -> dict:
+    """Whether a sealed final holdout can be taken from this file, and the part sizes or why not.
+
+    Checked on the default random split by a dry run. It is only worth offering when both
+    held-out parts are big enough for a score on them to mean anything -- the app's own bar --
+    because a sealed holdout that cannot support a verdict spends data and learns nothing. The
+    train request re-checks it for the split actually chosen.
+    """
+    try:
+        X_train, X_dev, X_final, y_train, y_dev, y_final = modeling.split_with_sealed_holdout(
+            df, target, task
+        )
+    except modeling.ModelingError as exc:
+        return {"available": False, "reason": str(exc)}
+    except Exception:  # noqa: BLE001 -- an offer is a nicety; it must never fail the plan
+        logger.warning("Could not work out whether a sealed holdout is possible", exc_info=True)
+        return {"available": False, "reason": "It could not be worked out for this file."}
+    reason = modeling.sealed_unavailable_reason(y_dev, y_final, task)
+    return {
+        "available": reason is None,
+        "reason": reason,
+        "train_rows": int(len(X_train)),
+        "development_rows": int(len(X_dev)),
+        "final_rows": int(len(X_final)),
+    }
 
 
 def _identical_rows(df: pd.DataFrame, target: str, columns: list[str]) -> dict | None:
@@ -592,6 +646,9 @@ def _save_and_record(directory, result: dict, df, *, route: str, action_log=None
     )
     result["evaluation"] = evaluation
     result["assessment"] = evaluation_ledger.qualify(result.get("assessment"), evaluation)
+    version = current_dataset_version_in(directory, ensure=True)
+    if (result.get("split") or {}).get("sealed"):
+        result["split"]["sealed_after_looks"] = _record_the_seal(directory, result["split"], version)
     payload = model_store.save_result(
         directory, result, fingerprint=model_store.fingerprint_frame(df)
     )
@@ -605,11 +662,54 @@ def _save_and_record(directory, result: dict, df, *, route: str, action_log=None
         split=payload.get("split"),
         route=route,
         run_id=payload["run_id"],
-        version=current_dataset_version_in(directory, ensure=True),
+        version=version,
         metrics=best.get("metrics"),
         extra={"primary_metric": payload.get("primary_metric"), "model": payload.get("best_model")},
     )
     return payload
+
+
+def _record_the_seal(directory, split: dict, version: dict | None) -> int:
+    """Writes down which rows were sealed and how many looks had already been taken.
+
+    Returns that number, which the result shows. A holdout sealed *after* looks have been taken
+    is still unopened, but the rows were training or development rows until now and informed the
+    decisions made on them, so the page says "sealed after N looks" rather than presenting it as
+    pristine (decision 0001, section 4). The first record for a (data, split rule) wins: later
+    runs on the same data cannot make the seal look older than it is.
+    """
+    import json
+
+    path = directory / model_store.SEALED_FILENAME
+    key = evaluation_ledger.split_key(split)
+    fingerprint = (version or {}).get("fingerprint")
+    try:
+        records = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+    except (OSError, ValueError):
+        records = []
+    for record in records:
+        if record.get("split_key") == key and record.get("dataset_fingerprint") == fingerprint:
+            return int(record.get("sealed_after_looks", 0))
+
+    looks_so_far = sum(
+        1 for e in evaluation_ledger.looks(directory) if e.get("event") == evaluation_ledger.LOOK
+    )
+    records.append(
+        {
+            "split_key": key,
+            "dataset_version": (version or {}).get("version"),
+            "dataset_fingerprint": fingerprint,
+            "rows": split.get("final_rows"),
+            "rows_hash": split.get("sealed_rows_hash"),
+            "sealed_after_looks": looks_so_far,
+            "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }
+    )
+    try:
+        path.write_text(json.dumps(records), encoding="utf-8")
+    except OSError:
+        logger.warning("Could not record the sealed holdout", exc_info=True)
+    return looks_so_far
 
 
 @router.post("/api/model/{session_id}/train")
@@ -642,6 +742,7 @@ async def train_model(
             feature_recipes_wanted=request.feature_recipes,
             clip_outliers=request.clip_outliers,
             keep_identical_rows_together=request.keep_identical_rows_together,
+            sealed_holdout=request.sealed_holdout,
         )
 
     try:
@@ -706,6 +807,7 @@ def _improve_and_save(
         on_stage=on_stage,
         clip_outliers=request.clip_outliers,
         keep_identical_rows_together=request.keep_identical_rows_together,
+        sealed_holdout=request.sealed_holdout,
     )
     best = found["best"]
     # Plain constructor names, not the `model__`-prefixed pipeline paths the search uses.
@@ -740,6 +842,7 @@ def _improve_and_save(
         feature_recipes_wanted=best.get("feature_recipes", []),
         clip_outliers=request.clip_outliers,
         keep_identical_rows_together=request.keep_identical_rows_together,
+        sealed_holdout=request.sealed_holdout,
     )
     rebuilt["improvement"] = {
         "rounds": found["rounds"],
@@ -909,7 +1012,152 @@ async def get_model_result(
         stored["evaluation"]["new_data"] = evaluation_ledger.new_data_summary(
             directory, stored.get("run_id")
         )
+        stored["evaluation"]["final"] = evaluation_ledger.final_summary(
+            directory, stored.get("run_id")
+        )
     return stored
+
+
+def _open_the_sealed_holdout(df, stored: dict, pipeline) -> dict:
+    """Scores the fitted model, once, on the sealed rows. Runs in a worker thread.
+
+    The partitions are rebuilt from the stored settings by the same rule that made them, and
+    the sealed rows are checked against the hash taken when they were set aside -- if the data
+    no longer produces those rows, the evaluation would not be the one promised, and it is
+    refused rather than quietly done on different rows.
+    """
+    split = stored["split"]
+    features = stored["features"]
+    task = stored["task"]
+    target = stored["target_column"]
+    used = features["numeric"] + features["categorical"] + features.get("frequent", [])
+    recipes = [feature_recipes.Recipe(**r) for r in features.get("derived", []) or []]
+
+    X_train, X_dev, X_final, y_train, y_dev, y_final = modeling.split_with_sealed_holdout(
+        feature_recipes.apply(df, recipes),
+        target,
+        task,
+        strategy=split["strategy"],
+        time_column=split.get("time_column"),
+        group_column=split.get("group_column"),
+        duplicate_columns=used if split.get("keep_duplicates_together") else None,
+        copy_columns=split.get("seal_key_columns"),
+    )
+    if modeling.sealed_rows_hash(X_final.index) != split.get("sealed_rows_hash") or len(
+        X_train
+    ) != split.get("train_rows"):
+        raise SealedRowsChangedError()
+
+    best = next((r for r in stored["results"] if r["model"] == stored["best_model"]), {})
+    positive = (stored.get("operating_point") or {}).get("positive_label") or (
+        best.get("metrics") or {}
+    ).get("positive_label")
+    metrics = modeling.evaluate(pipeline, X_final[used], y_final, task, positive)
+    baseline = modeling.baseline_score(y_train, y_final, task)
+    assessment = modeling.assess_result(
+        metrics,
+        baseline,
+        task,
+        test_rows=int(len(y_final)),
+        class_counts=(
+            pd.Series(y_final).astype(str).value_counts().tolist()
+            if task == "classification"
+            else None
+        ),
+        model_count=len(stored["results"]),
+    )
+    return {
+        "rows": int(len(y_final)),
+        "metrics": {k: v for k, v in metrics.items() if isinstance(v, (int, float))},
+        "baseline": baseline,
+        "assessment": assessment,
+        "primary_metric": stored.get("primary_metric"),
+        "rows_seen_in_training": modeling.test_rows_seen_in_training(
+            X_train[used], X_final[used], y_train, y_final
+        ),
+    }
+
+
+@router.post("/api/model/{session_id}/finalise")
+async def finalise_model(
+    session_id: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Opens the sealed final holdout, once, and scores the current model on it.
+
+    The one route that evaluates on the sealed rows; every other route works on the development
+    partition, so nothing done while iterating can have been informed by them. It can be called
+    once per (data version, split rule): a second call returns the stored result with a note
+    rather than evaluating again, because a second model scored on the same rows -- chosen,
+    perhaps, because of the first result -- is not an independent evaluation.
+    """
+    df, _goal, directory, _rules = _load_session(settings, session_id)
+    stored = model_store.load_result(directory)
+    if stored is None:
+        raise NoTrainedModelError()
+    split = stored.get("split") or {}
+    if not split.get("sealed"):
+        raise NoSealedHoldoutError(split.get("sealed_unavailable_reason"))
+
+    version = current_dataset_version_in(directory, ensure=True)
+    earlier = evaluation_ledger.find_final(directory, version, split)
+    if earlier is not None:
+        extra = earlier.get("extra") or {}
+        same_model = earlier.get("run_id") == stored.get("run_id")
+        return {
+            "already_opened": True,
+            "for_this_model": same_model,
+            "opened_at": earlier.get("at"),
+            "run_id": earlier.get("run_id"),
+            "rows": extra.get("rows"),
+            "metrics": earlier.get("metrics"),
+            "baseline": extra.get("baseline"),
+            "assessment": extra.get("assessment"),
+            "primary_metric": extra.get("primary_metric"),
+            "rows_seen_in_training": extra.get("rows_seen_in_training", 0),
+            "note": (
+                "The sealed rows were already opened for this model; this is the stored "
+                "result, not a new evaluation."
+                if same_model
+                else "The sealed rows were already opened, for an earlier model. Scoring this "
+                "one on them as well would not be independent, since the first result may "
+                "have informed it. This is the stored result for that model."
+            ),
+        }
+
+    pipeline_file = model_store.pipeline_path(directory)
+    if pipeline_file is None:
+        raise NoTrainedModelError()
+
+    import joblib
+
+    try:
+        pipeline = await asyncio.to_thread(joblib.load, pipeline_file)
+        opened = await asyncio.to_thread(_open_the_sealed_holdout, df, stored, pipeline)
+    except (SealedRowsChangedError, modeling.ModelingError):
+        raise
+    except Exception as exc:  # noqa: BLE001 -- surface the reason rather than a bare 500
+        logger.exception("Opening the sealed holdout failed for session %s", session_id)
+        raise TrainingFailedError(f"The sealed holdout could not be opened: {exc}") from exc
+
+    entry = evaluation_ledger.record(
+        directory,
+        event=evaluation_ledger.FINAL,
+        split=split,
+        route="finalise",
+        run_id=stored.get("run_id"),
+        version=version,
+        metrics=opened["metrics"],
+        extra={k: opened[k] for k in ("rows", "baseline", "assessment", "primary_metric", "rows_seen_in_training")},
+    )
+    return {
+        "already_opened": False,
+        "for_this_model": True,
+        "opened_at": (entry or {}).get("at"),
+        "run_id": stored.get("run_id"),
+        "earlier_openings_on_other_versions": evaluation_ledger.final_openings(directory, split) - 1,
+        **opened,
+    }
 
 
 @router.get("/api/model/{session_id}/history")

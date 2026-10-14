@@ -6,6 +6,7 @@ import type {
   BusinessRule,
   CorrelationResult,
   ErrorResponse,
+  FinaliseResult,
   GoalContext,
   GoalContextResponse,
   ImproveRequest,
@@ -177,6 +178,18 @@ export async function improveModel(
     body: JSON.stringify(request),
   });
   return handleResponse<ModelResult>(response);
+}
+
+/** Opens the sealed final holdout and scores the current model on it, once.
+ *
+ * A second call, for this model or another, returns the stored result with a note rather than
+ * evaluating again: a second model scored on rows the first result may have informed is not an
+ * independent evaluation. */
+export async function finaliseModel(sessionId: string): Promise<FinaliseResult> {
+  const response = await sessionFetch(sessionId, `/api/model/${sessionId}/finalise`, {
+    method: "POST",
+  });
+  return handleResponse<FinaliseResult>(response);
 }
 
 /** The last evaluation, so returning to the page doesn't mean retraining. 404 when nothing

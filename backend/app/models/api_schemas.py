@@ -153,6 +153,11 @@ class ModelPlanResponse(BaseModel):
     # question the model has already been shown the answer to.
     identical_rows: Optional[dict] = None
     keep_identical_rows_together: bool = False
+    # Whether a sealed final holdout can be taken from this file (each held-out part big enough
+    # to judge), with the part sizes or the reason it cannot. Computed for the default random
+    # split; the train request re-checks it for whichever split is chosen.
+    sealed_holdout_offer: Optional[dict] = None
+    sealed_holdout: bool = False
 
 
 class SetRulesRequest(BaseModel):
@@ -215,6 +220,10 @@ class TrainRequest(BaseModel):
     # side of a random split. Off unless asked for; the plan pre-selects it when copies exist.
     # Ignored by the other split strategies, which keep their own units whole.
     keep_identical_rows_together: bool = False
+    # Take a final partition out before anything else happens to the rows, for the user to open
+    # once with `finalise`. Needs a file big enough for both held-out parts to be judged; when
+    # it is not, the ordinary two-way split is used and the result says why.
+    sealed_holdout: bool = False
 
 
 class ImproveRequest(TrainRequest):

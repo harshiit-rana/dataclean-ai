@@ -218,7 +218,10 @@ class TestOverTheApi:
         _train(session_id)
         second = _train(session_id)
         stored = client.get(f"/api/model/{session_id}/result").json()
-        assert stored["evaluation"] == second["evaluation"]
+        # `new_data` and `final` are looked up when the result is read; everything else is what
+        # the run was told at the time.
+        dynamic = {"new_data", "final"}
+        assert {k: v for k, v in stored["evaluation"].items() if k not in dynamic} == second["evaluation"]
         assert stored["assessment"]["headline"] == second["assessment"]["headline"]
 
     def test_reading_the_result_again_does_not_advance_the_count(self):

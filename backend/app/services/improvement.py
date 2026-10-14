@@ -110,6 +110,7 @@ def improve(
     on_stage: Callable[[str, str], None] | None = None,
     clip_outliers: list[str] | None = None,
     keep_identical_rows_together: bool = False,
+    sealed_holdout: bool = False,
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
 
@@ -140,6 +141,7 @@ def improve(
     # The derived inputs in force, and the alternative the fourth round will try. Both frames
     # are built up front because the split is by index and the recipes only ever add columns,
     # so the same rows land on the same side of the split whichever frame is in use.
+    raw_columns = [c for c in df.columns if c != target_column]
     proposed = feature_recipes.propose(df, target_column, withheld)
     wanted_ids = set(feature_recipes_wanted or [])
     recipes = [r for r in proposed if r.id in wanted_ids]
@@ -164,17 +166,36 @@ def improve(
         )
 
     # Split once. Nothing below this line is allowed to look at X_test or y_test.
-    X_train, X_test, y_train, y_test = modeling.split_data(
-        df,
-        target_column,
-        task,
-        strategy=split_strategy,
-        time_column=time_column,
-        group_column=group_column,
-        duplicate_columns=(
-            used if keep_identical_rows_together and split_strategy == "random" else None
-        ),
-    )
+    duplicate_columns = used if keep_identical_rows_together and split_strategy == "random" else None
+    parts = None
+    if sealed_holdout:
+        # The same sealed rows `train_candidates` takes, by the same rule, so the model this
+        # loop settles on is rebuilt on exactly the partitions it searched within. When the file
+        # cannot support three parts the ordinary split is used, as it is there.
+        try:
+            parts = modeling.split_with_sealed_holdout(
+                df, target_column, task, strategy=split_strategy, time_column=time_column,
+                group_column=group_column, duplicate_columns=duplicate_columns,
+                copy_columns=(
+                    [str(c) for c in raw_columns] if keep_identical_rows_together else None
+                ),
+            )
+            if modeling.sealed_unavailable_reason(parts[4], parts[5], task) is not None:
+                parts = None
+        except modeling.ModelingError:
+            parts = None
+    if parts is not None:
+        X_train, X_test, _sealed, y_train, y_test, _sealed_y = parts
+    else:
+        X_train, X_test, y_train, y_test = modeling.split_data(
+            df,
+            target_column,
+            task,
+            strategy=split_strategy,
+            time_column=time_column,
+            group_column=group_column,
+            duplicate_columns=duplicate_columns,
+        )
     # Captured before the frame is narrowed to the model's inputs, and aligned to the training
     # rows -- every round below compares configurations on these folds.
     train_groups = (

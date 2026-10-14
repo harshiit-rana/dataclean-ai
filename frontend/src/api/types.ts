@@ -272,6 +272,37 @@ export interface ModelPlan {
   /** Whether the form should open with "keep identical rows together" ticked: on when copies
    * exist, or what the last run used. */
   keep_identical_rows_together?: boolean;
+  /** Whether a sealed final holdout can be taken from this file, and the part sizes or why not. */
+  sealed_holdout_offer?: {
+    available: boolean;
+    reason?: string | null;
+    train_rows?: number;
+    development_rows?: number;
+    final_rows?: number;
+  };
+  /** Whether the last run sealed one, so the form reopens showing what was chosen. */
+  sealed_holdout?: boolean;
+}
+
+/** The model scored once on the sealed final holdout. */
+export interface SealedEvaluation {
+  at: string | null;
+  rows: number | null;
+  metrics: Record<string, number>;
+  baseline: Record<string, number | string> | null;
+  assessment: { verdict: string; headline: string } | null;
+  primary_metric: string | null;
+  rows_seen_in_training: number;
+}
+
+/** What `POST /finalise` returns. */
+export interface FinaliseResult extends SealedEvaluation {
+  already_opened: boolean;
+  /** False when the rows were opened earlier for a different model: this is that result. */
+  for_this_model: boolean;
+  opened_at: string | null;
+  run_id: string | null;
+  note?: string;
 }
 
 /** How the held-out rows had been used when a run was made (decision 0001). */
@@ -289,6 +320,8 @@ export interface EvaluationStatus {
   whole_file_statistics?: { operation: string; column: string }[];
   /** How the model has done on rows that did not exist when it was built, shown beside the
    * held-out score and never in place of it. Looked up when the result is read. */
+  /** The sealed final holdout, once opened for this model. Looked up when the result is read. */
+  final?: SealedEvaluation | null;
   new_data?: {
     count: number;
     latest: {
@@ -393,6 +426,8 @@ export interface TrainRequest {
   clip_outliers?: string[];
   /** Put exact copies of a row on one side of a random split. Ignored by the other splits. */
   keep_identical_rows_together?: boolean;
+  /** Take a final partition out first, to open once with `finalise`. */
+  sealed_holdout?: boolean;
 }
 
 /** The confusion matrix at one cut-off, as counts and rates. */
@@ -581,6 +616,15 @@ export interface ModelResult {
     test_rows_seen_in_training?: number;
     /** True when exact copies were kept on one side of the split. */
     keep_duplicates_together?: boolean;
+    /** True when a final partition was set aside before anything was decided. */
+    sealed?: boolean;
+    final_rows?: number;
+    final_fraction?: number;
+    /** How many looks at the held-out rows had been taken before the seal was made. Zero means
+     * the rows were sealed before anything was decided. */
+    sealed_after_looks?: number;
+    /** Why a sealed holdout was asked for and could not be made. */
+    sealed_unavailable_reason?: string;
   };
   baseline: Record<string, number | string>;
   primary_metric: string;

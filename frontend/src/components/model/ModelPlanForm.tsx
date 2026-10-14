@@ -34,6 +34,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
   const [recipes, setRecipes] = useState<string[]>(plan.feature_recipes ?? []);
   const [clip, setClip] = useState<string[]>(plan.features.clipped ?? []);
   const [keepCopies, setKeepCopies] = useState<boolean>(plan.keep_identical_rows_together ?? false);
+  const [sealed, setSealed] = useState<boolean>(plan.sealed_holdout ?? false);
   const [timeColumn, setTimeColumn] = useState<string>(plan.date_columns[0] ?? "");
   // Defaults to the most-repeated column, which is the one the readiness panel names.
   const [groupColumn, setGroupColumn] = useState<string>(plan.group_columns?.[0] ?? "");
@@ -203,6 +204,31 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
             </Select>
           )}
 
+          {plan.sealed_holdout_offer && (
+            <label
+              className={cn(
+                "flex items-start gap-3 rounded-md border border-border p-3",
+                plan.sealed_holdout_offer.available ? "cursor-pointer" : "cursor-not-allowed opacity-60"
+              )}
+            >
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={sealed && plan.sealed_holdout_offer.available}
+                disabled={!plan.sealed_holdout_offer.available}
+                onChange={() => setSealed((on) => !on)}
+              />
+              <span className="flex-1 text-sm">
+                <span className="font-medium">Keep a sealed final holdout</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  {plan.sealed_holdout_offer.available
+                    ? `Sets aside ${plan.sealed_holdout_offer.final_rows?.toLocaleString()} rows before anything is decided. They are never scored while you iterate — only an explicit "open the sealed rows" does it, once — so the number you report has not been chosen against. Training uses about ${plan.sealed_holdout_offer.train_rows?.toLocaleString()} rows and the score you see while iterating is measured on ${plan.sealed_holdout_offer.development_rows?.toLocaleString()}. It only counts if you take it before your first look.`
+                    : `Not available for this file. ${plan.sealed_holdout_offer.reason ?? ""}`}
+                </span>
+              </span>
+            </label>
+          )}
+
           {splitStrategy === "random" && plan.identical_rows && (
             <label className="flex cursor-pointer items-start gap-3 rounded-md border border-amber-500/50 p-3">
               <input
@@ -304,6 +330,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
               clip_outliers: liveClip,
               keep_identical_rows_together:
                 splitStrategy === "random" && Boolean(plan.identical_rows) && keepCopies,
+              sealed_holdout: Boolean(plan.sealed_holdout_offer?.available) && sealed,
             })
           }
           disabled={training || models.length === 0 || blocked || !tradeOffReady}

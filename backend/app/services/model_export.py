@@ -21,6 +21,8 @@ from app.services.modeling import (
     DEFAULT_TEST_SIZE,
     MODELS,
     RANDOM_STATE,
+    SEALED_DEV_SIZE,
+    SEALED_FINAL_SIZE,
     ModelSpec,
 )
 
@@ -98,6 +100,46 @@ def _function_source(function) -> str:
 
 
 def _split_block(split: dict, task: str) -> str:
+    """The code that divides the rows, for the script.
+
+    A sealed final holdout is taken first, by the app's own function (copied from its source),
+    and the ordinary split then divides what is left -- the same order the app uses, so the
+    script reproduces all three partitions. The sealed rows are set aside and never touched
+    here; opening them is an explicit act in the app.
+    """
+    if not split.get("sealed"):
+        return _ordinary_split_block(split, task, DEFAULT_TEST_SIZE)
+
+    copies = bool(split.get("seal_key_columns"))
+    strategy = split.get("strategy") or "random"
+    helper = (
+        _function_source(modeling.split_keeping_identical_rows_together) + "\n\n" if copies else ""
+    )
+    seal = f"""{helper}{_function_source(modeling.sealed_holdout_rows)}
+
+# A sealed final holdout, taken out before anything else happens to the rows. It depends only on
+# the data, the seed and how the rows are divided -- not on which columns are used or which
+# model is fitted -- so nothing done during development can move it. The app opens it only when
+# you ask; this script never does.
+SEAL_KEY_COLUMNS = {_literal(split.get("seal_key_columns"))}
+final_index = sealed_holdout_rows(
+    labelled, TARGET, {task == "classification"}, {_literal(strategy)},
+    {_literal(split.get("time_column"))}, {_literal(split.get("group_column"))},
+    {SEALED_FINAL_SIZE}, {RANDOM_STATE}, SEAL_KEY_COLUMNS,
+)
+labelled = labelled.drop(index=final_index)
+features = features.drop(index=final_index)
+labels = labels.drop(index=final_index)
+print(f"Sealed {{len(final_index)}} rows as a final holdout; they are not used below.")
+"""
+    return seal + "\n" + _ordinary_split_block(
+        split, task, SEALED_DEV_SIZE / (1 - SEALED_FINAL_SIZE), helper_defined=copies
+    )
+
+
+def _ordinary_split_block(
+    split: dict, task: str, test_size: float, helper_defined: bool = False
+) -> str:
     if split.get("strategy") == "time" and split.get("time_column"):
         return f'''# Time-based split: train on older rows, test on the most recent.
 # A random split here would let the model learn from the future to predict the past,
@@ -109,7 +151,7 @@ ranked = order.sort_values(kind="stable").index
 times = order.loc[ranked]
 starts = [i for i, repeat in enumerate(times.duplicated().tolist()) if not repeat]
 boundaries = [start for start in starts if 0 < start < len(ranked)]
-target = int(len(ranked) * {1 - DEFAULT_TEST_SIZE})
+target = int(len(ranked) * {1 - test_size})
 cut = min(boundaries, key=lambda boundary: (abs(boundary - target), -boundary))
 X_train, X_test = features.loc[ranked[:cut]], features.loc[ranked[cut:]]
 y_train, y_test = labels.loc[ranked[:cut]], labels.loc[ranked[cut:]]'''
@@ -121,7 +163,7 @@ y_train, y_test = labels.loc[ranked[:cut]], labels.loc[ranked[cut:]]'''
 # recognising the entity rather than learning the pattern. That inflates every number
 # below and cannot help once it meets an entity it has never seen.
 groups = labelled[{_literal(column)}]
-splitter = GroupShuffleSplit(n_splits=1, test_size={DEFAULT_TEST_SIZE}, random_state={RANDOM_STATE})
+splitter = GroupShuffleSplit(n_splits=1, test_size={test_size}, random_state={RANDOM_STATE})
 train_pos, test_pos = next(splitter.split(features, labels, groups=groups))
 X_train, X_test = features.iloc[train_pos], features.iloc[test_pos]
 y_train, y_test = labels.iloc[train_pos], labels.iloc[test_pos]'''
@@ -136,7 +178,7 @@ y_train, y_test = labels.iloc[train_pos], labels.iloc[test_pos]'''
 X_train, X_test, y_train, y_test = train_test_split(
     features,
     labels,
-    test_size={DEFAULT_TEST_SIZE},
+    test_size={test_size},
     random_state={RANDOM_STATE},
     stratify=stratify,
 )"""
@@ -147,9 +189,8 @@ X_train, X_test, y_train, y_test = train_test_split(
     # Exact copies stay on one side. The function is the app's own, copied from its source
     # rather than rewritten, so this script cuts the same rows the app did; where there are no
     # copies the split is the ordinary one, as it is in the app.
-    return f"""{_function_source(modeling.split_keeping_identical_rows_together)}
-
-# Rows that are exact copies of each other -- the model's inputs and the answer -- stay on one
+    helper = "" if helper_defined else _function_source(modeling.split_keeping_identical_rows_together) + "\n\n"
+    return f"""{helper}# Rows that are exact copies of each other -- the model's inputs and the answer -- stay on one
 # side of the split. A copy in the test set is a question the model was already shown the
 # answer to, and it would flatter every number below.
 duplicate_key = pd.util.hash_pandas_object(
@@ -157,7 +198,7 @@ duplicate_key = pd.util.hash_pandas_object(
 )
 if duplicate_key.nunique() < len(duplicate_key):
     train_pos, test_pos = split_keeping_identical_rows_together(
-        labels, duplicate_key.to_numpy(), {task == "classification"}, {DEFAULT_TEST_SIZE}, {RANDOM_STATE}
+        labels, duplicate_key.to_numpy(), {task == "classification"}, {test_size}, {RANDOM_STATE}
     )
     X_train, X_test = features.iloc[train_pos], features.iloc[test_pos]
     y_train, y_test = labels.iloc[train_pos], labels.iloc[test_pos]

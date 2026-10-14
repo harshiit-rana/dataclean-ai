@@ -446,8 +446,18 @@ to choose anything*. Every decision the model path makes was traced to the rows 
   of that model — only when there are enough labelled rows to judge, never for the same file
   twice, and never on rows the model was built from (matched on their inputs, so a revised label
   does not make an old row new). It is shown beside the original score, never in place of it, and
-  does not use up the held-out rows. What is not built yet: a holdout sealed before the first
-  look (#8).
+  does not use up the held-out rows.
+
+  **A holdout sealed before the first look** is the answer when the held-out rows have been used
+  up. Opt-in at plan time, and offered only when both held-out parts are big enough to be judged
+  (on the churn sample 852 / 183 / 183; on a 300-row file with a 20% rarer class each part would
+  hold 9 of the rarer class, so it is withheld with the reason). Training, development and sealed
+  rows are 70 / 15 / 15, with every guarantee the ordinary split gives — whole entities, forward in
+  time, copies together — holding between all three. The sealed rows are fixed by the data and the
+  split rule alone, so nothing done while iterating can move them; only `finalise` scores them,
+  once per data version, and a second model asking for the same rows is handed the stored result
+  with the reason. A seal taken after looks says so. The exported script reproduces all three
+  partitions.
 
 ### Using a session again
 

@@ -332,6 +332,43 @@ class TestTheChecksShownBesideTheScore:
         assert rigged["permutation_importance"] != honest["permutation_importance"]
 
 
+# ------------------------------------------------------------------ the sealed rows
+
+
+class TestTheSealedRows:
+    """A sealed final holdout is only sealed if nothing but `finalise` ever reads it. Flip every
+    answer in it and everything the app decides, and everything it reports on the development
+    rows, must stay exactly as it was."""
+
+    def _pin(self, monkeypatch, df):
+        final = modeling.split_with_sealed_holdout(df, "outcome", "classification")[2].index
+        monkeypatch.setattr(modeling, "sealed_holdout_rows", lambda labelled, *a, **k: final)
+        flipped = df.copy()
+        flipped.loc[final, "outcome"] = flipped.loc[final, "outcome"].map({"yes": "no", "no": "yes"})
+        return flipped, final
+
+    def test_flipping_the_sealed_answers_moves_no_decision_and_no_report(self, learnable, monkeypatch):
+        flipped, final = self._pin(monkeypatch, learnable)
+
+        def run(frame):
+            return modeling.train_candidates(
+                frame, target_column="outcome", task="classification", model_names=MODELS,
+                include_deep_diagnostics=False, sealed_holdout=True, point=OperatingPoint("f1"),
+            )
+
+        honest, rigged = run(learnable), run(flipped)
+
+        assert rigged["best_model"] == honest["best_model"]
+        assert [(r["model"], r["cv_score"]) for r in rigged["results"]] == [
+            (r["model"], r["cv_score"]) for r in honest["results"]
+        ]
+        assert _chosen(rigged)["metrics"] == _chosen(honest)["metrics"]  # even the report
+        assert rigged["operating_point"] == honest["operating_point"]
+        assert rigged["assessment"] == honest["assessment"]
+        # The flip has to bite: the sealed rows really do hold different answers.
+        assert (learnable.loc[final, "outcome"] != flipped.loc[final, "outcome"]).all()
+
+
 # ------------------------------------------------------------------ the guard on the guard
 
 
