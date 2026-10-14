@@ -182,6 +182,13 @@ def improve(
         if split_strategy == "group" and group_column
         else None
     )
+    if train_groups is None and keep_identical_rows_together and split_strategy == "random":
+        # Copies were kept together at the split, so the folds keep them together too. Computed
+        # once, from the inputs the run started with; the alternative frame the derived-inputs
+        # round tries shares this split and these folds.
+        copy_ids = modeling.identical_row_ids(df, used, target_column)
+        if copy_ids.nunique() < len(copy_ids):
+            train_groups = copy_ids.loc[list(X_train.index)]
     train_index, test_index = list(X_train.index), list(X_test.index)
     X_train, X_test = X_train[used], X_test[used]
 

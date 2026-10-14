@@ -382,8 +382,11 @@ to choose anything*. Every decision the model path makes was traced to the rows 
   both — and the count of test rows seen in training is zero. It changes nothing when there are no
   copies, applies only to the random split (the others already keep their own units whole), is
   recorded as its own split rule in the test-set ledger, and the exported script carries the app's
-  own splitting function so it cuts the same rows. Near-duplicates (one cell different) are not
-  addressed.
+  own splitting function so it cuts the same rows. The folds inside the training rows keep copies
+  together too — model choice, tuning, the improvement loop, the cut-off and the diagnostics all
+  receive the copy ids — because a row and its copy straddling a fold is the same leak one level
+  down. Those grouped folds are not stratified (the known limit below). Near-duplicates (one cell
+  different) are not addressed.
 - **`drop_outlier_rows` wasn't warned about** alongside the other fixes that read a statistic
   from the whole file before any split.
 - **The app proposed fixes that leaked the test set into the training rows.** Filling blanks

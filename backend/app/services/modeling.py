@@ -1159,9 +1159,21 @@ def train_candidates(
     # Whether copies were actually kept together: asking for it on a file with no copies is the
     # ordinary split, and the ledger should key it as one.
     kept_together = False
+    copy_ids = None
     if duplicate_columns:
-        ids = identical_row_ids(df, duplicate_columns, target_column)
-        kept_together = bool(ids.nunique() < len(ids))
+        copy_ids = identical_row_ids(df, duplicate_columns, target_column)
+        kept_together = bool(copy_ids.nunique() < len(copy_ids))
+    # The groups every fold inside the training rows must keep whole. An entity wins: a grouped
+    # split already keeps its copies together, since they share an entity. Otherwise, when
+    # copies were kept together at the split, they are kept together in every fold too --
+    # choosing the model and tuning it on folds where a row and its copy straddle the boundary
+    # is the same leak as the split had, one level down.
+    if split_strategy == "group" and group_column:
+        fold_groups = df.loc[list(X_train.index), group_column]
+    elif kept_together:
+        fold_groups = copy_ids.loc[list(X_train.index)]
+    else:
+        fold_groups = None
     X_train, X_test = X_train[used], X_test[used]
 
     results = []
@@ -1224,11 +1236,7 @@ def train_candidates(
         )
 
     key = "r2" if task == "regression" else ("roc_auc" if "roc_auc" in trained[0]["metrics"] else "f1")
-    selection_groups = (
-        df.loc[list(X_train.index), group_column]
-        if split_strategy == "group" and group_column
-        else None
-    )
+    selection_groups = fold_groups
     selection = choose_on_training_folds(
         trained,
         lambda name: (
@@ -1286,11 +1294,7 @@ def train_candidates(
     # recorded, so the card and the script can say plainly that nothing was chosen.
     chosen_point = None
     if task == "classification" and best["metrics"].get("positive_label") is not None:
-        train_groups = (
-            df.loc[list(X_train.index), group_column]
-            if split_strategy == "group" and group_column
-            else None
-        )
+        train_groups = fold_groups
         chosen_point = operating_point.apply(
             build=lambda: build_pipeline(
                 best["model"],

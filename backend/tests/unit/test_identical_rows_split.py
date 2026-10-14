@@ -187,10 +187,10 @@ class TestInTraining:
 
         monkeypatch.setattr(modeling, "split_data", spy)
         improvement.improve(
-            with_copies(), target_column="y", task="classification",
+            continuous_with_copies(), target_column="y", task="classification",
             model_names=["logistic_regression"], budget=4, keep_identical_rows_together=True,
         )
-        assert seen["duplicate_columns"] == INPUTS
+        assert seen["duplicate_columns"] == ["x", "z"]
 
 
 class TestTheExport:

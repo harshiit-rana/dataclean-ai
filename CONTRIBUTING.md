@@ -160,6 +160,11 @@ are both running locally, you're ready to make changes.
   few lines of pandas (the date cut), a test executes the generated block and compares the app's
   test indices. Either way, a split the script cannot reproduce makes every exported number
   wrong.
+- **Copies kept together at the split are kept together in every fold.** When
+  `keep_identical_rows_together` took effect, `train_candidates` and `improve` hand the copy ids
+  to every fold-producing call as `groups`, through the same path a grouped split uses; an entity
+  grouping, when there is one, wins. `test_identical_rows_folds.py` spies on `tuning.cv_splitter`
+  and checks the splitter's own indices -- no group on both sides of any fold.
 - **A grouped split has to be grouped all the way down.** Choosing `split_strategy="group"`
   changes four things, not one: the train/test split uses `GroupShuffleSplit`, cross-validation
   uses `GroupKFold`, the improvement loop's search folds are grouped, and the grouping column
