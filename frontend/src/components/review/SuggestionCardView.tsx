@@ -15,6 +15,15 @@ interface SuggestionCardViewProps {
   onReasonChange: (cardId: string, reason: string) => void;
 }
 
+/** The heading over the app's own warning. `warning_kind` says which kind of correction it
+ * was; cards saved before it existed fall back to the operation, as they always did. */
+function warningHeading(card: SuggestionCard): string {
+  if (card.warning_kind === "left_to_model") return "Left for the model";
+  if (card.warning_kind === "blocked") return "Blocked";
+  if (card.warning_kind === "adjusted") return "Adjusted for your prediction target";
+  return card.operation ? "Adjusted for your prediction target" : "Blocked";
+}
+
 /** PRD §12.2/US-04: renders one suggestion card (Found / Proposed Action / Reasoning /
  * Tradeoff) with per-card approve/reject controls, and — once rejected — a box for the
  * reason. Decisions and reasons are held in ReviewPage state and submitted together to
@@ -51,12 +60,13 @@ export const SuggestionCardView = memo(function SuggestionCardView({
         </div>
 
         {/* Written by the app, not the model: this fix was corrected or blocked because of
-            the prediction target. Styled apart from the model's prose so it reads as a fact
-            about what will run, not as more advice. */}
+            the prediction target, or is left to the model pipeline so the test rows cannot
+            shape it. Styled apart from the model's prose so it reads as a fact about what
+            will run, not as more advice. */}
         {card.warning && (
           <div className="rounded-md border border-amber-500/40 bg-amber-500/10 p-3">
             <p className="font-medium text-amber-700 dark:text-amber-500">
-              {card.operation ? "Adjusted for your prediction target" : "Blocked"}
+              {warningHeading(card)}
             </p>
             <p className="mt-1 text-muted-foreground">{card.warning}</p>
           </div>

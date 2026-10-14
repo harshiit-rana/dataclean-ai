@@ -66,6 +66,8 @@ export interface SuggestionCard {
   /** Written in code, never by the model: the fix was corrected or blocked because it would
    * have damaged the prediction target, or it bakes a whole-file statistic into the data. */
   warning: string | null;
+  /** What kind of correction the warning describes. Absent on cards saved before it existed. */
+  warning_kind?: "adjusted" | "blocked" | "left_to_model" | null;
 }
 
 export interface ReadinessResponse {

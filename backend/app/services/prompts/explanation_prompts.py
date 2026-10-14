@@ -64,6 +64,14 @@ rules override everything above:
 - Never propose filling in missing values in the target column. A guessed answer becomes \
 indistinguishable from a real one. Propose drop_rows_with_nulls on it instead.
 - Never propose drop_column on the target column.
+- For missing values in any other column, do not propose fill_median, fill_mean or fill_mode. \
+The model fills the gaps itself using the training rows only, and filling them in the file \
+would let the rows it is tested on shape the numbers. Say "Leave these blanks for the model" \
+in PROPOSED_ACTION, explain in REASONING that the model handles blanks without that leak, and \
+give no OPERATION line at all.
+- Likewise do not propose cap_outliers or drop_outlier_rows for a column other than the \
+target: the limits would come from every row, test rows included. Say the model can clip \
+extreme values using the training rows only, and give no OPERATION line.
 - For a target_leakage issue, the fix is drop_column on the *flagged* column (not the \
 target). Explain in REASONING that the column gives away the answer and won't be available \
 when a real prediction is needed; in TRADEOFF, say plainly that keeping it would make the \

@@ -35,6 +35,11 @@ class SuggestionCard(BaseModel):
     # Written in code, never by the model, and shown on the card so the user approves the
     # corrected fix rather than the original one.
     warning: Optional[str] = None
+    # What kind of correction the warning describes, so the page can say so plainly:
+    # "adjusted" (the fix was rewritten), "blocked" (it would damage the target) or
+    # "left_to_model" (the model pipeline does this on the training rows alone). None on
+    # cards saved before this field existed, and on cards with no warning.
+    warning_kind: Optional[Literal["adjusted", "blocked", "left_to_model"]] = None
 
 
 class ActionLogEntry(BaseModel):

@@ -354,6 +354,14 @@ to choose anything*. Every decision the model path makes was traced to the rows 
   now counted, shown on the results page and cautioned in the model card.
 - **`drop_outlier_rows` wasn't warned about** alongside the other fixes that read a statistic
   from the whole file before any split.
+- **The app proposed fixes that leaked the test set into the training rows.** Filling blanks
+  with a column's median, and capping or dropping outliers, compute their value over every row
+  before any split. They were warned about but offered and, once approved, baked in — leaving
+  the pipeline's own training-only imputer with nothing to do. With a target named, a card for a
+  model input now comes out with no executable fix and says why ("Left for the model": the
+  pipeline fills gaps from the training rows only); the prompt tells the model not to propose
+  them and the code enforces it either way. Chat can still run them, with the warning. Sessions
+  with no target are unchanged, and so is the target column's own handling.
 - **A date-based split could cut a day in half.** The cut was a row count, so on daily data, or
   records loaded in batches, it usually fell mid-day: the model trained on part of a day and was
   tested on the rest, which is not predicting the future. The cut now moves to the nearest point
@@ -378,11 +386,10 @@ to choose anything*. Every decision the model path makes was traced to the rows 
 
 **Known, and left as they are:**
 
-- **Fixes that compute a statistic over the whole file** (fill with the median, cap outliers)
-  still run before the split when approved. The card warns, but once approved the blanks are
-  gone, so the pipeline's own training-only imputer has nothing left to do. The effect is small
-  for a median — but it is a leak, and the honest fix is to not offer these when a model is the
-  goal, and let the pipeline do it.
+- **A fix a user types in chat still runs from a whole-file statistic**, with the warning. That
+  is deliberate: the app no longer *proposes* them, but an instruction is the user's call.
+  Sessions that approved such fixes before this change carry the small leak; flagging those
+  runs is #12.
 - **The profiling-stage leakage cards still read the whole file.** The cards raised while
   cleaning, before any split exists, warn about a column that predicts the answer near-perfectly.
   They propose nothing that drops a column on its own, and no split exists yet to measure

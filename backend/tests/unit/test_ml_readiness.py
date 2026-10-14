@@ -190,11 +190,11 @@ class TestTargetSafety:
         assert operation is None
         assert warning
 
-    def test_imputing_a_feature_is_allowed_but_warned_about(self):
-        """Legal, and often right -- but it bakes a whole-file statistic into rows that will
-        later be split into train and test, so the user should approve it knowingly."""
+    def test_imputing_a_feature_is_allowed_by_chat_but_warned_about(self):
+        """A typed instruction is the user's call: it runs, with the warning. Only a proposal
+        the app makes itself is held back -- see TestWholeFileStatisticsAreNotProposed."""
         operation, _params, warning = ml_readiness.enforce_target_safety(
-            "fill_mean", {"column": "salary"}, goal()
+            "fill_mean", {"column": "salary"}, goal(), source="chat"
         )
         assert operation == "fill_mean"
         assert warning and "training" in warning
@@ -216,6 +216,75 @@ class TestTargetSafety:
             params,
             None,
         )
+
+
+class TestWholeFileStatisticsAreNotProposed:
+    """Filling a blank with the column median, or capping at limits read from the column,
+    computes its value over every row -- test rows included -- before any split. Once applied,
+    the pipeline's own training-only imputer has nothing left to do, so the leak is baked in.
+    With a target named the app does not propose these for a model input: the pipeline does
+    the same job on the training rows alone."""
+
+    WHOLE_FILE = ["fill_median", "fill_mean", "fill_mode", "cap_outliers", "drop_outlier_rows"]
+
+    @pytest.mark.parametrize("operation", WHOLE_FILE)
+    def test_a_card_for_a_model_input_gets_no_executable_fix(self, operation):
+        result, params, warning = ml_readiness.enforce_target_safety(
+            operation, {"column": "salary"}, goal()
+        )
+        assert result is None
+        assert params == {"column": "salary"}
+        assert warning and "left for the model" in warning.lower()
+
+    @pytest.mark.parametrize("operation", ["fill_median", "fill_mean", "fill_mode"])
+    def test_a_fill_says_the_model_fills_from_training_rows(self, operation):
+        _, _, warning = ml_readiness.enforce_target_safety(
+            operation, {"column": "salary"}, goal()
+        )
+        assert "training rows only" in warning
+        assert "chat" in warning  # how to still get a filled-in file
+
+    @pytest.mark.parametrize("operation", ["cap_outliers", "drop_outlier_rows"])
+    def test_extremes_point_to_the_training_only_clipping(self, operation):
+        _, _, warning = ml_readiness.enforce_target_safety(
+            operation, {"column": "salary"}, goal()
+        )
+        assert "model plan" in warning and "training rows only" in warning
+
+    @pytest.mark.parametrize("operation", WHOLE_FILE)
+    def test_without_a_target_the_same_proposal_is_unchanged(self, operation):
+        params = {"column": "salary"}
+        reporting = GoalContext(use_case="reporting", expected_output="x")
+        assert ml_readiness.enforce_target_safety(operation, params, reporting) == (
+            operation,
+            params,
+            None,
+        )
+
+    @pytest.mark.parametrize("operation", WHOLE_FILE)
+    def test_chat_can_still_run_them_with_the_warning(self, operation):
+        result, _params, warning = ml_readiness.enforce_target_safety(
+            operation, {"column": "salary"}, goal(), source="chat"
+        )
+        assert result == operation
+        assert warning and "whole file" in warning
+
+    def test_the_target_itself_is_handled_as_before(self):
+        """Imputing the target is still rewritten to dropping rows, not 'left for the model'."""
+        operation, _params, warning = ml_readiness.enforce_target_safety(
+            "fill_mode", {"column": "attrition"}, goal()
+        )
+        assert operation == "drop_rows_with_nulls"
+        assert "left for the model" not in warning.lower()
+
+    def test_row_wise_fixes_on_inputs_are_untouched(self):
+        for operation in ("drop_rows_with_nulls", "trim_whitespace", "fill_constant"):
+            params = {"column": "salary"}
+            assert ml_readiness.enforce_target_safety(operation, params, goal()) == (
+                operation,
+                params,
+                None,
+            )
 
 
 class TestReadinessVerdict:

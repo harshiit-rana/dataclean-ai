@@ -77,6 +77,23 @@ DATASET_STATISTIC_OPERATIONS = frozenset(
     {"fill_median", "fill_mean", "fill_mode", "cap_outliers", "drop_outlier_rows"}
 )
 
+# What the card says when one of those is proposed for a model input and not offered. Written
+# in code, never by the model, and specific to the operation: the alternative differs.
+LEFT_FOR_THE_MODEL_FILL = (
+    "This is left for the model. It fills each column's gaps itself, using the training rows "
+    "only, so nothing in the rows it is later tested on can shape the numbers it writes. "
+    "Filling the gaps here would calculate the value from every row, test rows included, and "
+    "your scores would come out better than they should. If you need a filled-in file for "
+    "something other than the model, ask for it in the chat after cleaning."
+)
+LEFT_FOR_THE_MODEL_EXTREMES = (
+    "This is left for the model. Limits for what counts as extreme would be calculated here "
+    "from every row, test rows included, and your scores would come out better than they "
+    "should. If extreme values are hurting the model, tick the option in the model plan that "
+    "clips them using the training rows only. If you need the file itself changed, ask for it "
+    "in the chat after cleaning."
+)
+
 
 def infer_task_type(series: pd.Series, declared: str = "auto") -> str | None:
     """Returns "classification" or "regression", or None if the column is unusable as a
@@ -425,7 +442,11 @@ def augment_issues(
 
 
 def enforce_target_safety(
-    operation: str, params: dict, goal_context: GoalContext | None
+    operation: str,
+    params: dict,
+    goal_context: GoalContext | None,
+    *,
+    source: str = "card",
 ) -> tuple[str | None, dict, str | None]:
     """Corrects a proposed fix that would damage the modelling target, and attaches a warning
     explaining why. Returns (operation, params, warning); a None operation means the fix has
@@ -434,12 +455,27 @@ def enforce_target_safety(
     This runs when the suggestion card is *built*, not when it executes, so what the user
     approves is what actually runs -- silently substituting an operation at execution time
     would make the approval meaningless.
+
+    `source` is "card" for a proposal the app is making and "chat" for something the user
+    typed. With a target named, a card is not offered a fix that computes its value from the
+    whole file (a fill, an outlier limit) on a model input: the model pipeline does the same
+    job on the training rows alone, so offering the whole-file version asks the user to
+    approve a leak the app can avoid. A typed instruction is the user's call, and is carried
+    out with the warning.
     """
     target = (goal_context.target_column or "").strip() if goal_context else ""
     column = str(params.get("column") or "")
 
     if not target or column != target:
         if target and operation in DATASET_STATISTIC_OPERATIONS:
+            if source == "card":
+                return (
+                    None,
+                    params,
+                    LEFT_FOR_THE_MODEL_FILL
+                    if operation in {"fill_median", "fill_mean", "fill_mode"}
+                    else LEFT_FOR_THE_MODEL_EXTREMES,
+                )
             return (
                 operation,
                 params,

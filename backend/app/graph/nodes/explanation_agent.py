@@ -17,7 +17,7 @@ from app.models.graph_state import ColumnIssue, GraphState
 from app.models.suggestion_card import SuggestionCard
 from app.services import conflicts
 from app.services.llm_client import get_llm_client
-from app.services.ml_readiness import enforce_target_safety
+from app.services.ml_readiness import DATASET_STATISTIC_OPERATIONS, enforce_target_safety
 from app.services.operations import OPERATIONS, parse_operation
 from app.services.prompts.explanation_prompts import (
     build_explanation_messages,
@@ -114,11 +114,17 @@ async def explanation_agent(state: GraphState) -> dict:
         # prediction target has to be impossible, not discouraged. Runs here, at card-build
         # time, so the user approves the corrected operation rather than the original.
         warning: str | None = None
+        warning_kind: str | None = None
         if parsed_operation is not None:
             op_name, op_params = parsed_operation
             safe_name, safe_params, warning = enforce_target_safety(
                 op_name, op_params, state.goal_context
             )
+            if warning:
+                if safe_name is None and op_name in DATASET_STATISTIC_OPERATIONS:
+                    warning_kind = "left_to_model"
+                else:
+                    warning_kind = "adjusted" if safe_name else "blocked"
             if safe_name != op_name:
                 logger.info(
                     "Card %s: %s on the target column was rewritten to %s",
@@ -148,6 +154,7 @@ async def explanation_agent(state: GraphState) -> dict:
             operation=parsed_operation[0] if parsed_operation else None,
             operation_params=parsed_operation[1] if parsed_operation else {},
             warning=warning,
+            warning_kind=warning_kind,
         )
         cards.append(card)
         writer({"event": "card_complete", "card": card.model_dump()})

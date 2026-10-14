@@ -61,6 +61,14 @@ are both running locally, you're ready to make changes.
   the column being predicted has to be impossible, not discouraged. The guard runs when the
   suggestion card is *built* so the user approves the corrected operation -- substituting it
   silently at execution time would make the approval meaningless.
+- **With a target named, a card never offers a fix that reads a whole-file statistic.**
+  `ml_readiness.DATASET_STATISTIC_OPERATIONS` (median/mean/mode fills, outlier caps and drops)
+  compute their value over every row, test rows included, before any split. For a model input
+  `enforce_target_safety(..., source="card")` returns no operation and the reason, and the card
+  carries `warning_kind="left_to_model"`; the pipeline does the same job on the training rows
+  alone. `source="chat"` still runs them with the warning, because a typed instruction is the
+  user's call. If you add an operation that learns a value from the data, add it to that set
+  (and to `LEARNED_OPERATIONS`).
 - **Warnings have to stay believable.** The leakage thresholds in `ml_readiness.py` are
   deliberately high. A warning that fires on ordinary strong correlation teaches users to
   ignore it, and it's only worth having if it's believed the one time it matters.

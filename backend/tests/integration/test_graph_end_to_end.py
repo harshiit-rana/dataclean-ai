@@ -172,3 +172,81 @@ async def test_resume_applies_only_approved_fixes(graph, fixtures_dir, tmp_path)
     assert working.read_bytes() == original_bytes
     cleaned = pd.read_csv(cleaned_path)
     assert cleaned[approved["column_name"]].isna().sum() == 0
+
+
+class _FillMedianClient:
+    """A model that answers every issue with a whole-file fill, which is what an unconstrained
+    one does with a column of blanks."""
+
+    async def astream(self, messages):
+        prompt = str(messages[-1].content)
+        column = ""
+        for line in prompt.splitlines():
+            if line.startswith("- column:"):
+                column = line.split(":", 1)[1].strip()
+                break
+        text = (
+            "FOUND:\nThis column has missing values.\n"
+            "PROPOSED_ACTION:\nFill the blanks with the median.\n"
+            "REASONING:\nKeeps every row for the model.\n"
+            "TRADEOFF:\nHides which values were blank.\n"
+            "OPERATION:\n"
+            f'fill_median(column="{column}")\n'
+        )
+        yield SimpleNamespace(content=text)
+
+
+@pytest.mark.asyncio
+async def test_a_model_session_gets_no_whole_file_fill_on_an_input(monkeypatch, fixtures_dir):
+    """With a target named, a card for a model input must come out with no operation and the
+    reason, whatever the LLM proposed; the target's own card is still handled as before."""
+    monkeypatch.setattr(
+        "app.graph.nodes.profiling_agent.get_llm_client",
+        lambda settings, streaming=False: _FakeInvokeClient(),
+    )
+    monkeypatch.setattr(
+        "app.graph.nodes.explanation_agent.get_llm_client",
+        lambda settings, streaming=False: _FillMedianClient(),
+    )
+    graph = build_graph(MemorySaver())
+    config = thread_config("fills-session")
+    goal = {
+        "use_case": "ml_training",
+        "expected_output": "predict the age",
+        "critical_columns": [],
+        "cleaning_aggression": "moderate",
+        "target_column": "age",
+    }
+    await graph.ainvoke(
+        {
+            "session_id": "fills-session",
+            "file_path": str(fixtures_dir / "missing_values.csv"),
+            "file_name": "missing_values.csv",
+            "file_size_bytes": 500,
+            "goal_context": goal,
+        },
+        config,
+    )
+    cards = (await graph.aget_state(config)).values["suggestion_cards"]
+
+    inputs = [c for c in cards if c["column_name"] != "age"]
+    assert inputs, "the fixture should have produced cards for input columns"
+    for card in inputs:
+        assert card["operation"] is None, card
+        assert card["warning_kind"] == "left_to_model"
+        assert "left for the model" in card["warning"].lower()
+
+    # The same fake model, with no target named, is allowed its fill.
+    reporting_config = thread_config("fills-reporting")
+    await graph.ainvoke(
+        {
+            "session_id": "fills-reporting",
+            "file_path": str(fixtures_dir / "missing_values.csv"),
+            "file_name": "missing_values.csv",
+            "file_size_bytes": 500,
+            "goal_context": {**goal, "use_case": "reporting", "target_column": None},
+        },
+        reporting_config,
+    )
+    reporting = (await graph.aget_state(reporting_config)).values["suggestion_cards"]
+    assert reporting and all(c["operation"] == "fill_median" for c in reporting)

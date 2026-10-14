@@ -136,7 +136,9 @@ async def send_chat_message(
     # Same guard the suggestion cards go through -- a typed instruction is no more allowed to
     # impute the prediction target than a generated one. There is no approval step here, so
     # a correction is reported in the reply rather than applied quietly.
-    operation, params, warning = enforce_target_safety(intent["operation"], params, goal_context)
+    operation, params, warning = enforce_target_safety(
+        intent["operation"], params, goal_context, source="chat"
+    )
     if operation is None:
         return {
             "applied": False,

@@ -84,4 +84,22 @@ describe("SuggestionCardView", () => {
     });
     expect(screen.getByText("Blocked")).toBeInTheDocument();
   });
+
+  it("says a fix is left for the model, not that it is blocked", () => {
+    renderCard({
+      card: {
+        ...CARD,
+        operation: null,
+        warning_kind: "left_to_model",
+        warning: "This is left for the model. It fills each column's gaps itself.",
+      },
+    });
+    expect(screen.getByText("Left for the model")).toBeInTheDocument();
+    expect(screen.queryByText("Blocked")).not.toBeInTheDocument();
+  });
+
+  it("still reads a card saved before warning_kind existed", () => {
+    renderCard({ card: { ...CARD, operation: null, warning: "Nothing to predict." } });
+    expect(screen.getByText("Blocked")).toBeInTheDocument();
+  });
 });
