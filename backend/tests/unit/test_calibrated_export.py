@@ -180,7 +180,8 @@ class TestWhatTheScriptSays:
 
     def test_a_grouped_script_uses_whole_group_folds(self):
         script = self.script(entities(), split_strategy="group", group_column="customer", model=LOGISTIC)
-        assert "GroupKFold(n_splits=5)" in script and "groups.loc[X_train.index]" in script
+        assert "StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=42)" in script
+        assert "groups.loc[X_train.index]" in script
         assert "StratifiedKFold" not in script
 
     def test_a_dated_script_uses_forward_folds_and_the_averaged_form(self):
@@ -189,7 +190,7 @@ class TestWhatTheScriptSays:
 
     def test_a_copies_script_groups_the_folds_by_the_copy_key(self):
         script = self.script(with_copies(), model=LOGISTIC, keep_identical_rows_together=True)
-        assert "duplicate_key.loc[X_train.index]" in script and "GroupKFold" in script
+        assert "duplicate_key.loc[X_train.index]" in script and "StratifiedGroupKFold" in script
 
     def test_it_imports_only_what_it_uses(self):
         """The existing rule for the script, held for every variant: an unused import in a file

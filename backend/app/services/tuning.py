@@ -138,7 +138,13 @@ def cv_splitter(task: str, y, folds: int = CV_FOLDS, groups=None, ordered: bool 
     Returns None when the data can't support even two folds, which is the caller's signal
     that searching isn't possible here.
     """
-    from sklearn.model_selection import GroupKFold, KFold, StratifiedKFold, TimeSeriesSplit
+    from sklearn.model_selection import (
+        GroupKFold,
+        KFold,
+        StratifiedGroupKFold,
+        StratifiedKFold,
+        TimeSeriesSplit,
+    )
 
     if ordered:
         usable = min(folds, len(y) - 1)
@@ -146,7 +152,16 @@ def cv_splitter(task: str, y, folds: int = CV_FOLDS, groups=None, ordered: bool 
 
     if groups is not None:
         usable = min(folds, int(pd.Series(groups).nunique()))
-        return GroupKFold(n_splits=usable) if usable >= 2 else None
+        if usable < 2:
+            return None
+        if task == "classification":
+            # Whole groups stay together, and within that the classes are balanced across folds as
+            # far as the grouping allows. A plain GroupKFold balances only the number of rows, so
+            # on a lopsided target with few entities a fold could end up with almost none of the
+            # rarer answer. Best-effort: when a rare answer is concentrated in a few large groups
+            # no assignment can balance it, and a fold that cannot be scored is reported as such.
+            return StratifiedGroupKFold(n_splits=usable, shuffle=True, random_state=42)
+        return GroupKFold(n_splits=usable)
 
     if task != "classification":
         return KFold(n_splits=folds, shuffle=True, random_state=42)

@@ -187,9 +187,10 @@ are both running locally, you're ready to make changes.
 - **Calibration is part of what the export rebuilds.** When the result records a calibration
   method, `train_model.py` names the base pipeline `base_pipeline` and wraps it in
   `CalibratedClassifierCV` with the same method, `ensemble` setting and *explicit list of folds*
-  (a splitter handed over would get no groups): stratified for a plain split, `GroupKFold` on the
-  group column or the copy key, `TimeSeriesSplit` for a date split, with the fold count the app
-  used. `test_calibrated_export.py` runs the script in a subprocess for each of those and compares
+  (a splitter handed over would get no groups): `StratifiedKFold` for a plain split,
+  `StratifiedGroupKFold` on the group column or the copy key, `TimeSeriesSplit` for a date split,
+  with the fold count the app used. These must match `tuning.cv_splitter` exactly -- changing one
+  without the other makes the exported script fit a different mapping. `test_calibrated_export.py` runs the script in a subprocess for each of those and compares
   accuracy and Brier score with the app's to 1e-4. A new way of splitting the training rows into
   folds has to be added to `model_export._calibration_block` and `_calibration_imports` together,
   and the script prints the Brier score of any two-class model so the probabilities are checked,

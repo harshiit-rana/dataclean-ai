@@ -292,13 +292,19 @@ def _calibration_block(result: dict, report: dict) -> str:
         arguments = "X_train, fold_labels"
         why = "Forward in time: each fold is calibrated on rows later than the ones it trained on."
     elif grouped:
-        splitter = f"GroupKFold(n_splits={folds})"
+        splitter = f"StratifiedGroupKFold(n_splits={folds}, shuffle=True, random_state=42)"
         arguments = "X_train, fold_labels, groups.loc[X_train.index]"
-        why = "Whole groups: no entity is in both the part a fold trains on and the part it is calibrated on."
+        why = (
+            "Whole groups: no entity is in both the part a fold trains on and the part it is calibrated on,\n"
+            "# and within that the answers are balanced across folds as far as the grouping allows."
+        )
     elif copies:
-        splitter = f"GroupKFold(n_splits={folds})"
+        splitter = f"StratifiedGroupKFold(n_splits={folds}, shuffle=True, random_state=42)"
         arguments = "X_train, fold_labels, duplicate_key.loc[X_train.index]"
-        why = "Copies together: a row and its exact copy are never on opposite sides of a fold."
+        why = (
+            "Copies together: a row and its exact copy are never on opposite sides of a fold,\n"
+            "# and within that the answers are balanced across folds as far as the grouping allows."
+        )
     else:
         splitter = f"StratifiedKFold(n_splits={folds}, shuffle=True, random_state=42)"
         arguments = "X_train, fold_labels"
@@ -325,7 +331,9 @@ def _calibration_imports(result: dict, report: dict) -> str:
     ordered = strategy == "time" and bool(split.get("time_column"))
     grouped = strategy == "group" and bool(split.get("group_column"))
     copies = bool(split.get("keep_duplicates_together")) and not ordered and not grouped
-    splitter = "TimeSeriesSplit" if ordered else "GroupKFold" if (grouped or copies) else "StratifiedKFold"
+    splitter = (
+        "TimeSeriesSplit" if ordered else "StratifiedGroupKFold" if (grouped or copies) else "StratifiedKFold"
+    )
     return f"from sklearn.calibration import CalibratedClassifierCV\nfrom sklearn.model_selection import {splitter}"
 
 

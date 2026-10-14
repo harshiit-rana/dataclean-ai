@@ -521,8 +521,8 @@ to choose anything*. Every decision the model path makes was traced to the rows 
   own splitting function so it cuts the same rows. The folds inside the training rows keep copies
   together too — model choice, tuning, the improvement loop, the cut-off and the diagnostics all
   receive the copy ids — because a row and its copy straddling a fold is the same leak one level
-  down. Those grouped folds are not stratified (the known limit below). Near-duplicates (one cell
-  different) are not addressed.
+  down. Those grouped folds are stratified as far as the grouping allows (see the known limit
+  below). Near-duplicates (one cell different) are not addressed.
 - **`drop_outlier_rows` wasn't warned about** alongside the other fixes that read a statistic
   from the whole file before any split.
 - **The app proposed fixes that leaked the test set into the training rows.** Filling blanks
@@ -780,8 +780,12 @@ built.
   deliberate scope choice, not an oversight — but it means there's no "my past sessions" view.
 - **Single-process.** Fine for the intended use; a multi-worker deployment would need the
   retention sweep moved out of the app process.
-- **A grouped split can't also be stratified.** Keeping an entity whole and balancing the
-  classes across folds are competing demands, and splitting the entity is the one that
-  inflates the score — so grouping wins. On a lopsided target with few entities this can leave
-  a fold thin on the rare class; the fold spread shown next to the score is where that shows
-  up.
+- **A grouped split is stratified only as far as the grouping allows.** Keeping an entity whole
+  and balancing the classes across folds are competing demands, and splitting the entity is the
+  one that inflates the score — so grouping wins. Classification folds inside a grouped split (and
+  the cross-validated spread and the learning curve) now use `StratifiedGroupKFold`, which balances
+  the answers within that constraint: on forty customers and a 10% positive rate the positive rate
+  varies less across folds than it did with the plain `GroupKFold`, and no fold lacks the rarer
+  answer. But when the rare answer is concentrated in a few large groups no assignment can balance
+  it, and a fold can still be thin; the fold spread shown next to the score is where that shows
+  up. Regression still uses `GroupKFold`.

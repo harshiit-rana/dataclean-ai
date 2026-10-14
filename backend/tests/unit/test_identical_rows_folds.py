@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from sklearn.model_selection import GroupKFold, StratifiedKFold
+from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 
 from app.services import diagnostics, improvement, modeling, operating_point, tuning
 from app.services.operating_point import OperatingPoint
@@ -63,7 +63,7 @@ def train(df, **kwargs):
 class TestChoosingTheModel:
     def test_every_fold_is_grouped_when_copies_were_kept_together(self, copies, folds):
         train(copies, keep_identical_rows_together=True)
-        assert all(isinstance(f["splitter"], GroupKFold) for f in folds)
+        assert all(isinstance(f["splitter"], StratifiedGroupKFold) for f in folds)
         assert_no_group_straddles(folds)
 
     def test_no_copy_is_on_both_sides_of_any_fold(self, copies, folds):
@@ -141,7 +141,7 @@ class TestTheOtherFoldProducers:
             copies, target_column="y", task="classification",
             model_names=["logistic_regression"], budget=4, keep_identical_rows_together=True,
         )
-        assert folds and all(isinstance(f["splitter"], GroupKFold) for f in folds)
+        assert folds and all(isinstance(f["splitter"], StratifiedGroupKFold) for f in folds)
         assert_no_group_straddles(folds)
 
     def test_the_improvement_loop_without_it_is_unchanged(self, copies, folds):

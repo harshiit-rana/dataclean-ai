@@ -419,7 +419,13 @@ def cross_validate_pipeline(
     entity across folds -- an inflated number sitting directly beside the honest one, which is
     worse than not showing it, because the two disagree and nothing says why.
     """
-    from sklearn.model_selection import GroupKFold, KFold, StratifiedKFold, cross_val_score
+    from sklearn.model_selection import (
+        GroupKFold,
+        KFold,
+        StratifiedGroupKFold,
+        StratifiedKFold,
+        cross_val_score,
+    )
 
     scoring = scoring_for(task, y)
 
@@ -450,9 +456,13 @@ def cross_validate_pipeline(
         usable_folds = int(min(folds, distinct))
         if usable_folds < 2:
             return {}
-        # Not stratified: keeping an entity whole and balancing the classes are competing
-        # demands, and splitting the entity is the one that inflates the score.
-        splitter = GroupKFold(n_splits=usable_folds)
+        # Whole groups first -- splitting an entity is what inflates the score -- and the classes
+        # balanced across folds as far as that allows (see `tuning.cv_splitter`).
+        splitter = (
+            StratifiedGroupKFold(n_splits=usable_folds, shuffle=True, random_state=42)
+            if task == "classification"
+            else GroupKFold(n_splits=usable_folds)
+        )
         y_input = pd.Series(y).astype(str) if task == "classification" else y
         scores = cross_val_score(
             build(), X, y_input, cv=splitter, scoring=scoring, n_jobs=1, groups=groups
@@ -517,12 +527,16 @@ def learning_curve_points(
 
         cv, shuffle = TimeSeriesSplit(n_splits=3), False
     elif groups is not None:
-        from sklearn.model_selection import GroupKFold
+        from sklearn.model_selection import GroupKFold, StratifiedGroupKFold
 
         usable_folds = int(min(3, pd.Series(groups).nunique()))
         if usable_folds < 2:
             return []
-        cv, shuffle = GroupKFold(n_splits=usable_folds), True
+        cv, shuffle = (
+            StratifiedGroupKFold(n_splits=usable_folds, shuffle=True, random_state=42)
+            if task == "classification"
+            else GroupKFold(n_splits=usable_folds)
+        ), True
     else:
         cv, shuffle = 3, True
     sizes, train_scores, validation_scores = learning_curve(

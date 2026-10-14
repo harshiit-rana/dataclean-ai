@@ -397,7 +397,7 @@ class TestDeepDiagnosticsStayOffTheTestSet:
 
     def test_the_learning_curve_keeps_an_entity_on_one_side_of_every_fold(self, monkeypatch):
         """The curve was the one fold-producing call that never received `groups`."""
-        from sklearn.model_selection import GroupKFold
+        from sklearn.model_selection import StratifiedGroupKFold
         import sklearn.model_selection as selection
 
         used = {}
@@ -420,7 +420,7 @@ class TestDeepDiagnosticsStayOffTheTestSet:
         )
 
         assert points
-        assert isinstance(used["cv"], GroupKFold)
+        assert isinstance(used["cv"], StratifiedGroupKFold)
         assert used["groups"] is not None
 
     def test_the_learning_curve_gives_up_cleanly_with_one_group(self):
