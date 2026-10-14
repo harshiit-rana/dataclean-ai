@@ -78,17 +78,27 @@ export function ColumnImportanceChart({ rows }: { rows: ColumnImportance[] }) {
   );
 }
 
+/** The metric's name as a reader would say it. Every chart that scores something says which
+ * score, because they used to disagree: the spread was AUC, the curve was accuracy. */
+const METRIC_NAMES: Record<string, string> = {
+  roc_auc: "ROC AUC",
+  accuracy: "accuracy",
+  r2: "R²",
+};
+const metricName = (metric?: string) => (metric ? (METRIC_NAMES[metric] ?? metric) : "score");
+
 export function PermutationImportanceChart({ rows }: { rows: PermutationImportance[] }) {
   const theme = useChartTheme();
   if (!rows?.length) return null;
+  const measure = metricName(rows[0].metric);
 
   return (
     <ChartCard
       title="What the model would lose without each column"
-      description="Measured by scrambling each column in turn and seeing how much the score drops."
+      description={`Measured by scrambling each column in turn and seeing how much the ${measure} drops.`}
       tableColumns={[
         { key: "column", label: "Column" },
-        { key: "importance", label: "Score lost", numeric: true, format: ratio },
+        { key: "importance", label: `${measure} lost`, numeric: true, format: ratio },
         { key: "std", label: "Variation", numeric: true, format: ratio },
       ]}
       tableRows={rows as unknown as Record<string, unknown>[]}
@@ -132,6 +142,7 @@ export function LearningCurveChart({ points }: { points: LearningCurvePoint[] })
   const theme = useChartTheme();
   if (!points?.length) return null;
 
+  const measure = metricName(points[0].metric);
   const last = points[points.length - 1];
   const gap = last.training_score - last.validation_score;
   const climbing = last.validation_score - points[0].validation_score > 0.05;
@@ -146,11 +157,11 @@ export function LearningCurveChart({ points }: { points: LearningCurvePoint[] })
   return (
     <ChartCard
       title="Would more data help?"
-      description="How the score changes as the model is trained on more and more rows."
+      description={`How the ${measure} changes as the model is trained on more and more rows.`}
       tableColumns={[
         { key: "training_rows", label: "Rows trained on", numeric: true },
-        { key: "training_score", label: "On rows it saw", numeric: true, format: ratio },
-        { key: "validation_score", label: "On unseen rows", numeric: true, format: ratio },
+        { key: "training_score", label: `${measure} on rows it saw`, numeric: true, format: ratio },
+        { key: "validation_score", label: `${measure} on unseen rows`, numeric: true, format: ratio },
       ]}
       tableRows={points as unknown as Record<string, unknown>[]}
       footnote={reading}

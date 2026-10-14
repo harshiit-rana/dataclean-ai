@@ -317,6 +317,12 @@ class balance, feature importance, permutation importance, cross-validation spre
 curve, correlation matrix — and for regression, predicted-vs-actual, residuals, residual
 distribution, error by range.
 
+**One metric across the charts.** The cross-validation spread was scored in AUC for a two-class
+target while the learning curve and the permutation importance beside it were scored in accuracy,
+so on a lopsided target the curve could sit flat while the AUC improved and the two read as
+disagreeing about one model. All three now use the primary metric (AUC for two classes, accuracy
+for more, R² for a number), fixed from the training rows, and every chart and the card name it.
+
 **The simplest model the folds cannot separate from the best.** The winner used to be the raw
 highest cross-validated score, so a forest that beat logistic regression by 0.002, with the folds
 disagreeing by 0.03, "won" although the evidence does not tell them apart. It is now the

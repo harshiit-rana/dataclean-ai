@@ -24,6 +24,8 @@ import logging
 import numpy as np
 import pandas as pd
 
+from app.services.tuning import scoring_for
+
 logger = logging.getLogger(__name__)
 
 MAX_CURVE_POINTS = 120  # beyond this a line chart gains nothing but payload
@@ -379,9 +381,7 @@ def cross_validate_pipeline(
     """
     from sklearn.model_selection import GroupKFold, KFold, StratifiedKFold, cross_val_score
 
-    scoring = "r2" if task == "regression" else "roc_auc"
-    if task == "classification" and pd.Series(y).nunique() > 2:
-        scoring = "accuracy"
+    scoring = scoring_for(task, y)
 
     if ordered:
         # Date-based split: each fold validated on rows later than it trained on. X arrives
@@ -465,7 +465,10 @@ def learning_curve_points(
     """
     from sklearn.model_selection import learning_curve
 
-    scoring = "r2" if task == "regression" else "accuracy"
+    # The metric the cross-validation spread beside it uses. This chart used to score with
+    # accuracy while the spread used AUC, so on a lopsided target the curve could sit flat while
+    # the AUC next to it improved, and the two read as disagreeing about the same model.
+    scoring = scoring_for(task, y)
     y_input = pd.Series(y).astype(str) if task == "classification" else y
 
     if ordered:
@@ -499,12 +502,15 @@ def learning_curve_points(
             "training_rows": int(size),
             "training_score": round(float(train.mean()), 4),
             "validation_score": round(float(validation.mean()), 4),
+            "metric": scoring,
         }
         for size, train, validation in zip(sizes, train_scores, validation_scores)
     ]
 
 
-def permutation_importance_scores(pipeline, X_test, y_test, task: str, top_n: int = 15) -> list[dict]:
+def permutation_importance_scores(
+    pipeline, X_test, y_test, task: str, top_n: int = 15, scoring: str | None = None
+) -> list[dict]:
     """Importance measured by breaking each column in turn and seeing what the score loses.
 
     Preferred over the model's built-in importances, which are biased toward high-cardinality
@@ -513,7 +519,10 @@ def permutation_importance_scores(pipeline, X_test, y_test, task: str, top_n: in
     """
     from sklearn.inspection import permutation_importance
 
-    scoring = "r2" if task == "regression" else "accuracy"
+    # The primary metric, like every other chart beside it. `scoring` lets the caller fix it
+    # from the training rows, so a test set that happens to hold one class does not change which
+    # metric the chart speaks.
+    scoring = scoring or scoring_for(task, y_test)
     y_input = pd.Series(y_test).astype(str) if task == "classification" else y_test
 
     result = permutation_importance(
@@ -530,6 +539,7 @@ def permutation_importance_scores(pipeline, X_test, y_test, task: str, top_n: in
             "column": str(column),
             "importance": round(float(mean), 4),
             "std": round(float(std), 4),
+            "metric": scoring,
         }
         for column, mean, std in zip(X_test.columns, result.importances_mean, result.importances_std)
     ]
@@ -580,7 +590,9 @@ def compute_deep_diagnostics(
         ),
         (
             "permutation_importance",
-            lambda: permutation_importance_scores(pipeline, X_test, y_test, task),
+            lambda: permutation_importance_scores(
+                pipeline, X_test, y_test, task, scoring=scoring_for(task, y_train)
+            ),
         ),
     ):
         try:

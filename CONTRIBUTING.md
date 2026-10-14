@@ -330,6 +330,12 @@ are both running locally, you're ready to make changes.
   a kind. The comparison of candidate models leads with the fold scores that chose between
   them; the other candidates' held-out scores are behind a button with the reason they are not
   the basis for anything, and `model_card._comparison_table` does the same in the written card.
+- **One metric per page.** Anything on the results page that scores a model asks
+  `tuning.scoring_for(task, y)` -- ROC AUC for two classes, accuracy for more, R² for a number --
+  and says which it used. The learning curve and permutation importance scored in accuracy
+  while the spread beside them was AUC, so on a lopsided target they read as disagreeing about
+  one model. The metric is fixed from the training rows, not the test rows, and each chart's
+  output carries its `metric` so the page can name it.
 - **A new model gets a `complexity_rank`.** The one-standard-error rule keeps the simplest
   candidate the folds cannot separate from the best, and "simplest" is the rank written on its
   `ModelSpec` (a linear model before a forest before boosted trees), not an accident of the

@@ -459,8 +459,9 @@ def _trust_section(result: dict) -> list[str]:
         first, last = curve[0], curve[-1]
         gap = last["training_score"] - last["validation_score"]
         still_climbing = last["validation_score"] - first["validation_score"] > 0.05
+        measure = _METRIC_LABELS.get(first.get("metric", ""), ("score",))[0]
         lines.append(
-            f"Trained on increasing amounts of data, the score on unseen rows went from "
+            f"Trained on increasing amounts of data, the {measure} on unseen rows went from "
             f"{first['validation_score']:.3f} at {first['training_rows']:,} rows to "
             f"{last['validation_score']:.3f} at {last['training_rows']:,}."
         )

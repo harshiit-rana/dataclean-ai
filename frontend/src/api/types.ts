@@ -563,6 +563,8 @@ export interface PermutationImportance {
   column: string;
   importance: number;
   std: number;
+  /** The metric whose loss this is: the same one the cross-validation spread uses. */
+  metric?: string;
 }
 export interface CrossValidation {
   metric: string;
@@ -575,6 +577,8 @@ export interface LearningCurvePoint {
   training_rows: number;
   training_score: number;
   validation_score: number;
+  /** The metric scored: roc_auc for two classes, accuracy for more, r2 for a number. */
+  metric?: string;
 }
 export interface CorrelationResult {
   columns: string[];
