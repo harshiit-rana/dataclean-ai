@@ -219,6 +219,11 @@ are both running locally, you're ready to make changes.
   they drift, `train_model.py` silently builds different inputs from the ones that were
   scored and every number in the app becomes unreproducible. To add a kind, add a branch to
   both -- never an escape hatch that computes an expression.
+- **A proposal never reads the target.** `features.propose` runs over the whole file, test rows
+  included, so what it offers must not depend on the answers. `TestProposalsNeverReadTheTarget`
+  replaces the target with shuffles, a constant, another vocabulary and a column of blanks and
+  requires the same proposals every time; a new recipe that looks at the target fails it. Anything
+  that does need the answers belongs inside the pipeline, fitted on the training fold.
 - **Derive before the split only when the recipe is row-wise.** Date parts, text length and a
   missingness flag depend on nothing but the row they are on, so computing them on the whole
   frame leaks nothing. Anything that learns from the column -- which values are common, a

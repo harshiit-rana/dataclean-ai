@@ -133,6 +133,77 @@ class TestWhatItProposes:
             assert recipe.id.endswith(recipe.column)
 
 
+def _proposals(df: pd.DataFrame, target: str = "outcome", excluded=None) -> list[dict]:
+    return [r.as_dict() for r in features.propose(df, target, excluded)]
+
+
+def _target_variants(df: pd.DataFrame, target: str):
+    """The same frame with the target's *values* replaced by things that share nothing with
+    the real answers: shuffles, a constant, the reverse, labels from another vocabulary, a
+    numeric regression-style target, and a column of blanks."""
+    n = len(df)
+    for seed in (0, 1, 2, 3, 4):
+        yield f"permutation {seed}", df.assign(
+            **{target: np.random.default_rng(seed).permutation(df[target].to_numpy())}
+        )
+    yield "constant", df.assign(**{target: "yes"})
+    yield "reversed", df.assign(**{target: df[target].to_numpy()[::-1]})
+    yield "other labels", df.assign(**{target: np.random.default_rng(9).choice(list("abc"), n)})
+    yield "numeric", df.assign(**{target: np.random.default_rng(10).normal(0, 1, n)})
+    yield "all blank", df.assign(**{target: np.nan})
+
+
+def assert_independent_of_the_target(propose, df: pd.DataFrame, target: str = "outcome") -> None:
+    """Fails if `propose` returns anything different when only the target's values change."""
+    reference = [r.as_dict() for r in propose(df, target)]
+    for label, variant in _target_variants(df, target):
+        assert [r.as_dict() for r in propose(variant, target)] == reference, (
+            f"the proposals changed when the target was replaced by: {label}"
+        )
+
+
+class TestProposalsNeverReadTheTarget:
+    """Derived inputs are offered from the whole file, test rows included. That is only
+    harmless while no proposal depends on the answers. It is true today -- offering is decided
+    by dates, text length, how much is blank and how often categories repeat -- and nothing
+    enforced it, so a future recipe that looked at the target (a target-correlated binning,
+    say) would leak into the proposals with every test still green."""
+
+    def test_replacing_the_targets_values_changes_no_proposal(self, messy):
+        assert_independent_of_the_target(features.propose, messy)
+
+    def test_the_proposals_exist_to_be_compared(self, messy):
+        """A property over an empty list holds for any implementation."""
+        assert {r["kind"] for r in _proposals(messy)} == set(features.KINDS)
+
+    def test_the_selection_the_server_makes_is_independent_of_it_too(self, messy):
+        ids = [r["id"] for r in _proposals(messy)]
+        reference = [r.as_dict() for r in features.select(messy, "outcome", [], ids)]
+        for label, variant in _target_variants(messy, "outcome"):
+            assert [r.as_dict() for r in features.select(variant, "outcome", [], ids)] == reference, label
+
+    def test_the_check_would_notice_a_proposal_that_read_the_target(self, messy):
+        """The test above is only worth having if it can fail. This stands in for the future
+        change it guards against: a proposer that offers an extra input when the answers lean
+        one way."""
+
+        def peeking_propose(df, target, excluded=None):
+            proposals = features.propose(df, target, excluded)
+            if (df[target].astype(str) == "yes").mean() > 0.5:
+                proposals.append(
+                    features.Recipe(
+                        id="peek:signal", kind="missing_flag", column="signal",
+                        outputs=["signal_peek"], reason="signal, because the answers lean yes",
+                    )
+                )
+            return proposals
+
+        # A frame whose answers lean one way, so that the canary actually fires.
+        leaning = messy.assign(outcome=np.where(np.arange(len(messy)) % 5 == 0, "no", "yes"))
+        with pytest.raises(AssertionError, match="the proposals changed when the target"):
+            assert_independent_of_the_target(peeking_propose, leaning)
+
+
 class TestNothingIsAppliedByItself:
     def test_a_proposal_alone_changes_nothing(self, messy):
         before = messy.copy()
