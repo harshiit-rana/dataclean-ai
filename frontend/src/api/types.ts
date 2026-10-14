@@ -636,6 +636,16 @@ export interface ModelSelection {
   standard_error?: number;
   /** The sentence saying why the simpler model was kept, or null when the rule changed nothing. */
   rule_note?: string | null;
+  /** The model the chosen one was weighed against: the highest scorer if the rule kept a simpler
+   * model, otherwise the second-highest. Null when there was nothing to compare with. */
+  runner_up?: string | null;
+  /** Whether the folds can tell the two apart: the paired difference's 95% range excludes zero.
+   * Null when there was no comparison. */
+  distinguishable?: boolean | null;
+  /** How much the higher scorer beat the other, fold by fold; `difference` is not negative. */
+  paired_difference?: { difference: number; low: number; high: number } | null;
+  /** Written in code, and present exactly when the two models are within the noise. */
+  distinguishable_note?: string | null;
 }
 
 export interface ModelResult {

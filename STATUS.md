@@ -334,6 +334,18 @@ when it did not, they say nothing. The improvement loop's starting family uses t
 a train and a search cannot begin from different models on the same evidence. It reads fold scores
 only, and a test flips every held-out answer to show the choice does not move.
 
+**Saying when two models cannot be told apart.** One winner in a table reads as a ranking whether
+or not the evidence separates the models. Every candidate is cross-validated on the same folds, so
+`score_config` now returns each fold's score and the chosen model is compared with its closest
+rival -- the raw highest scorer when the rule kept a simpler model, otherwise the second-highest --
+fold by fold. The interval on the average gap uses the Nadeau-Bengio correction, because folds
+share training rows and the plain paired interval calls differences real far too often. When it
+includes zero the page (under the comparison table) and the card say the two are within the noise
+of each other, with the gap and its 95% range, and why one was kept; when it excludes zero they say
+nothing. If the rule kept a simpler model against a lead the folds do show consistently, the note
+says that lead is not noise instead of calling it indistinguishable. With three folds (large files)
+the interval is very wide, which is the honest answer.
+
 **How far a score could move.** "AUC 0.78" on 60 rows and on 6,000 used to look identical. The
 chosen model's headline held-out metrics now carry a 95% interval from a percentile bootstrap over
 the test rows — `0.78 (0.71–0.84)` — resampled within each class so a rare class cannot vanish

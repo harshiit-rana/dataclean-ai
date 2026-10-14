@@ -238,6 +238,44 @@ def paired_difference(
     }
 
 
+def fold_difference(first, second, level: float = LEVEL) -> dict | None:
+    """Whether one model beat another across the *same* cross-validation folds.
+
+    `first` and `second` are the per-fold scores of two models scored on identical folds. The
+    differences fold by fold are paired, so what makes a fold easy or hard cancels, and the
+    interval is on how much the first beat the second.
+
+    Folds are not independent draws: every pair of training sets overlaps, so the plain
+    paired t-interval is too narrow and calls differences real far too often (Nadeau and
+    Bengio, 2003). The standard correction widens the variance of the mean difference by the
+    ratio of test to training rows, 1/(k-1) for k-fold, which is used here for every splitter.
+    With only a few folds the t quantile is large, and the interval is wide: that is the
+    correct message about how little a handful of folds can establish.
+
+    Returns `{"difference", "low", "high"}` (first minus second), or None when the folds do not
+    line up, there are fewer than two, or any score is not a number.
+    """
+    from scipy import stats
+
+    a, b = np.asarray(first, dtype=float), np.asarray(second, dtype=float)
+    if a.shape != b.shape or a.ndim != 1 or len(a) < 2:
+        return None
+    if not (np.isfinite(a).all() and np.isfinite(b).all()):
+        return None
+
+    folds = len(a)
+    deltas = a - b
+    mean = float(deltas.mean())
+    spread = float(deltas.std(ddof=1))
+    standard_error = spread * float(np.sqrt(1 / folds + 1 / (folds - 1)))
+    half = float(stats.t.ppf((1 + level) / 2, folds - 1)) * standard_error
+    return {
+        "difference": round(mean, 4),
+        "low": round(mean - half, 4),
+        "high": round(mean + half, 4),
+    }
+
+
 def metric_intervals(
     y_true,
     y_pred,

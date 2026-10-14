@@ -95,6 +95,10 @@ class SearchResult:
     std: float
     metric: str
     fits: int
+    # The score of each fold, in fold order. Two configurations scored with `score_config` on the
+    # same rows are scored on the same folds, so these can be compared fold by fold: how often
+    # and by how much one beat the other is far more telling than two means and two spreads.
+    fold_scores: tuple[float, ...] = ()
 
     @property
     def readable_params(self) -> dict:
@@ -198,6 +202,7 @@ def score_config(
         std=round(float(np.std(scores)), 4),
         metric=metric,
         fits=len(scores),
+        fold_scores=tuple(round(float(s), 6) for s in scores),
     )
 
 

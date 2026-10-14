@@ -128,6 +128,9 @@ def _selection_tables(result: dict) -> list[str]:
             f"| {name} | {_fmt(score)} | {'± ' + _fmt(spread) if spread is not None else '—'} |"
         )
 
+    if selection.get("distinguishable_note"):
+        lines += ["", selection["distinguishable_note"]]
+
     lines += ["", "### Held-out evaluation", ""]
     lines.append(
         "Scored once, on rows the model never saw and nothing was chosen against, for the "

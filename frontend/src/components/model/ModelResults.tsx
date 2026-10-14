@@ -288,6 +288,10 @@ function ModelComparison({ result, keys }: { result: ModelResult; keys: string[]
           </table>
         </div>
 
+        {selection.distinguishable_note && (
+          <p className="text-sm text-muted-foreground">{selection.distinguishable_note}</p>
+        )}
+
         {result.results.length > 1 && keys.length > 0 && (
           <div className="text-sm">
             <button

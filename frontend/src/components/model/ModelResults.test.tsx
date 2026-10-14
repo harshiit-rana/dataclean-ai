@@ -434,3 +434,38 @@ describe("ModelResults — the one-standard-error rule (#33)", () => {
     expect(screen.getByText("chosen on training folds")).toBeInTheDocument();
   });
 });
+
+describe("ModelResults — when the folds cannot tell the models apart (#34)", () => {
+  const NOTE =
+    "Random forest and logistic regression are within the noise of each other on these folds (the gap averaged +0.016 per fold, 95% range -0.015 to +0.047); Logistic regression was kept because it is simpler.";
+
+  const withNote = (note: string | null | undefined) => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.selection = { ...r.selection!, distinguishable: note ? false : true, distinguishable_note: note };
+    return r;
+  };
+
+  it("says so under the comparison table", () => {
+    render(<ModelResults result={withNote(NOTE)} />);
+    const sentence = screen.getByText(/are within the noise of each other on these folds/);
+    const table = screen.getByRole("columnheader", { name: /Fold score/ }).closest("table")!;
+    expect(sentence).toBeInTheDocument();
+    // under the table, not above it
+    expect(table.compareDocumentPosition(sentence) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("gives the range, so the size of the doubt is visible", () => {
+    render(<ModelResults result={withNote(NOTE)} />);
+    expect(screen.getByText(/95% range -0\.015 to \+0\.047/)).toBeInTheDocument();
+  });
+
+  it("says nothing when the models can be told apart", () => {
+    render(<ModelResults result={withNote(null)} />);
+    expect(screen.queryByText(/within the noise of each other/)).not.toBeInTheDocument();
+  });
+
+  it("says nothing for a result saved before the comparison existed", () => {
+    render(<ModelResults result={withNote(undefined)} />);
+    expect(screen.queryByText(/within the noise of each other/)).not.toBeInTheDocument();
+  });
+});

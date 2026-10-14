@@ -1245,6 +1245,47 @@ def one_standard_error_choice(scores: dict[str, dict]) -> dict:
     }
 
 
+def _in_a_sentence(label: str) -> str:
+    """A model's label inside a sentence: 'Random forest' -> 'random forest', 'XGBoost' stays."""
+    return label[:1].lower() + label[1:] if label[1:2].islower() else label
+
+
+def _signed(value: float) -> str:
+    return f"{'+' if value >= 0 else '-'}{abs(value):.3f}"
+
+
+def runner_up_comparison(scores: dict[str, dict], chosen: str, highest_scorer: str) -> dict | None:
+    """Whether the folds can tell the chosen model from the one it is being weighed against.
+
+    That rival is the raw highest scorer when the one-standard-error rule kept a simpler model
+    instead, and otherwise the second-highest scorer. Every candidate was scored on the same
+    folds (`tuning.cv_splitter` is deterministic for a given target), so the per-fold scores
+    pair up. Returns None when there is no rival or the folds cannot be compared.
+    """
+    from app.services import uncertainty
+
+    order = {name: i for i, name in enumerate(MODELS)}
+    others = [name for name in scores if name != chosen]
+    if not others:
+        return None
+    if highest_scorer != chosen:
+        rival = highest_scorer
+    else:
+        rival = max(others, key=lambda name: (scores[name]["score"], -order.get(name, len(order))))
+
+    leader, other = highest_scorer, (chosen if highest_scorer != chosen else rival)
+    gap = uncertainty.fold_difference(scores[leader].get("fold_scores"), scores[other].get("fold_scores"))
+    if gap is None:
+        return None
+    return {
+        "runner_up": rival,
+        "leader": leader,
+        "other": other,
+        "distinguishable": not (gap["low"] <= 0 <= gap["high"]),
+        "paired_difference": gap,
+    }
+
+
 def choose_on_training_folds(
     trained, build_for, X_train, y_train, task: str, *, groups=None, ordered: bool = False
 ) -> dict:
@@ -1288,7 +1329,12 @@ def choose_on_training_folds(
             ordered=ordered,
         )
         if found is not None:
-            scores[entry["model"]] = {"score": found.score, "std": found.std, "folds": found.fits}
+            scores[entry["model"]] = {
+                "score": found.score,
+                "std": found.std,
+                "folds": found.fits,
+                "fold_scores": list(found.fold_scores),
+            }
 
     if not scores:
         return {
@@ -1307,13 +1353,36 @@ def choose_on_training_folds(
     pick = one_standard_error_choice(scores)
     chosen, top = pick["chosen"], pick["highest_scorer"]
     metric = tuning.scoring_for(task, y_train)
+    comparison = runner_up_comparison(scores, chosen, top)
     rule_note = None
     if pick["rule"] == "one_standard_error":
         rule_note = (
             f"{MODELS[top].label} scored highest ({scores[top]['score']:.3f}), but "
             f"{MODELS[chosen].label} ({scores[chosen]['score']:.3f}) is within one standard "
             f"error ({pick['standard_error']:.3f}) of it, so the simpler model was kept: a lead "
-            f"that small is not distinguishable from the folds' own disagreement."
+            f"smaller than the folds' own disagreement is a weak reason to prefer the more "
+            f"complex one."
+        )
+        if comparison and comparison["distinguishable"]:
+            gap = comparison["paired_difference"]
+            rule_note += (
+                f" The folds do lean its way, though: it was ahead by {_signed(gap['difference'])} "
+                f"on average (95% range {_signed(gap['low'])} to {_signed(gap['high'])}), so that "
+                f"small lead is not noise."
+            )
+    distinguishable_note = None
+    if comparison and not comparison["distinguishable"]:
+        gap = comparison["paired_difference"]
+        leader, other = MODELS[comparison["leader"]].label, MODELS[comparison["other"]].label
+        why = (
+            "it is simpler" if chosen != top else "it scored higher, which these folds "
+            "cannot show is more than chance"
+        )
+        distinguishable_note = (
+            f"{leader} and {_in_a_sentence(other)} are within the noise of each other on these "
+            f"folds (the gap averaged {_signed(gap['difference'])} per fold, 95% range "
+            f"{_signed(gap['low'])} to {_signed(gap['high'])}); {MODELS[chosen].label} was kept "
+            f"because {why}."
         )
     return {
         "chosen": chosen,
@@ -1325,6 +1394,12 @@ def choose_on_training_folds(
         "highest_scorer": top,
         "standard_error": pick["standard_error"],
         "rule_note": rule_note,
+        # Whether the folds can separate the chosen model from its closest rival, and the
+        # paired difference that says so. None when there was no rival to compare with.
+        "runner_up": comparison["runner_up"] if comparison else None,
+        "distinguishable": comparison["distinguishable"] if comparison else None,
+        "paired_difference": comparison["paired_difference"] if comparison else None,
+        "distinguishable_note": distinguishable_note,
         "chosen_on": (
             f"cross-validated {metric} over {scores[chosen]['folds']} folds of the training "
             f"rows; the test set was not consulted"

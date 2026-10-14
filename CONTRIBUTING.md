@@ -348,6 +348,13 @@ are both running locally, you're ready to make changes.
   `ModelSpec` (a linear model before a forest before boosted trees), not an accident of the
   registry's order. Add the rank when you add a family, and see `choose_on_training_folds` and
   the improvement loop's first round, which both go through `one_standard_error_choice`.
+- **Candidates are compared on identical folds.** `selection.distinguishable` pairs each model's
+  fold scores, which is only meaningful if fold *i* holds the same rows for every candidate.
+  `tuning.cv_splitter` is deterministic for a given target and groups, and a test checks that
+  selection hands every candidate the same splits; if you add randomness to a splitter, seed it
+  from the data, not from the call. Do not interpret the interval with a plain paired t-test:
+  `uncertainty.fold_difference` applies the Nadeau-Bengio correction for overlapping training
+  sets, and the page's wording depends on it.
 - **A headline held-out number carries its interval, and the interval's arithmetic is held to
   `evaluate`.** `uncertainty.py` recomputes every headline metric as a weighted sum over one set
   of predictions (a resample is a vector of draw counts). If you add a metric to `evaluate`, add
