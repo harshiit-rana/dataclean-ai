@@ -17,6 +17,7 @@ DATASET_STATISTIC_OPERATIONS) rather than baking them into cleaned.csv.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -76,6 +77,11 @@ class ModelSpec:
     # True when the model's coefficients/importances are directly readable. Used to decide
     # whether a feature-importance review is offered for this model.
     explains_features: bool = True
+    # How much explaining and exporting this model costs, lowest first. Written down rather than
+    # inferred from the order of the registry, because the one-standard-error rule prefers the
+    # simpler of two models the evidence cannot separate, and "simpler" is a decision to make
+    # visibly -- a linear model before a forest before boosted trees.
+    complexity_rank: int = 1
 
     def settings(self, overrides: dict | None = None) -> dict:
         """Defaults, with anything the tuner found layered on top.
@@ -129,6 +135,7 @@ MODELS: dict[str, ModelSpec] = {
                 "random_state": RANDOM_STATE,
                 "n_jobs": -1,
             },
+            complexity_rank=2,
         ),
         ModelSpec(
             "gradient_boosting_classifier",
@@ -140,6 +147,7 @@ MODELS: dict[str, ModelSpec] = {
             "HistGradientBoostingClassifier",
             {"random_state": RANDOM_STATE},
             explains_features=False,
+            complexity_rank=3,
         ),
         ModelSpec(
             "linear_regression",
@@ -158,6 +166,7 @@ MODELS: dict[str, ModelSpec] = {
             "sklearn.ensemble",
             "RandomForestRegressor",
             {"n_estimators": 200, "random_state": RANDOM_STATE, "n_jobs": -1},
+            complexity_rank=2,
         ),
         ModelSpec(
             "gradient_boosting_regressor",
@@ -168,6 +177,7 @@ MODELS: dict[str, ModelSpec] = {
             "HistGradientBoostingRegressor",
             {"random_state": RANDOM_STATE},
             explains_features=False,
+            complexity_rank=3,
         ),
     ]
 }
@@ -1189,6 +1199,43 @@ def test_rows_seen_in_training(X_train, X_test, y_train, y_test) -> int:
         return 0
 
 
+def one_standard_error_choice(scores: dict[str, dict]) -> dict:
+    """Which candidate to keep when each has a cross-validated score and a spread across folds.
+
+    The plain maximum treats a lead of 0.002 as a lead even when the folds disagree with each
+    other by 0.03: a forest "beats" logistic regression, though the evidence does not separate
+    them and the simpler model is easier to explain, to export and to trust. The
+    one-standard-error rule (Breiman et al.; Hastie, Tibshirani and Friedman) keeps the simplest
+    candidate whose mean is within one standard error of the best -- the standard error being
+    the fold-to-fold spread divided by the square root of the number of folds.
+
+    `scores` maps a model name to `{"score", "std", "folds"}`. Ties in complexity go to the
+    higher score. Returns the choice, the raw highest scorer, and whether the rule changed it.
+    """
+    order = {name: i for i, name in enumerate(MODELS)}
+
+    def rank(name: str) -> int:
+        spec = MODELS.get(name)
+        return spec.complexity_rank if spec else 99
+
+    best = max(scores, key=lambda name: (scores[name]["score"], -rank(name), -order.get(name, 0)))
+    folds = max(int(scores[best].get("folds") or 1), 1)
+    standard_error = float(scores[best]["std"]) / math.sqrt(folds)
+    threshold = scores[best]["score"] - standard_error
+    within = [name for name in scores if scores[name]["score"] >= threshold]
+    chosen = min(
+        within,
+        key=lambda name: (rank(name), -scores[name]["score"], order.get(name, len(order))),
+    )
+    return {
+        "chosen": chosen,
+        "highest_scorer": best,
+        "rule": "one_standard_error" if chosen != best else "highest_score",
+        "standard_error": round(standard_error, 4),
+        "within_one_standard_error": sorted(within, key=lambda name: order.get(name, 99)),
+    }
+
+
 def choose_on_training_folds(
     trained, build_for, X_train, y_train, task: str, *, groups=None, ordered: bool = False
 ) -> dict:
@@ -1248,14 +1295,27 @@ def choose_on_training_folds(
             ),
         }
 
-    chosen = max(scores, key=lambda name: (scores[name]["score"], -order.get(name, 0)))
+    pick = one_standard_error_choice(scores)
+    chosen, top = pick["chosen"], pick["highest_scorer"]
     metric = tuning.scoring_for(task, y_train)
+    rule_note = None
+    if pick["rule"] == "one_standard_error":
+        rule_note = (
+            f"{MODELS[top].label} scored highest ({scores[top]['score']:.3f}), but "
+            f"{MODELS[chosen].label} ({scores[chosen]['score']:.3f}) is within one standard "
+            f"error ({pick['standard_error']:.3f}) of it, so the simpler model was kept: a lead "
+            f"that small is not distinguishable from the folds' own disagreement."
+        )
     return {
         "chosen": chosen,
         "method": "cross_validation",
         "metric": metric,
         "folds": scores[chosen]["folds"],
         "scores": scores,
+        "rule": pick["rule"],
+        "highest_scorer": top,
+        "standard_error": pick["standard_error"],
+        "rule_note": rule_note,
         "chosen_on": (
             f"cross-validated {metric} over {scores[chosen]['folds']} folds of the training "
             f"rows; the test set was not consulted"

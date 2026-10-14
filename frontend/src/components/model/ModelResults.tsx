@@ -230,6 +230,11 @@ function ModelComparison({ result, keys }: { result: ModelResult; keys: string[]
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
+        {selection.rule_note && (
+          <p className="rounded-md border border-sky-500/40 bg-sky-500/5 p-3 text-sm">
+            {selection.rule_note}
+          </p>
+        )}
         {selection.method === "default_order" && (
           <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
             {selection.chosen_on}.
@@ -260,7 +265,9 @@ function ModelComparison({ result, keys }: { result: ModelResult; keys: string[]
                       {entry.label}
                       {isChosen && (
                         <span className="ml-2 text-xs text-muted-foreground">
-                          {SELECTION_NOTE[selection.method]}
+                          {selection.rule === "one_standard_error"
+                            ? "simplest within one standard error of the best"
+                            : SELECTION_NOTE[selection.method]}
                         </span>
                       )}
                     </td>

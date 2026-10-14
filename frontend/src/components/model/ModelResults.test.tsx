@@ -400,3 +400,37 @@ describe("ModelResults — how far the score could move (#28)", () => {
     expect(screen.queryAllByText(/\(0\.\d{3}–0\.\d{3}\)/).length).toBe(2);
   });
 });
+
+describe("ModelResults — the one-standard-error rule (#33)", () => {
+  const kept = () => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.selection = {
+      ...r.selection!,
+      rule: "one_standard_error",
+      highest_scorer: "random_forest_classifier",
+      standard_error: 0.013,
+      rule_note:
+        "Random forest scored highest (0.842), but Logistic regression (0.840) is within one standard error (0.013) of it, so the simpler model was kept.",
+    };
+    return r;
+  };
+
+  it("says why the simpler model was kept", () => {
+    render(<ModelResults result={kept()} />);
+    expect(screen.getByText(/is within one standard error \(0.013\) of it, so the simpler model was kept/)).toBeInTheDocument();
+  });
+
+  it("marks the chosen row as the simplest within the noise, not just 'chosen'", () => {
+    render(<ModelResults result={kept()} />);
+    expect(screen.getByText("simplest within one standard error of the best")).toBeInTheDocument();
+    expect(screen.queryByText("chosen on training folds")).not.toBeInTheDocument();
+  });
+
+  it("says nothing extra when the rule changed nothing", () => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.selection = { ...r.selection!, rule: "highest_score", rule_note: null };
+    render(<ModelResults result={r} />);
+    expect(screen.queryByText(/within one standard error/)).not.toBeInTheDocument();
+    expect(screen.getByText("chosen on training folds")).toBeInTheDocument();
+  });
+});

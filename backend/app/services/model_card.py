@@ -103,6 +103,8 @@ def _selection_tables(result: dict) -> list[str]:
         "Compared on cross-validated folds of the training rows, never on the held-out rows, "
         f"so the choice cannot have been made with the test answers ({selection.get('chosen_on')})."
     )
+    if selection.get("rule_note"):
+        lines += ["", selection["rule_note"]]
     lines += [
         "",
         f"| Model | Fold score{f' ({label})' if label else ''} | Fold spread |",
@@ -114,7 +116,12 @@ def _selection_tables(result: dict) -> list[str]:
             lines.append(f"| {name} | did not train | — |")
             continue
         if entry.get("model") == result.get("best_model"):
-            name = f"**{name}** (chosen; {_SELECTION_NOTE.get(method, 'chosen')})"
+            note = (
+                "simplest within one standard error of the best"
+                if selection.get("rule") == "one_standard_error"
+                else _SELECTION_NOTE.get(method, "chosen")
+            )
+            name = f"**{name}** (chosen; {note})"
         score = entry.get("cv_score")
         spread = entry.get("cv_std")
         lines.append(

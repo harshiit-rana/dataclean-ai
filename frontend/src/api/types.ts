@@ -611,6 +611,14 @@ export interface ModelSelection {
   scores: Record<string, { score: number; std: number; folds: number }>;
   /** One sentence saying what the choice was based on, written in code. */
   chosen_on: string;
+  /** "one_standard_error" when the simplest model within one standard error of the best was
+   * kept instead of the raw highest scorer; "highest_score" otherwise. */
+  rule?: "one_standard_error" | "highest_score";
+  /** The candidate with the highest raw fold score, which is not always the one kept. */
+  highest_scorer?: string;
+  standard_error?: number;
+  /** The sentence saying why the simpler model was kept, or null when the rule changed nothing. */
+  rule_note?: string | null;
 }
 
 export interface ModelResult {

@@ -272,7 +272,7 @@ def improve(
     # looked at once. A loop that keeps going cannot afford even that, so family selection
     # moves onto cross-validation here.
     family_scores: dict[str, float] = {}
-    best_name, best_score, best_std = "", float("-inf"), 0.0
+    scored: dict[str, dict] = {}
     for name in candidates:
         result = tuning.score_config(
             build_for(name), X_train, y_train, task, groups=train_groups, ordered=ordered
@@ -280,11 +280,15 @@ def improve(
         if result is None:
             continue
         family_scores[name] = result.score
-        if result.score > best_score:
-            best_name, best_score, best_std = name, result.score, result.std
+        scored[name] = {"score": result.score, "std": result.std, "folds": result.fits}
 
-    if not best_name:
+    if not scored:
         raise modeling.ModelingError("None of the models could be scored on this data.")
+    # The same rule the plain train uses, so a search and a train cannot start from different
+    # models on the same evidence: the simplest family within one standard error of the best.
+    pick = modeling.one_standard_error_choice(scored)
+    best_name = pick["chosen"]
+    best_score, best_std = scored[best_name]["score"], scored[best_name]["std"]
 
     best_params: dict = {}
     emit(
@@ -299,7 +303,12 @@ def improve(
             gain=None,
             accepted=True,
             outcome=f"{modeling.MODELS[best_name].label} leads at {best_score:.3f} {metric_label}.",
-            detail={"scores": family_scores, "chosen": best_name},
+            detail={
+                "scores": family_scores,
+                "chosen": best_name,
+                "rule": pick["rule"],
+                "highest_scorer": pick["highest_scorer"],
+            },
         )
     )
 

@@ -468,3 +468,25 @@ class TestTheChoiceIsShownOnTheNumbersThatMadeIt:
         card = _card()
         assert "### How the model was chosen" not in card
         assert "Random forest" in card and "0.77" in card
+
+
+class TestTheOneStandardErrorRuleIsExplained:
+    NOTE = (
+        "Random forest scored highest (0.8421), but Logistic regression (0.8300) is within one "
+        "standard error (0.0123) of it, so the simpler model was kept."
+    )
+
+    def _kept(self):
+        data = _with_fold_scores({**SELECTION, "rule": "one_standard_error", "rule_note": self.NOTE})
+        return _card(**data)
+
+    def test_the_card_says_why_the_simpler_model_was_kept(self):
+        assert self.NOTE in self._kept()
+
+    def test_the_chosen_row_says_it_is_the_simplest_within_the_noise(self):
+        assert "(chosen; simplest within one standard error of the best)" in self._kept()
+
+    def test_a_rule_that_changed_nothing_adds_nothing(self):
+        card = _card(**_with_fold_scores({**SELECTION, "rule": "highest_score", "rule_note": None}))
+        assert "within one standard error" not in card
+        assert "(chosen; chosen on training folds)" in card

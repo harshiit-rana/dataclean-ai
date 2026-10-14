@@ -317,6 +317,17 @@ class balance, feature importance, permutation importance, cross-validation spre
 curve, correlation matrix — and for regression, predicted-vs-actual, residuals, residual
 distribution, error by range.
 
+**The simplest model the folds cannot separate from the best.** The winner used to be the raw
+highest cross-validated score, so a forest that beat logistic regression by 0.002, with the folds
+disagreeing by 0.03, "won" although the evidence does not tell them apart. It is now the
+one-standard-error rule: among candidates whose mean is within one standard error (the fold spread
+over the square root of the number of folds) of the best, the simplest is kept, "simplest" being
+a written `complexity_rank` on each model rather than the order of a list. When the rule changed
+the answer the page and the card say which model scored highest and why the simpler one was kept;
+when it did not, they say nothing. The improvement loop's starting family uses the same rule, so
+a train and a search cannot begin from different models on the same evidence. It reads fold scores
+only, and a test flips every held-out answer to show the choice does not move.
+
 **How far a score could move.** "AUC 0.78" on 60 rows and on 6,000 used to look identical. The
 chosen model's headline held-out metrics now carry a 95% interval from a percentile bootstrap over
 the test rows — `0.78 (0.71–0.84)` — resampled within each class so a rare class cannot vanish

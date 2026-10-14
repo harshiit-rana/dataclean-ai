@@ -330,6 +330,11 @@ are both running locally, you're ready to make changes.
   a kind. The comparison of candidate models leads with the fold scores that chose between
   them; the other candidates' held-out scores are behind a button with the reason they are not
   the basis for anything, and `model_card._comparison_table` does the same in the written card.
+- **A new model gets a `complexity_rank`.** The one-standard-error rule keeps the simplest
+  candidate the folds cannot separate from the best, and "simplest" is the rank written on its
+  `ModelSpec` (a linear model before a forest before boosted trees), not an accident of the
+  registry's order. Add the rank when you add a family, and see `choose_on_training_folds` and
+  the improvement loop's first round, which both go through `one_standard_error_choice`.
 - **A headline held-out number carries its interval, and the interval's arithmetic is held to
   `evaluate`.** `uncertainty.py` recomputes every headline metric as a weighted sum over one set
   of predictions (a resample is a vector of draw counts). If you add a metric to `evaluate`, add
