@@ -1753,7 +1753,7 @@ def train_candidates(
         calibration_refusal = calibration_service.eligibility(calibration, task, y_train)
         if calibration_refusal is None:
             try:
-                calibrated, used = calibration_service.fit(
+                calibrated, fold_count = calibration_service.fit(
                     build_best, calibration, X_train, y_train,
                     groups=fold_groups, ordered=split_strategy == "time",
                 )
@@ -1768,11 +1768,11 @@ def train_candidates(
                 )
                 applied_calibration = {
                     "method": calibration,
-                    "folds": used,
+                    "folds": fold_count,
                     "ensemble": split_strategy == "time",
                     "metrics": after,
                     "fitted_on": (
-                        f"cross-validation over {used} folds of the {len(X_train):,} training rows"
+                        f"cross-validation over {fold_count} folds of the {len(X_train):,} training rows"
                         f"{', each calibrated on rows later than the model trained on' if split_strategy == 'time' else ''}; "
                         f"the test set was not consulted"
                     ),

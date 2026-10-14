@@ -358,6 +358,13 @@ probabilities, calibration appears in the run history, and applying it re-runs t
 counts as another look at the test rows. A test with every held-out answer flipped shows the fitted
 calibrator and the cut-off do not move.
 
+The exported `train_model.py` rebuilds the calibrated model: the same method, the same
+`ensemble` setting, and the same folds listed explicitly (stratified, whole groups, copies together,
+or forward in time), so it reproduces the reported accuracy and Brier score to four places; the
+script now prints the Brier score of every two-class model, and the prediction snippet says the
+probabilities are calibrated and what that does to the default line. Tests run the generated file
+in a subprocess for a plain, a grouped, a dated, a copy-keeping and a sealed run, for both methods.
+
 **The simplest model the folds cannot separate from the best.** The winner used to be the raw
 highest cross-validated score, so a forest that beat logistic regression by 0.002, with the folds
 disagreeing by 0.03, "won" although the evidence does not tell them apart. It is now the

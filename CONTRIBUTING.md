@@ -184,6 +184,16 @@ are both running locally, you're ready to make changes.
   few lines of pandas (the date cut), a test executes the generated block and compares the app's
   test indices. Either way, a split the script cannot reproduce makes every exported number
   wrong.
+- **Calibration is part of what the export rebuilds.** When the result records a calibration
+  method, `train_model.py` names the base pipeline `base_pipeline` and wraps it in
+  `CalibratedClassifierCV` with the same method, `ensemble` setting and *explicit list of folds*
+  (a splitter handed over would get no groups): stratified for a plain split, `GroupKFold` on the
+  group column or the copy key, `TimeSeriesSplit` for a date split, with the fold count the app
+  used. `test_calibrated_export.py` runs the script in a subprocess for each of those and compares
+  accuracy and Brier score with the app's to 1e-4. A new way of splitting the training rows into
+  folds has to be added to `model_export._calibration_block` and `_calibration_imports` together,
+  and the script prints the Brier score of any two-class model so the probabilities are checked,
+  not just the answers.
 - **Copies kept together at the split are kept together in every fold.** When
   `keep_identical_rows_together` took effect, `train_candidates` and `improve` hand the copy ids
   to every fold-producing call as `groups`, through the same path a grouped split uses; an entity

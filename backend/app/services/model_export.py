@@ -206,7 +206,7 @@ else:
 {textwrap.indent(standard.strip(chr(10)), "    ")}"""
 
 
-def _evaluation_block(task: str, point: dict | None = None) -> str:
+def _evaluation_block(task: str, point: dict | None = None, brier: bool = False) -> str:
     if task == "regression":
         return '''predictions = pipeline.predict(X_test)
 print(f"R2:   {r2_score(y_test, predictions):.4f}")
@@ -221,6 +221,16 @@ print()
 print(classification_report(y_test, predictions, zero_division=0))
 print("Confusion matrix (rows = actual, columns = predicted):")
 print(confusion_matrix(y_test, predictions))'''
+    if brier:
+        # How far the probabilities are from what happened, which accuracy cannot say. Printed
+        # to four places so it can be checked against the number the app reported.
+        default += '''
+
+positive_index = [str(c) for c in pipeline.classes_].index(POSITIVE_LABEL)
+probabilities = pipeline.predict_proba(X_test)[:, positive_index]
+print()
+print(f"Brier score: {brier_score_loss(y_test.astype(str) == POSITIVE_LABEL, probabilities):.4f}"
+      "  (lower is better; 0 is perfect)")'''
 
     if not point or point.get("objective") in (None, "default"):
         return default
@@ -247,12 +257,76 @@ print(f"  caught  {caught} of {int(is_case.sum())} real cases"
 print(f"  correct when flagged: {caught / max(int(flagged.sum()), 1):.4f} (precision)")'''
 
 
-def _metric_imports(task: str) -> str:
+def _metric_imports(task: str, brier: bool = False) -> str:
     if task == "regression":
         return "from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score"
-    return (
-        "from sklearn.metrics import accuracy_score, classification_report, confusion_matrix"
-    )
+    names = "accuracy_score, " + ("brier_score_loss, " if brier else "") + "classification_report, confusion_matrix"
+    return f"from sklearn.metrics import {names}"
+
+
+def _calibration_applied(result: dict) -> dict | None:
+    """The calibration report, when the model delivered is a calibrated one."""
+    report = result.get("calibration") or {}
+    return report if report.get("method") in ("sigmoid", "isotonic") else None
+
+
+def _calibration_block(result: dict, report: dict) -> str:
+    """Wraps the pipeline in the calibrator the app fitted, on the same folds.
+
+    The folds are the ones every other step on the training rows uses (`tuning.cv_splitter`):
+    stratified for a plain split, whole groups for a grouped split or copies kept together,
+    forward in time for a date split. They are listed explicitly rather than handed over as a
+    splitter, because scikit-learn gives a splitter's `split` no groups. A script that rebuilt
+    them differently would calibrate on a different mapping and quietly report different
+    numbers, which is the one thing this file exists not to do.
+    """
+    split = result.get("split", {})
+    strategy = split.get("strategy")
+    folds = int(report.get("folds") or 0)
+    ordered = strategy == "time" and bool(split.get("time_column"))
+    grouped = strategy == "group" and bool(split.get("group_column"))
+    copies = bool(split.get("keep_duplicates_together")) and not ordered and not grouped
+
+    if ordered:
+        splitter = f"TimeSeriesSplit(n_splits={folds})"
+        arguments = "X_train, fold_labels"
+        why = "Forward in time: each fold is calibrated on rows later than the ones it trained on."
+    elif grouped:
+        splitter = f"GroupKFold(n_splits={folds})"
+        arguments = "X_train, fold_labels, groups.loc[X_train.index]"
+        why = "Whole groups: no entity is in both the part a fold trains on and the part it is calibrated on."
+    elif copies:
+        splitter = f"GroupKFold(n_splits={folds})"
+        arguments = "X_train, fold_labels, duplicate_key.loc[X_train.index]"
+        why = "Copies together: a row and its exact copy are never on opposite sides of a fold."
+    else:
+        splitter = f"StratifiedKFold(n_splits={folds}, shuffle=True, random_state=42)"
+        arguments = "X_train, fold_labels"
+        why = "Stratified, so each fold has both answers."
+
+    return f'''
+# --- Probability calibration ------------------------------------------------------------
+# The app corrected this model's probabilities with a {report["method"]} calibration, so that "70%
+# likely" happens about 70% of the time. It is fitted on cross-validation folds of the
+# TRAINING rows only -- each row scored by a model that never saw it -- and the test rows take
+# no part. {why}
+CALIBRATION_METHOD = {_literal(report["method"])}
+fold_labels = y_train.astype(str)
+calibration_folds = list({splitter}.split({arguments}))
+pipeline = CalibratedClassifierCV(
+    base_pipeline, method=CALIBRATION_METHOD, cv=calibration_folds, ensemble={bool(report.get("ensemble"))},
+)
+'''
+
+
+def _calibration_imports(result: dict, report: dict) -> str:
+    split = result.get("split", {})
+    strategy = split.get("strategy")
+    ordered = strategy == "time" and bool(split.get("time_column"))
+    grouped = strategy == "group" and bool(split.get("group_column"))
+    copies = bool(split.get("keep_duplicates_together")) and not ordered and not grouped
+    splitter = "TimeSeriesSplit" if ordered else "GroupKFold" if (grouped or copies) else "StratifiedKFold"
+    return f"from sklearn.calibration import CalibratedClassifierCV\nfrom sklearn.model_selection import {splitter}"
 
 
 def build_training_script(result: dict, *, file_name: str = "cleaned.csv") -> str:
@@ -280,6 +354,11 @@ def build_training_script(result: dict, *, file_name: str = "cleaned.csv") -> st
     metrics = best.get("metrics", {})
     point = result.get("operating_point")
     has_point = bool(point and point.get("objective") not in (None, "default"))
+    calibrated = _calibration_applied(result) if task == "classification" else None
+    positive_label = metrics.get("positive_label")
+    # Printed whenever the app reported it, so the probabilities can be checked, not just the
+    # answers. Needs the positive answer named, which only a two-class model has.
+    brier = task == "classification" and "brier_score" in metrics and positive_label is not None
     scored = ", ".join(
         f"{k} {v}" for k, v in metrics.items() if isinstance(v, (int, float))
     ) or "not recorded"
@@ -344,8 +423,8 @@ import joblib
 from sklearn.impute import SimpleImputer
 {encoder_import}{split_import}
 from sklearn.pipeline import Pipeline
-{_metric_imports(task)}
-{spec.import_line}
+{_metric_imports(task, brier)}
+{_calibration_imports(result, calibrated) + chr(10) if calibrated else ""}{spec.import_line}
 {_clipper_block(clipped)}
 TARGET = {_literal(target)}
 NUMERIC_FEATURES = {_literal(numeric)}
@@ -353,7 +432,7 @@ CATEGORICAL_FEATURES = {_literal(categorical)}
 FREQUENT_FEATURES = {_literal(frequent)}
 CLIPPED_FEATURES = {_literal(clipped)}
 EXCLUDED_BY_CHOICE = {_literal(excluded)}
-{_threshold_constants(point) if has_point else ""}
+{_threshold_constants(point) if has_point else _positive_label_constant(positive_label) if brier else ""}
 path = sys.argv[1] if len(sys.argv) > 1 else {_literal(file_name)}
 df = pd.read_csv(path)
 {_derived_block(recipes)}
@@ -365,16 +444,16 @@ labels = labelled[TARGET]
 
 {_split_block(split, task)}
 
-pipeline = Pipeline([
+{"base_pipeline" if calibrated else "pipeline"} = Pipeline([
     ("prepare", ColumnTransformer([
 {chr(10).join(entries)}
     ])),
     ("model", {spec.constructor_source(best.get("tuned_params"))}),
 ])
-
+{_calibration_block(result, calibrated) if calibrated else ""}
 pipeline.fit(X_train, y_train)
 
-{_evaluation_block(task, point if has_point else None)}
+{_evaluation_block(task, point if has_point else None, brier)}
 
 joblib.dump(pipeline, "model.joblib")
 print("\\nSaved the fitted pipeline to model.joblib")
@@ -431,6 +510,13 @@ def _derived_block(recipes: list) -> str:
     )
 
 
+def _positive_label_constant(label) -> str:
+    return (
+        f"\n# Which answer counts as a case, for the Brier score below.\n"
+        f"POSITIVE_LABEL = {_literal(str(label))}\n"
+    )
+
+
 def _threshold_constants(point: dict) -> str:
     return (
         f"\n# Where the cut-off sits. Chosen by the app so that {point.get('description')},\n"
@@ -463,6 +549,13 @@ def build_prediction_snippet(result: dict) -> str:
             f"scores = pipeline.predict_proba(new_rows[{columns!r}])[:, positive]\n"
             f"print(scores >= {point['threshold']})"
         )
+    calibration_note = (
+        f"\n# The probabilities are calibrated ({_calibration_applied(result)['method']}), fitted on the training rows only,\n"
+        "# so \"70% likely\" means about 70%. That also moves the default 0.50 line: on a rare\n"
+        "# answer predict() flags fewer rows than an uncalibrated model would.\n"
+        if _calibration_applied(result)
+        else ""
+    )
     derived_note = (
         "\n# Some inputs are derived (see train_model.py): "
         + ", ".join(sorted({o for r in features.get("derived", []) for o in r.get("outputs", [])}))
@@ -481,7 +574,7 @@ def build_prediction_snippet(result: dict) -> str:
 import pandas as pd
 {clip_note}
 pipeline = joblib.load("model.joblib")
-{derived_note}
+{calibration_note}{derived_note}
 # Column names and order must match training. The pipeline handles the rest -- missing
 # values, scaling and encoding are all inside it.
 new_rows = pd.DataFrame([{{{", ".join(f"{c!r}: ..." for c in columns[:4])}}}])
