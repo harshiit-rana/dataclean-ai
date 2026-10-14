@@ -41,6 +41,13 @@ are both running locally, you're ready to make changes.
 - Frontend: `cd frontend && npm test && npm run build` should both pass.
 - Keep stub signatures intact if you're not implementing them yet -- other code and tests
   are written against those signatures.
+- `backend/tests/integration/test_http_session_end_to_end.py` runs a whole session over HTTP --
+  upload, goal, profile, resume, readiness, plan, train, improve, export, apply -- on the churn
+  sample with a fake LLM and the real graph and models (about 20 seconds). It exists because
+  wiring defects between steps have been found by running real data by hand. If you change a
+  response shape a later step reads, it fails; update it in the same change, deliberately. The
+  fake card writer is kept close to the real prompt contract (an OPERATION line per issue
+  type), so keep it in step with `explanation_prompts.py`.
 - If you added anything that **decides** something -- picks a model, a setting, a feature, a
   threshold, a column to drop, a number shown beside the score -- add a case for that decision
   path to `backend/tests/unit/test_evaluation_integrity.py`. It runs the path twice, once with
