@@ -178,6 +178,14 @@ are both running locally, you're ready to make changes.
   last passed against and caps are the next release allowed to break the API. They used to be
   floors only, some years stale, so a fresh build got whatever was newest that day. To move up:
   raise the bound, run the suite, commit both together.
+- **CI runs on a pinned image, and its actions are kept off deprecated runtimes.** Both jobs use
+  `ubuntu-24.04`, not `ubuntu-latest`: the alias moves to a new Ubuntu release on GitHub's
+  schedule, and a new release can change the system libraries WeasyPrint needs and break the
+  backend job with no change to this repo. Moving to a newer image is a deliberate commit with
+  the run read afterwards, not something that happens to you. When GitHub's annotations on a
+  run say an action targets a deprecated Node.js runtime, upgrade the action's major version
+  and read its release notes for changed defaults first -- the `setup-node` majors changed
+  automatic caching, for instance.
 - **A POST stream is opened once.** `streamPost` sets `openWhenHidden: true`. The library's
   default aborts the request when the tab is hidden and re-sends it when the tab returns --
   harmless for a GET, and for every stream here it meant re-running profiling, re-applying
