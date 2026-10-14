@@ -10,6 +10,7 @@ a change that no longer exists would be worse than no report at all.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from fastapi import APIRouter, Depends
@@ -21,7 +22,7 @@ from app.graph.checkpointer import thread_config
 from app.graph.nodes.audit_agent import mark_report_stale
 from app.models.api_schemas import UndoRequest
 from app.services import model_store
-from app.services.session_store import session_dir
+from app.services.session_store import record_dataset_version_in, session_dir
 from app.services.undo import ActionNotFoundError, undo_action
 
 logger = logging.getLogger(__name__)
@@ -71,6 +72,9 @@ async def undo(
     )
 
     await graph.aupdate_state(config, {"action_log": updated_log})
+    await asyncio.to_thread(
+        record_dataset_version_in, directory, f"undo:{action_id}"
+    )
 
     # The data just changed, so any trained model was evaluated against rows that no longer
     # exist. Showing a stale score next to different data is worse than showing none.

@@ -188,6 +188,14 @@ are both running locally, you're ready to make changes.
   change an operation, change its template; if you add one, add a template and a step to
   `EVERY_OPERATION` in `test_cleaning_export.py`, which fails until the registry is covered and
   compares the script's output with the app's byte for byte.
+- **Whatever rewrites `cleaned.csv` records a dataset version.** The working data is replaced in
+  place by the cleaning run, by undo and by chat, so a model, a test-set look or an export needs a
+  name for the state it describes. `session_store.record_dataset_version_in(directory, event)` is
+  called after each write (`cleaning_run`, `undo:<action>`, `chat:<action>`; `upload` at upload)
+  and appends `{version, fingerprint, rows, columns, at, event}` to the meta sidecar only when
+  the content hash differs from the latest version. It never raises — it is bookkeeping about
+  work already done. If you add a route that rewrites the data, call it; a test that walks the
+  routes should fail if you do not.
 - **No row leaves without a reason.** Replay keeps the upload's row numbers as the index through
   every step and records which step removed each row; the predictions file carries every
   uploaded row. Operations must preserve the index (filter with a mask, never `reset_index`) or

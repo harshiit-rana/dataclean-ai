@@ -229,3 +229,7 @@ class SessionStatusResponse(BaseModel):
     issue_count: int
     approved_count: int
     rejected_count: int
+    # Every state the session's working data has been in, oldest first: version, full content
+    # fingerprint, row and column counts, when, and what produced it (upload, cleaning_run,
+    # undo:<action>, chat:<action>). A model or a test-set look names one of these.
+    dataset_versions: list[dict] = []

@@ -4,16 +4,22 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
+from app.config import Settings, get_settings
 from app.core.errors import SessionNotFoundError
 from app.dependencies import get_graph
 from app.graph.checkpointer import thread_config
 from app.models.api_schemas import SessionStatusResponse
+from app.services.session_store import dataset_versions
 
 router = APIRouter()
 
 
 @router.get("/api/session/{session_id}", response_model=SessionStatusResponse)
-async def get_session_status(session_id: str, graph=Depends(get_graph)) -> SessionStatusResponse:
+async def get_session_status(
+    session_id: str,
+    graph=Depends(get_graph),
+    settings: Settings = Depends(get_settings),
+) -> SessionStatusResponse:
     state = await graph.aget_state(thread_config(session_id))
     if not state.values:
         raise SessionNotFoundError(session_id)
@@ -30,4 +36,5 @@ async def get_session_status(session_id: str, graph=Depends(get_graph)) -> Sessi
         issue_count=len(issues),
         approved_count=len(approved),
         rejected_count=len(skipped),
+        dataset_versions=dataset_versions(settings.upload_dir, session_id),
     )

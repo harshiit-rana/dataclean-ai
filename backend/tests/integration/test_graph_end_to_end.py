@@ -250,3 +250,69 @@ async def test_a_model_session_gets_no_whole_file_fill_on_an_input(monkeypatch, 
     )
     reporting = (await graph.aget_state(reporting_config)).values["suggestion_cards"]
     assert reporting and all(c["operation"] == "fill_median" for c in reporting)
+
+
+async def _run_to_approval(graph, tmp_path, fixtures_dir, session_id):
+    """A session shaped like the app's: the upload, its meta sidecar and version 1."""
+    import json
+    import shutil
+
+    from app.services.session_store import record_dataset_version_in
+
+    working = tmp_path / "original.csv"
+    shutil.copy(fixtures_dir / "missing_values.csv", working)
+    (tmp_path / "meta.json").write_text(json.dumps({"file_name": "missing_values.csv"}))
+    record_dataset_version_in(tmp_path, "upload")
+
+    config = thread_config(session_id)
+    await graph.ainvoke(
+        {
+            "session_id": session_id,
+            "file_path": str(working),
+            "file_name": "missing_values.csv",
+            "file_size_bytes": 500,
+            "goal_context": {
+                "use_case": "reporting",
+                "expected_output": "a clean dataset",
+                "critical_columns": [],
+                "cleaning_aggression": "moderate",
+            },
+        },
+        config,
+    )
+    return config, (await graph.aget_state(config)).values["suggestion_cards"]
+
+
+def _events(tmp_path) -> list[str]:
+    import json
+
+    return [v["event"] for v in json.loads((tmp_path / "meta.json").read_text())["dataset_versions"]]
+
+
+@pytest.mark.asyncio
+async def test_a_cleaning_run_that_changes_the_data_records_a_version(graph, fixtures_dir, tmp_path):
+    from langgraph.types import Command
+
+    config, cards = await _run_to_approval(graph, tmp_path, fixtures_dir, "versions-session")
+    await graph.ainvoke(
+        Command(resume={"approved_action_ids": [cards[0]["card_id"]], "skipped_action_ids": []}),
+        config,
+    )
+    assert _events(tmp_path) == ["upload", "cleaning_run"]
+
+
+@pytest.mark.asyncio
+async def test_a_cleaning_run_that_approves_nothing_records_no_version(graph, fixtures_dir, tmp_path):
+    from langgraph.types import Command
+
+    config, cards = await _run_to_approval(graph, tmp_path, fixtures_dir, "versions-session-2")
+    await graph.ainvoke(
+        Command(
+            resume={
+                "approved_action_ids": [],
+                "skipped_action_ids": [c["card_id"] for c in cards],
+            }
+        ),
+        config,
+    )
+    assert _events(tmp_path) == ["upload"]

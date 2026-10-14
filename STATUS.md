@@ -458,6 +458,12 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
 
 ### Cross-cutting
 
+- **Dataset versions.** The session's data is rewritten in place — by the cleaning run, by undo,
+  by a chat instruction — so nothing stable existed to attach a model, a test-set look or an
+  export to. Each state now has a numbered version in the session's meta sidecar, with the full
+  content hash, the row and column counts, when, and what produced it. A step that changes
+  nothing adds nothing, and an undo that lands on an old state is recorded as a new version, so
+  the history stays chronological. `GET /api/session/{id}` returns them.
 - **Session access tokens.** Knowing a session id isn't enough to read its data. Issued at
   upload, only the hash stored, required on every session-scoped request. Off in development.
 - **Retention.** Files deleted 24 hours after last use, swept hourly in-process.

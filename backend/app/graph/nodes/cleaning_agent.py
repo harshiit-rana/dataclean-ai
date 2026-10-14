@@ -16,6 +16,7 @@ remaining approved fixes.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from pathlib import Path
@@ -25,7 +26,7 @@ from langgraph.config import get_stream_writer
 
 from app.models.graph_state import GraphState
 from app.models.suggestion_card import ActionLogEntry, SuggestionCard
-from app.services import conflicts, operations
+from app.services import conflicts, operations, session_store
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +176,10 @@ async def cleaning_agent(state: GraphState) -> dict:
 
     cleaned_path = Path(state.file_path).parent / "cleaned.csv"
     df.to_csv(cleaned_path, index=False)
+    # A run that applied nothing leaves the data as it was and adds no version.
+    await asyncio.to_thread(
+        session_store.record_dataset_version_in, cleaned_path.parent, "cleaning_run"
+    )
 
     superseded_count = sum(1 for entry in action_log if entry.status == "superseded")
     writer(

@@ -12,6 +12,7 @@ re-running profiling and explanation for no benefit. The node stays unwired.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -28,6 +29,7 @@ from app.models.api_schemas import ChatRequest
 from app.models.graph_state import GraphState
 from app.models.suggestion_card import ActionLogEntry
 from app.services import model_store, operations
+from app.services.session_store import record_dataset_version_in
 from app.services.llm_client import get_llm_client
 from app.services.ml_readiness import enforce_target_safety
 from app.services.prompts.cleaning_prompts import (
@@ -173,6 +175,7 @@ async def send_chat_message(
         source="conversational",
     )
     updated_log = list(values.get("action_log", [])) + [entry.model_dump()]
+    await asyncio.to_thread(record_dataset_version_in, directory, f"chat:{entry.action_id}")
 
     await graph.aupdate_state(
         config,

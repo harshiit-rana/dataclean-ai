@@ -9,7 +9,12 @@ from app.core.errors import FileTooLargeError, UnsupportedFileTypeError
 from app.models.api_schemas import UploadResponse
 from app.services.encoding import read_csv_bytes
 from app.services.session_access import META_KEY, issue_token
-from app.services.session_store import new_session_id, save_uploaded_csv, write_session_meta
+from app.services.session_store import (
+    new_session_id,
+    record_dataset_version,
+    save_uploaded_csv,
+    write_session_meta,
+)
 
 router = APIRouter()
 
@@ -48,6 +53,11 @@ async def upload_csv(
             META_KEY: token_hash,  # the hash only -- the token itself is never stored
         },
     )
+
+    # Version 1 is the upload itself. Everything later -- a cleaning run, an undo, a chat
+    # instruction -- appends to this list, and a model or a test-set look names the version it
+    # was made on.
+    record_dataset_version(settings.upload_dir, session_id, "upload")
 
     return UploadResponse(
         session_id=session_id,
