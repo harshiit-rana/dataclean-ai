@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { ScoreLabel } from "@/components/model/ScoreLabel";
 import type { ImprovementRound } from "@/api/types";
 
 interface LiveImprovementProps {
@@ -22,7 +23,10 @@ export function LiveImprovement({ rounds, stage }: LiveImprovementProps) {
   return (
     <Card aria-live="polite">
       <CardHeader>
-        <CardTitle className="text-base">Searching for a better model</CardTitle>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-base">Searching for a better model</CardTitle>
+          <ScoreLabel kind="exploratory" />
+        </div>
         <p className="text-sm text-muted-foreground">
           Every round is judged on cross-validated folds of the training rows. The test set
           stays sealed until the very end.

@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { ScoreLabel } from "@/components/model/ScoreLabel";
 import type { ImprovementTrail as Trail } from "@/api/types";
 
 const METRIC_LABELS: Record<string, string> = {
@@ -47,8 +48,9 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
         <CardTitle className="text-base">What it tried</CardTitle>
+        <ScoreLabel kind="exploratory" />
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
         <p className="text-muted-foreground">

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DownloadButton } from "@/components/ui/download-button";
+import { ScoreLabel } from "@/components/model/ScoreLabel";
 import { FileDropzone } from "@/components/upload/FileDropzone";
 import { ApiError, applyToNewFile } from "@/api/client";
 import { OPERATION_LABELS } from "@/lib/operations";
@@ -216,8 +217,9 @@ export function ApplyPage() {
 
           {result.answers && (
             <Card>
-              <CardHeader>
+              <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
                 <CardTitle className="text-base">Checked against the real answers in this file</CardTitle>
+                <ScoreLabel kind="new_data" />
               </CardHeader>
               <CardContent className="text-sm">{result.answers.headline}</CardContent>
             </Card>

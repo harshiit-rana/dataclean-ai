@@ -316,6 +316,16 @@ class balance, feature importance, permutation importance, cross-validation spre
 curve, correlation matrix — and for regression, predicted-vs-actual, residuals, residual
 distribution, error by range.
 
+**Every number says what kind it is.** The app shows three kinds of score that are not
+interchangeable — fold scores on the training rows (*exploratory*), the one-time score on rows
+nothing was chosen against (*held-out evaluation*), and a score on newly uploaded rows (*new
+data*) — and used to print them alike. Each now carries a label, and the held-out one carries
+how many times those rows have been used. The table comparing models leads with the fold
+scores and spreads that actually chose between them, where it used to print every candidate's
+test score and mark one "chosen", which read as though the highest test score had won; the
+others' held-out scores are behind a button that says why choosing by them would bring back
+the problem. The model card makes the same split.
+
 **An improvement loop** (newest). Searches model settings and the other model types, optionally
 until a target you name. Built so it cannot fool itself: the test set is split off once and
 never touched during the search, every round competes on cross-validated folds of the training

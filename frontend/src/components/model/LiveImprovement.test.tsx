@@ -24,6 +24,11 @@ describe("LiveImprovement", () => {
     expect(screen.getByText("Starting…")).toBeInTheDocument();
   });
 
+  it("labels its scores as exploratory — they are fold scores, not the held-out result", () => {
+    render(<LiveImprovement rounds={[round({})]} stage={null} />);
+    expect(screen.getByText(/Exploratory · training folds/)).toBeInTheDocument();
+  });
+
   it("names the round in progress", () => {
     render(
       <LiveImprovement rounds={[]} stage="Searching the settings of logistic regression." />

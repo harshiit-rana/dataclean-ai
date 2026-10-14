@@ -61,10 +61,69 @@ def _fmt(value) -> str:
     return str(value)
 
 
+_SELECTION_NOTE = {
+    "cross_validation": "chosen on training folds",
+    "only_candidate": "the only model trained",
+    "default_order": "kept by default order",
+}
+
+
 def _comparison_table(result: dict) -> list[str]:
     """Every candidate side by side. Which models were tried and rejected is part of the
     record -- without it, a reader can't tell whether the chosen one was the best of several
-    or the only one attempted."""
+    or the only one attempted.
+
+    The winner is chosen on cross-validated folds of the training rows, so those lead: a table
+    of every candidate's *test* score with one marked "chosen" reads as though the highest test
+    score won, and invites choosing by it, which is selecting on the test set by hand. The
+    held-out scores follow, for the chosen model only.
+
+    A result saved before models were chosen on folds has no fold scores. Its choice was made
+    on the test set, so its test-score table is the accurate description of it."""
+    if result.get("selection"):
+        return _selection_tables(result)
+    return _held_out_comparison(result)
+
+
+def _selection_tables(result: dict) -> list[str]:
+    selection = result["selection"]
+    method = selection.get("method")
+    metric = selection.get("metric")
+    label = _METRIC_LABELS.get(metric or "", (metric or "", ""))[0]
+
+    lines = ["", "### How the model was chosen", ""]
+    lines.append(
+        "Compared on cross-validated folds of the training rows, never on the held-out rows, "
+        f"so the choice cannot have been made with the test answers ({selection.get('chosen_on')})."
+    )
+    lines += [
+        "",
+        f"| Model | Fold score{f' ({label})' if label else ''} | Fold spread |",
+        "| --- | --- | --- |",
+    ]
+    for entry in result.get("results", []):
+        name = entry.get("label", entry.get("model"))
+        if entry.get("failed"):
+            lines.append(f"| {name} | did not train | — |")
+            continue
+        if entry.get("model") == result.get("best_model"):
+            name = f"**{name}** (chosen; {_SELECTION_NOTE.get(method, 'chosen')})"
+        score = entry.get("cv_score")
+        spread = entry.get("cv_std")
+        lines.append(
+            f"| {name} | {_fmt(score)} | {'± ' + _fmt(spread) if spread is not None else '—'} |"
+        )
+
+    lines += ["", "### Held-out evaluation", ""]
+    lines.append(
+        "Scored once, on rows the model never saw and nothing was chosen against, for the "
+        "chosen model only."
+    )
+    lines += _held_out_comparison(result, chosen_only=True)
+    return lines
+
+
+def _held_out_comparison(result: dict, chosen_only: bool = False) -> list[str]:
     task = result.get("task")
     keys = (
         ["r2", "mae", "rmse"]
@@ -84,6 +143,8 @@ def _comparison_table(result: dict) -> list[str]:
     rows = [header, divider]
 
     for entry in result.get("results", []):
+        if chosen_only and entry.get("model") != result.get("best_model"):
+            continue
         name = entry.get("label", entry.get("model"))
         if entry.get("failed"):
             rows.append(f"| {name} | " + " | ".join(["did not train"] * len(present)) + " |")

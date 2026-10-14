@@ -519,6 +519,23 @@ export interface CandidateResult {
   column_importance: ColumnImportance[];
   diagnostics: ModelDiagnostics;
   failed: string | null;
+  /** The cross-validated score on the training rows that the model was *chosen* on, and how
+   * much it moved between folds. Null when the candidate could not be cross-validated, and
+   * absent on results from before models were chosen on folds. */
+  cv_score?: number | null;
+  cv_std?: number | null;
+}
+
+/** How the winning model was chosen. The held-out rows are never part of it. */
+export interface ModelSelection {
+  chosen: string;
+  method: "cross_validation" | "only_candidate" | "default_order";
+  /** The metric the folds were scored on (roc_auc, accuracy or r2). */
+  metric: string | null;
+  folds: number;
+  scores: Record<string, { score: number; std: number; folds: number }>;
+  /** One sentence saying what the choice was based on, written in code. */
+  chosen_on: string;
 }
 
 export interface ModelResult {
@@ -542,6 +559,8 @@ export interface ModelResult {
   primary_metric: string;
   results: CandidateResult[];
   best_model: string;
+  /** Absent on results from before models were chosen on training folds. */
+  selection?: ModelSelection;
   assessment: {
     verdict: "useful" | "marginal" | "no_better_than_guessing" | "not_enough_test_data";
     headline: string;

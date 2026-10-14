@@ -71,4 +71,23 @@ describe("OperatingPointCard", () => {
     );
     expect(screen.getByText(/promised 95% caught and the test set delivered 70%/)).toBeInTheDocument();
   });
+
+  it("says which column is a training-fold promise and which is a held-out result", () => {
+    render(<OperatingPointCard point={POINT} />);
+    const promised = screen.getByText(/Training folds promised/).closest("th")!;
+    const delivered = screen.getByText(/Test set delivered/).closest("th")!;
+    expect(promised).toHaveTextContent("Exploratory · training folds");
+    expect(delivered).toHaveTextContent("Held-out evaluation");
+  });
+
+  it("carries the reuse status onto the held-out columns", () => {
+    render(
+      <OperatingPointCard
+        point={POINT}
+        evaluation={{ look_count: 3, limit: 3, status: "reused", message: "", looks_on_other_splits: 0 }}
+      />
+    );
+    const delivered = screen.getByText(/Test set delivered/).closest("th")!;
+    expect(delivered).toHaveTextContent("used 3 times");
+  });
 });

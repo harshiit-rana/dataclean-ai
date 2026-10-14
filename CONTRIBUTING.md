@@ -289,6 +289,14 @@ are both running locally, you're ready to make changes.
   set in miniature. `expected` (folds) and `observed` (test) are both kept so the gap is
   visible. There is a test that flips every test-set label and asserts the chosen line does
   not move.
+- **Every score says what kind of number it is.** Fold scores, held-out scores and new-data
+  scores are not interchangeable, and presenting them alike is how a maximised fold score ends up
+  beside an untouched held-out one and gets compared. `ScoreLabel` has three kinds --
+  `exploratory` (training folds), `held_out` (with the reuse status) and `new_data` -- and any
+  surface that shows a metric uses one, on the section header when everything beneath it shares
+  a kind. The comparison of candidate models leads with the fold scores that chose between
+  them; the other candidates' held-out scores are behind a button with the reason they are not
+  the basis for anything, and `model_card._comparison_table` does the same in the written card.
 - **Charts read the app's surface, never the OS.** `useChartTheme` looks only at the `dark`
   class on `<html>` — the same signal Tailwind's `darkMode: ["class"]` uses. Falling back to
   `prefers-color-scheme` is how the correlation heatmap ended up painting near-zero cells

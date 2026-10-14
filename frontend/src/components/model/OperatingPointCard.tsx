@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { CutoffMetrics, OperatingPointResult } from "@/api/types";
+import { ScoreLabel } from "@/components/model/ScoreLabel";
+import type { CutoffMetrics, EvaluationStatus, OperatingPointResult } from "@/api/types";
 
 const pct = (v: number | null | undefined) => (typeof v === "number" ? `${Math.round(v * 100)}%` : "—");
 
@@ -10,7 +11,13 @@ const pct = (v: number | null | undefined) => (typeof v === "number" ? `${Math.r
  * *promised* at that line is one number and what the sealed test set *delivered* is another
  * -- and the gap between them is how much the choice over-promised. The default at 0.50 sits
  * beside both so the trade-off is visible as a change, not a claim. */
-export function OperatingPointCard({ point }: { point: OperatingPointResult }) {
+export function OperatingPointCard({
+  point,
+  evaluation,
+}: {
+  point: OperatingPointResult;
+  evaluation?: EvaluationStatus;
+}) {
   if (point.objective === "default") return null;
 
   const rows: { label: string; pick: (m: CutoffMetrics) => string; hint?: string }[] = [
@@ -51,12 +58,23 @@ export function OperatingPointCard({ point }: { point: OperatingPointResult }) {
                 <th className="border-b border-border py-2 pr-3 font-medium">At this line</th>
                 <th className="border-b border-border py-2 pr-3 text-right font-medium">
                   Training folds promised
+                  <ScoreLabel kind="exploratory" className="ml-1 normal-case tracking-normal" />
                 </th>
                 <th className="border-b border-border py-2 pr-3 text-right font-medium">
                   Test set delivered
+                  <ScoreLabel
+                    kind="held_out"
+                    evaluation={evaluation}
+                    className="ml-1 normal-case tracking-normal"
+                  />
                 </th>
                 <th className="border-b border-border py-2 text-right font-medium">
                   Test set at 0.50
+                  <ScoreLabel
+                    kind="held_out"
+                    evaluation={evaluation}
+                    className="ml-1 normal-case tracking-normal"
+                  />
                 </th>
               </tr>
             </thead>

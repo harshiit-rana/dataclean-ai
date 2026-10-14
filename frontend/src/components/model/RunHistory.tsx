@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScoreLabel } from "@/components/model/ScoreLabel";
 import { cn } from "@/lib/utils";
 import type { ModelRun } from "@/api/types";
 
@@ -92,7 +93,10 @@ export function RunHistory({
               <tr className="border-b border-border text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="py-2 pr-3 font-medium">Run</th>
                 <th className="py-2 pr-3 font-medium">Setup</th>
-                <th className="py-2 pr-3 font-medium">Score</th>
+                <th className="py-2 pr-3 font-medium">
+                  Score
+                  <ScoreLabel kind="held_out" className="ml-1 normal-case tracking-normal" />
+                </th>
                 <th className="py-2 pr-3 font-medium">Change</th>
                 <th className="py-2 font-medium">Verdict</th>
               </tr>

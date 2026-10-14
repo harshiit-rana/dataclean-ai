@@ -143,3 +143,11 @@ describe("RunHistory — how the held-out rows had been used", () => {
     expect(screen.getByText(/look 4 at the test rows \(exhausted\)/)).toBeInTheDocument();
   });
 });
+
+describe("RunHistory — what the Score column is", () => {
+  it("labels the column as the held-out score", () => {
+    renderHistory([run(), run()]);
+    const header = screen.getByRole("columnheader", { name: /Score/ });
+    expect(header).toHaveTextContent("Held-out evaluation");
+  });
+});

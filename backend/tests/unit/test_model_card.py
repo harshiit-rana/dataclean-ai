@@ -385,3 +385,86 @@ class TestTheProseKnowsAboutDerivedInputs:
         payload = json.loads(human[human.index("{") : human.rindex("}") + 1])
         assert payload["derived_inputs"] == []
         assert payload["features_used"] == ["signal"]
+
+
+SELECTION = {
+    "chosen": "logistic_regression",
+    "method": "cross_validation",
+    "metric": "roc_auc",
+    "folds": 5,
+    "scores": {},
+    "chosen_on": "cross-validated roc_auc over 5 folds of the training rows; the test set was not consulted",
+}
+
+
+def _with_fold_scores(selection=SELECTION) -> dict:
+    """The forest scores higher on the test set but lower on the folds -- the case where the
+    old table's 'chosen' marker looked like a mistake."""
+    results = [dict(r) for r in BASE_RESULT["results"]]
+    results[0].update(cv_score=0.8421, cv_std=0.0123)
+    results[1].update(cv_score=0.7954, cv_std=0.0312)
+    return {"results": results, "selection": selection}
+
+
+class TestTheChoiceIsShownOnTheNumbersThatMadeIt:
+    """The winner is chosen on training folds, so those lead; the held-out score is for the
+    chosen model only. A table of every candidate's test score with one marked chosen invites
+    choosing by it -- selecting on the test set by hand."""
+
+    def test_the_fold_scores_and_spreads_are_shown(self):
+        card = _card(**_with_fold_scores())
+        assert "### How the model was chosen" in card
+        assert "| Model | Fold score (ROC AUC) | Fold spread |" in card
+        assert "0.8421" in card and "± 0.0123" in card
+        assert "0.7954" in card and "± 0.0312" in card
+
+    def test_the_chosen_row_says_how_it_was_chosen(self):
+        card = _card(**_with_fold_scores())
+        assert "(chosen; chosen on training folds)" in card
+
+    def test_the_reason_is_stated_in_words(self):
+        card = _card(**_with_fold_scores())
+        assert "never on the held-out rows" in card
+        assert "the test set was not consulted" in card
+
+    def test_only_the_chosen_models_held_out_scores_appear(self):
+        card = _card(**_with_fold_scores())
+        held_out = card.split("### Held-out evaluation", 1)[1].split("\n## ", 1)[0]
+        assert "Logistic regression" in held_out
+        assert "Random forest" not in held_out
+        assert "0.77" not in held_out  # the forest's held-out AUC is nowhere on the card's table
+
+    def test_the_do_nothing_baseline_stays_beside_the_held_out_score(self):
+        card = _card(**_with_fold_scores())
+        held_out = card.split("### Held-out evaluation", 1)[1]
+        assert "No model at all" in held_out
+
+    def test_a_single_model_says_nothing_was_chosen(self):
+        selection = {**SELECTION, "method": "only_candidate", "metric": None,
+                     "chosen_on": "the only model trained"}
+        card = _card(**{**_with_fold_scores(selection), "results": _with_fold_scores()["results"][:1]})
+        assert "(chosen; the only model trained)" in card
+
+    def test_a_choice_made_by_default_order_gives_its_reason(self):
+        selection = {**SELECTION, "method": "default_order", "metric": None,
+                     "chosen_on": "no candidate could be cross-validated, so the simplest one was kept"}
+        results = _with_fold_scores(selection)
+        for r in results["results"]:
+            r.update(cv_score=None, cv_std=None)
+        card = _card(**results)
+        assert "so the simplest one was kept" in card
+        assert "(chosen; kept by default order)" in card
+
+    def test_a_failed_candidate_is_still_shown_as_failed(self):
+        data = _with_fold_scores()
+        data["results"] = data["results"] + [
+            {"model": "gradient_boosting_classifier", "label": "Gradient boosting", "metrics": {},
+             "column_importance": [], "diagnostics": {}, "failed": "ran out of memory"}
+        ]
+        assert "| Gradient boosting | did not train | — |" in _card(**data)
+
+    def test_a_result_from_before_fold_selection_keeps_its_old_table(self):
+        """Its choice was made on the test set, so its test-score table is the honest account."""
+        card = _card()
+        assert "### How the model was chosen" not in card
+        assert "Random forest" in card and "0.77" in card

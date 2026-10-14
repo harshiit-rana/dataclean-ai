@@ -117,6 +117,22 @@ describe("ApplyPage", () => {
     expect(await screen.findByText(/at the cut-off you chose \(0.42\)/)).toBeInTheDocument();
   });
 
+  it("labels a score on the new file's real answers as new data, not as the held-out score", async () => {
+    await runWith({
+      ...RESULT,
+      answers: { rows: 200, metric: "roc_auc", reported: 0.8, now: 0.78, headline: "Holding up." },
+    });
+    expect(await screen.findByText("Holding up.")).toBeInTheDocument();
+    expect(screen.getByText("New data")).toBeInTheDocument();
+    expect(screen.queryByText(/Held-out evaluation/)).not.toBeInTheDocument();
+  });
+
+  it("shows no score label when the file carries no answers", async () => {
+    await runWith(RESULT);
+    await screen.findByText("59 of 60 rows kept");
+    expect(screen.queryByText("New data")).not.toBeInTheDocument();
+  });
+
   it("offers only the cleaned file when there is no model", async () => {
     await runWith({ ...RESULT, drift: null, predictions: null, downloads: { cleaned: RESULT.downloads.cleaned } });
     expect(await screen.findByText(/Download the cleaned file/)).toBeInTheDocument();

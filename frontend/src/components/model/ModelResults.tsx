@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import {
@@ -23,7 +24,8 @@ import {
   PermutationImportanceChart,
 } from "@/components/charts/ModelCharts";
 import { OperatingPointCard } from "@/components/model/OperatingPointCard";
-import type { ModelResult } from "@/api/types";
+import { HeldOutUse, ScoreLabel } from "@/components/model/ScoreLabel";
+import type { CandidateResult, ModelResult } from "@/api/types";
 
 const METRIC_LABELS: Record<string, string> = {
   accuracy: "Accuracy",
@@ -56,6 +58,242 @@ function formatMetric(value: unknown): string {
   return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(3);
 }
 
+/** The chosen model's held-out scores, with the no-model baseline for contrast.
+ *
+ * This is the only place a test-set score is shown by default. Candidates other than the one
+ * chosen have theirs hidden (see ModelComparison): showing them invites choosing by them,
+ * which is selecting on the test set by hand. */
+function HeldOutScores({
+  result,
+  best,
+  keys,
+}: {
+  result: ModelResult;
+  best: CandidateResult;
+  keys: string[];
+}) {
+  if (best.failed || keys.length === 0) return null;
+  return (
+    <div className="mt-4 overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <caption className="pb-1 text-left text-xs text-muted-foreground">
+          Scored once on the held-out rows, for the chosen model only.
+        </caption>
+        <thead>
+          <tr>
+            <th className="border-b border-border px-2 py-1.5 text-left font-medium">&nbsp;</th>
+            {keys.map((key) => (
+              <th key={key} className="border-b border-border px-2 py-1.5 text-right font-medium">
+                {METRIC_LABELS[key] ?? key}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          <tr className="bg-muted/50">
+            <td className="px-2 py-1.5 font-medium">{best.label}</td>
+            {keys.map((key) => (
+              <td key={key} className="px-2 py-1.5 text-right tabular-nums">
+                {formatMetric(best.metrics[key])}
+              </td>
+            ))}
+          </tr>
+          <tr className="text-muted-foreground">
+            <td className="px-2 py-1.5 italic">
+              No model at all ({String(result.baseline.strategy ?? "guessing")})
+            </td>
+            {keys.map((key) => (
+              <td key={key} className="px-2 py-1.5 text-right tabular-nums">
+                {formatMetric(result.baseline[key])}
+              </td>
+            ))}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+const SELECTION_NOTE: Record<NonNullable<ModelResult["selection"]>["method"], string> = {
+  cross_validation: "chosen on training folds",
+  only_candidate: "the only model trained",
+  default_order: "kept by default order",
+};
+
+/** The models side by side, on the numbers that actually chose between them.
+ *
+ * This table used to show every candidate's *test* score and mark the best one "chosen", which
+ * reads as though the highest test score won -- and lets anyone pick a different candidate by
+ * it, which is selecting on the test set by hand. The winner is chosen on cross-validated
+ * folds of the training rows, so those are what lead; the test scores of the others are behind
+ * a button, with the reason they are not the basis for anything. */
+function ModelComparison({ result, keys }: { result: ModelResult; keys: string[] }) {
+  const [showHeldOut, setShowHeldOut] = useState(false);
+  const selection = result.selection;
+  const metric = selection?.metric ?? null;
+
+  // A result saved before models were chosen on folds has no fold scores to lead with. Its
+  // choice *was* made on the test set, so its test-score table is the accurate description.
+  if (!selection) {
+    return (
+      <Card>
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
+          <CardTitle className="text-base">How the models compared</CardTitle>
+          <ScoreLabel kind="held_out" evaluation={result.evaluation} />
+        </CardHeader>
+        <CardContent className="overflow-x-auto">
+          <HeldOutTable result={result} keys={keys} />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <CardTitle className="text-base">How the models compared</CardTitle>
+          <ScoreLabel kind="exploratory" />
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Compared on cross-validated folds of the training rows — never on the held-out rows, so
+          the choice cannot have been made with the test answers. The held-out score above is
+          for the chosen model only.
+        </p>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {selection.method === "default_order" && (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+            {selection.chosen_on}.
+          </p>
+        )}
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className="border-b border-border px-2 py-1.5 text-left font-medium">Model</th>
+                <th className="border-b border-border px-2 py-1.5 text-right font-medium">
+                  Fold score{metric ? ` (${METRIC_LABELS[metric] ?? metric})` : ""}
+                </th>
+                <th className="border-b border-border px-2 py-1.5 text-right font-medium">
+                  Fold spread
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.results.map((entry) => {
+                const isChosen = entry.model === result.best_model;
+                return (
+                  <tr
+                    key={entry.model}
+                    className={cn("border-b border-border last:border-0", isChosen && "bg-muted/50")}
+                  >
+                    <td className="px-2 py-1.5">
+                      {entry.label}
+                      {isChosen && (
+                        <span className="ml-2 text-xs text-muted-foreground">
+                          {SELECTION_NOTE[selection.method]}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums">
+                      {entry.failed
+                        ? "did not train"
+                        : entry.cv_score != null
+                          ? entry.cv_score.toFixed(3)
+                          : "—"}
+                    </td>
+                    <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">
+                      {!entry.failed && entry.cv_std != null ? `± ${entry.cv_std.toFixed(3)}` : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+
+        {result.results.length > 1 && keys.length > 0 && (
+          <div className="text-sm">
+            <button
+              type="button"
+              className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+              aria-expanded={showHeldOut}
+              onClick={() => setShowHeldOut((open) => !open)}
+            >
+              {showHeldOut
+                ? "Hide the other models' held-out scores"
+                : "Show held-out scores for every model"}
+            </button>
+            {showHeldOut && (
+              <div className="mt-2 flex flex-col gap-2">
+                <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-xs">
+                  These were not what the choice was based on. Choosing a different model
+                  because it scores higher here would bring back the problem the folds avoid:
+                  the best of several scores on the same rows looks better than it will on new
+                  data.
+                </p>
+                <ScoreLabel kind="held_out" evaluation={result.evaluation} className="self-start" />
+                <HeldOutTable result={result} keys={keys} />
+              </div>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function HeldOutTable({ result, keys }: { result: ModelResult; keys: string[] }) {
+  return (
+    <table className="w-full border-collapse text-sm">
+      <thead>
+        <tr>
+          <th className="border-b border-border px-2 py-1.5 text-left font-medium">Model</th>
+          {keys.map((key) => (
+            <th key={key} className="border-b border-border px-2 py-1.5 text-right font-medium">
+              {METRIC_LABELS[key] ?? key}
+            </th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {result.results.map((entry) => (
+          <tr
+            key={entry.model}
+            className={cn(
+              "border-b border-border last:border-0",
+              entry.model === result.best_model && "bg-muted/50"
+            )}
+          >
+            <td className="px-2 py-1.5">
+              {entry.label}
+              {entry.model === result.best_model && (
+                <span className="ml-2 text-xs text-muted-foreground">chosen</span>
+              )}
+            </td>
+            {keys.map((key) => (
+              <td key={key} className="px-2 py-1.5 text-right tabular-nums">
+                {entry.failed ? "—" : formatMetric(entry.metrics[key])}
+              </td>
+            ))}
+          </tr>
+        ))}
+        <tr className="text-muted-foreground">
+          <td className="px-2 py-1.5 italic">
+            No model at all ({String(result.baseline.strategy ?? "guessing")})
+          </td>
+          {keys.map((key) => (
+            <td key={key} className="px-2 py-1.5 text-right tabular-nums">
+              {formatMetric(result.baseline[key])}
+            </td>
+          ))}
+        </tr>
+      </tbody>
+    </table>
+  );
+}
+
 export function ModelResults({ result }: { result: ModelResult }) {
   const best = result.results.find((r) => r.model === result.best_model);
   const verdict = VERDICT_STYLES[result.assessment.verdict] ?? VERDICT_STYLES.marginal;
@@ -75,8 +313,9 @@ export function ModelResults({ result }: { result: ModelResult }) {
       {/* The verdict leads. A model that learned nothing still reports a healthy-looking
           accuracy on a lopsided target, and that is the single easiest thing to misread. */}
       <Card className={cn("border", verdict.className)}>
-        <CardHeader>
+        <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
           <CardTitle className="text-base">{verdict.title}</CardTitle>
+          <ScoreLabel kind="held_out" evaluation={result.evaluation} />
         </CardHeader>
         <CardContent className="text-sm">
           <p>{result.assessment.headline}</p>
@@ -100,6 +339,7 @@ export function ModelResults({ result }: { result: ModelResult }) {
               repeats, remove duplicates during cleaning and retrain.
             </p>
           )}
+          <HeldOutUse evaluation={result.evaluation} split={result.split} />
           {result.split.strategy === "group" && result.split.test_groups != null && (
             <p className="mt-1 text-muted-foreground">
               That is {result.split.train_groups?.toLocaleString()} distinct{" "}
@@ -108,67 +348,17 @@ export function ModelResults({ result }: { result: ModelResult }) {
               {result.split.group_column} appears on both sides.
             </p>
           )}
+          {best && (
+            <HeldOutScores
+              result={result}
+              best={best}
+              keys={presentKeys}
+            />
+          )}
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">How the models compared</CardTitle>
-          <p className="text-sm text-muted-foreground">
-            All trained on the same split. The last row is what you get with no model at all.
-          </p>
-        </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
-            <thead>
-              <tr>
-                <th className="border-b border-border px-2 py-1.5 text-left font-medium">Model</th>
-                {presentKeys.map((key) => (
-                  <th
-                    key={key}
-                    className="border-b border-border px-2 py-1.5 text-right font-medium"
-                  >
-                    {METRIC_LABELS[key] ?? key}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {result.results.map((entry) => (
-                <tr
-                  key={entry.model}
-                  className={cn(
-                    "border-b border-border last:border-0",
-                    entry.model === result.best_model && "bg-muted/50"
-                  )}
-                >
-                  <td className="px-2 py-1.5">
-                    {entry.label}
-                    {entry.model === result.best_model && (
-                      <span className="ml-2 text-xs text-muted-foreground">chosen</span>
-                    )}
-                  </td>
-                  {presentKeys.map((key) => (
-                    <td key={key} className="px-2 py-1.5 text-right tabular-nums">
-                      {entry.failed ? "—" : formatMetric(entry.metrics[key])}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-              <tr className="text-muted-foreground">
-                <td className="px-2 py-1.5 italic">
-                  No model at all ({String(result.baseline.strategy ?? "guessing")})
-                </td>
-                {presentKeys.map((key) => (
-                  <td key={key} className="px-2 py-1.5 text-right tabular-nums">
-                    {formatMetric(result.baseline[key])}
-                  </td>
-                ))}
-              </tr>
-            </tbody>
-          </table>
-        </CardContent>
-      </Card>
+      <ModelComparison result={result} keys={presentKeys} />
 
       {(result.features.derived?.length ?? 0) > 0 && (
         <Card>
@@ -196,7 +386,14 @@ export function ModelResults({ result }: { result: ModelResult }) {
         </Card>
       )}
 
-      {result.operating_point && <OperatingPointCard point={result.operating_point} />}
+      {result.operating_point && (
+        <OperatingPointCard point={result.operating_point} evaluation={result.evaluation} />
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+        <ScoreLabel kind="held_out" evaluation={result.evaluation} />
+        The charts below, down to the importance chart, are measured on the held-out rows.
+      </div>
 
       {result.task === "classification" ? (
         <>
@@ -245,6 +442,12 @@ export function ModelResults({ result }: { result: ModelResult }) {
       {deep.permutation_importance?.length ? (
         <PermutationImportanceChart rows={deep.permutation_importance} />
       ) : null}
+      {(deep.cross_validation || deep.learning_curve?.length) && (
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <ScoreLabel kind="exploratory" />
+          The next two are scored on folds of the training rows only.
+        </div>
+      )}
       {deep.cross_validation ? <CrossValidationChart cv={deep.cross_validation} /> : null}
       {deep.learning_curve?.length ? <LearningCurveChart points={deep.learning_curve} /> : null}
       {result.feature_correlations?.columns?.length ? (
