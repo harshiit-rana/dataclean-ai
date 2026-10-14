@@ -162,6 +162,12 @@ are both running locally, you're ready to make changes.
   as `useful` is, and neither can be made from twelve rows. Related: `_auc_noise_threshold` is
   deliberately uncapped. The `min(0.75, ...)` that used to be there fired only on the smallest
   test sets — the exact case the formula exists to be strict about — and lowered the bar.
+- **A regression verdict stands on the lower end of the R² interval.** `assess_result` takes the
+  held-out metrics' `intervals` and `_regression_verdict_from_interval` uses `low`: at or below 0
+  is guessing, below `R2_USEFUL_FLOOR` (0.3) is marginal, otherwise useful. Pass the intervals
+  from every place a verdict is made (the train path and the sealed `finalise`); without them it
+  falls back to the old fixed cut-offs, which ignore how many test rows there were. R² has no
+  lower limit, so a wide negative-to-positive range on a small set is the correct message.
 - **A date-based split has to be forward-in-time all the way down.** Same rule as grouping:
   `split_strategy="time"` sets `ordered=True` on every fold the run makes -- model choice,
   tuning, the improvement loop, the cut-off, the cross-validation spread, the learning curve --

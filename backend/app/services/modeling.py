@@ -951,6 +951,9 @@ _Z_BY_CANDIDATE_COUNT = {1: 1.645, 2: 1.96, 3: 2.13, 4: 2.24, 5: 2.33}
 MIN_TEST_ROWS_TO_JUDGE = 30
 MIN_TEST_ROWS_PER_CLASS_TO_JUDGE = 10
 
+# A regression is "useful" only when even the pessimistic end of its R² interval reaches this.
+R2_USEFUL_FLOOR = 0.3
+
 
 def _auc_noise_threshold(class_counts: list[int] | None, model_count: int = 2) -> float:
     """The AUC a model with no skill can reach by luck alone on a test set this small.
@@ -1014,6 +1017,50 @@ def _too_small_to_judge(
     }
 
 
+def _regression_verdict_from_interval(r2: float, low: float, high: float, test_rows: int | None) -> dict:
+    """The verdict for a regression, from how low its R² could plausibly be.
+
+    The fixed cut-offs (R² under 0.05 is guessing, under 0.3 marginal) treated 35 test rows and
+    35,000 alike, so a lucky 0.35 on a few dozen rows was "useful" and a steady 0.04 on tens of
+    thousands was "no better than guessing". The 95% interval from the bootstrap over the test
+    rows widens on a small set and tightens on a large one, and its lower end is what the
+    verdict stands on: it must clear zero to count as a signal at all, and clear
+    `R2_USEFUL_FLOOR` to count as a strong one. R² is unbounded below, so on a small set the
+    interval is very wide -- that is the correct message, not a defect.
+    """
+    rows = f" on {test_rows} test rows" if test_rows else ""
+    if high < 0:
+        return {
+            "verdict": "no_better_than_guessing",
+            "headline": f"This model does worse than always predicting the average: its R² is "
+            f"{r2:.2f}, and the whole 95% range{rows} ({low:.2f} to {high:.2f}) is below 0, "
+            f"which is what guessing the average scores. The columns you have don't explain "
+            f"the target -- more or different data is needed, not a different model.",
+        }
+    if low <= 0:
+        return {
+            "verdict": "no_better_than_guessing",
+            "headline": f"This model cannot be told apart from always predicting the average: its "
+            f"R² is {r2:.2f}, and the 95% range{rows} ({low:.2f} to {high:.2f}) includes 0, which "
+            f"is what guessing the average scores. The columns you have don't explain the "
+            f"target well enough to show -- more or different data is needed, not a different "
+            f"model.",
+        }
+    if low < R2_USEFUL_FLOOR:
+        return {
+            "verdict": "marginal",
+            "headline": f"This model explains about {r2:.0%} of the variation (95% range "
+            f"{low:.0%} to {high:.0%}). The range stays above zero, so it picks up a real signal, "
+            f"but it does not clear {R2_USEFUL_FLOOR:.0%} throughout, so a strong signal is not "
+            f"shown; treat its predictions as a hint, not an answer.",
+        }
+    return {
+        "verdict": "useful",
+        "headline": f"This model explains about {r2:.0%} of the variation in the target (95% "
+        f"range {low:.0%} to {high:.0%}), clearly better than guessing the average.",
+    }
+
+
 def assess_result(
     metrics: dict,
     baseline: dict,
@@ -1022,6 +1069,7 @@ def assess_result(
     test_rows: int | None = None,
     class_counts: list[int] | None = None,
     model_count: int = 2,
+    intervals: dict | None = None,
 ) -> dict:
     """Is this model actually worth anything?
 
@@ -1031,6 +1079,10 @@ def assess_result(
     accuracy, which reads like success. So the comparison against "just guess" is made here
     rather than left for the user to work out, and it is made against what luck alone could
     have produced on a test set of this size.
+
+    `intervals` is the held-out metrics' 95% intervals (`uncertainty.metric_intervals`). A
+    regression is judged on the lower end of its R² interval, which is what makes the verdict
+    depend on how many test rows there are; without it the fixed cut-offs below are used.
     """
     # Asked before anything else. Every verdict below is a claim about what the test set
     # shows, so if the test set is too small to show anything, none of them can be made --
@@ -1041,6 +1093,11 @@ def assess_result(
 
     if task == "regression":
         r2 = float(metrics.get("r2", 0.0))
+        bounds = ((intervals or {}).get("metrics") or {}).get("r2")
+        if bounds is not None:
+            return _regression_verdict_from_interval(r2, float(bounds["low"]), float(bounds["high"]), test_rows)
+        # No interval (an older result, or one that could not be computed): the fixed cut-offs
+        # this used to apply to every test set, however many rows it held.
         # R² of 0 is exactly the performance of always predicting the mean; below 0 is worse.
         if r2 < 0.05:
             return {
@@ -1794,5 +1851,6 @@ def train_candidates(
             # was compensating for. Loosening a guard is its own decision, not a side effect
             # of fixing the thing it guarded against; until it is made, the bar stays strict.
             model_count=len(trained),
+            intervals=best.get("metrics_intervals"),
         ),
     }

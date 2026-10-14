@@ -1086,6 +1086,7 @@ def _open_the_sealed_holdout(df, stored: dict, pipeline) -> dict:
             else None
         ),
         model_count=len(stored["results"]),
+        intervals=intervals,
     )
     return {
         "rows": int(len(y_final)),

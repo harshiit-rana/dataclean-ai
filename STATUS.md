@@ -201,6 +201,15 @@ target. So results are judged against what luck alone could produce on a test se
 and against always guessing the same answer. On data with no signal, 23 of 25 runs are
 correctly flagged and none are called useful.
 
+A regression is judged the same way. It used to be fixed R² cut-offs (under 0.05 is guessing,
+under 0.3 marginal) for 35 test rows and 35,000 alike, so a lucky 0.35 on a few dozen rows was
+"useful". The verdict now stands on the lower end of the 95% R² interval from the bootstrap over
+the test rows: the interval includes 0 means no better than guessing, a lower bound under 0.3
+means marginal, and only a range that clears 0.3 throughout is useful. The headline prints the
+range, so the same R² reads differently on 40 rows and on 4,000. On regression targets with no
+signal, 25 of 25 runs with 40 test rows are called guessing, and a clearly learnable problem is
+still useful. A result with no interval (an older one) keeps the fixed cut-offs.
+
 There is a fourth verdict before those three: **not enough test data to judge**. Below 30 test
 rows, or 10 in the rarer class, no verdict is given at all — and that includes "this model does
 not work", which is just as much a claim about the test set as "this model works" is. The
