@@ -378,7 +378,7 @@ are both running locally, you're ready to make changes.
   is deliberate: one model and one mapping keeps a sigmoid's AUC exactly where it was and keeps the
   saved model one estimator; scikit-learn refuses it for forward-in-time folds, which is the only
   place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
-  does not need this application's class to load. `TestCalibratingTheProbabilities` in
+  does not need this application's class to load. Nothing may build a fold splitter without the groups -- not even to ask whether folds are possible -- or `test_identical_rows_folds.py` rightly flags it. `TestCalibratingTheProbabilities` in
   `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
 - **A promise-versus-delivery message needs a range behind it.** The operating-point card judges
   "over-promised" by whether the training folds' figure is outside `observed_intervals`, never by

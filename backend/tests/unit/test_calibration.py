@@ -82,6 +82,15 @@ class TestWhatIsEligible:
     def test_an_unknown_method_is_named(self):
         assert "platt" in calibration.eligibility("platt", "classification", self.labels(500, 200))
 
+    def test_deciding_what_to_offer_builds_no_fold_splitter(self, monkeypatch):
+        """Every fold-producing call in the app knows about groups; an ungrouped one made just to
+        see whether folds are possible would be the exception, and the suite that checks the
+        others (test_identical_rows_folds.py) would rightly flag it."""
+        from app.services import tuning
+
+        monkeypatch.setattr(tuning, "cv_splitter", lambda *a, **k: pytest.fail("a splitter was built"))
+        calibration.options("classification", self.labels(5000, 900))
+
     def test_options_say_which_are_available_and_why_not(self):
         found = calibration.options("classification", self.labels(500, 200))
         assert found["sigmoid"] == {"available": True, "reason": None}

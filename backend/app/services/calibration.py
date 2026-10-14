@@ -80,7 +80,7 @@ def chance_error(points: list[dict] | None) -> float | None:
     )
 
 
-def eligibility(method: str, task: str, y_train, folds: int = tuning.CV_FOLDS) -> str | None:
+def eligibility(method: str, task: str, y_train) -> str | None:
     """Why this method cannot be used on these training rows, or None if it can.
 
     Returned as a sentence, because the caller says it to the person who asked.
@@ -115,8 +115,10 @@ def eligibility(method: str, task: str, y_train, folds: int = tuning.CV_FOLDS) -
             f"answer and this has {rarest:,}."
         )
 
-    if tuning.cv_splitter(task, labels, folds) is None:
-        return "The training rows cannot be split into folds, which calibration is fitted on."
+    # Whether the rows can be folded is not asked here. Having enough of the rarer answer already
+    # guarantees plain folds; a grouped split with too few groups fails when the folds are made,
+    # and the caller declines with that reason. Building a splitter here, without the groups,
+    # would also be the one fold-producer in the app that did not know about them.
     return None
 
 
