@@ -72,7 +72,9 @@ def test_a_test_set_favourite_does_not_win_against_the_folds(learnable, monkeypa
 
     def test_prefers_forest(pipeline, X_test, y_test, task, positive_label=None):
         metrics = real_evaluate(pipeline, X_test, y_test, task, positive_label)
-        is_forest = "RandomForest" in type(pipeline.named_steps["model"]).__name__
+        # The baselines are scored through `evaluate` too, and they are not pipelines.
+        steps = getattr(pipeline, "named_steps", {})
+        is_forest = "RandomForest" in type(steps.get("model")).__name__
         metrics["roc_auc"] = 0.99 if is_forest else 0.51
         return metrics
 

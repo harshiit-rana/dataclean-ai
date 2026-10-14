@@ -153,7 +153,9 @@ class TestInTheResult:
     def test_a_regression_is_unaffected(self):
         result = train(numeric(), task="regression", model="linear_regression")
         assert not (CALIBRATION_KEYS & set(result["results"][0]["metrics"]))
-        assert set(result["baseline"]) == {"strategy", "r2", "mae"}
+        # The regression baselines carry no probability scores, whatever else they carry.
+        assert not (CALIBRATION_KEYS & set(result["baseline"]))
+        assert not any(CALIBRATION_KEYS & set(row) for row in result["baseline"]["others"])
 
     def test_a_model_without_probabilities_does_not_lose_its_other_scores(self):
         class NoProbabilities:
