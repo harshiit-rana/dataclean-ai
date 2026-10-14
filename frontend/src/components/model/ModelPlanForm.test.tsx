@@ -273,3 +273,69 @@ describe("ModelPlanForm — what the suggestions were measured on", () => {
     expect(screen.queryByText(/checked on the 960/)).not.toBeInTheDocument();
   });
 });
+
+describe("ModelPlanForm — how much to hold back (#44)", () => {
+  const REC = {
+    fraction: 0.3,
+    reason: "Raised to 30%: 20% would leave about 8 of the rarer answer to test on, and at least 10 are needed before a score means anything. 30% leaves 90 test rows (12 of the rarer answer) -- enough to judge a model.",
+    feasible: true,
+    labelled_rows: 300,
+    test_rows: 90,
+    train_rows: 210,
+    test_rare_rows: 12,
+  };
+  const select = () => screen.getByRole("combobox", { name: /Fraction held back for testing/ }) as HTMLSelectElement;
+
+  it("pre-selects the recommended fraction, labelled as such, with the reason", () => {
+    renderForm({ recommended_test_size: REC, trainable_row_count: 300 });
+    expect(select().value).toBe("0.3");
+    expect(screen.getByRole("option", { name: /30% \(recommended\)/ })).toBeInTheDocument();
+    expect(screen.getByText(/Raised to 30%: 20% would leave about 8/)).toBeInTheDocument();
+  });
+
+  it("sends the recommendation when the user changes nothing", () => {
+    const onTrain = renderForm({ recommended_test_size: REC, trainable_row_count: 300 });
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].test_size).toBe(0.3);
+  });
+
+  it("sends what the user chose instead, and says they overrode it", () => {
+    const onTrain = renderForm({ recommended_test_size: REC, trainable_row_count: 300 });
+    fireEvent.change(select(), { target: { value: "0.15" } });
+    expect(screen.getByText(/You chose 15% instead of the recommended 30%/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].test_size).toBe(0.15);
+  });
+
+  it("offers a recommendation that is not one of the usual steps", () => {
+    renderForm({ recommended_test_size: { ...REC, fraction: 0.12 } });
+    expect(screen.getByRole("option", { name: /12% \(recommended\)/ })).toBeInTheDocument();
+    expect(select().value).toBe("0.12");
+  });
+
+  it("says plainly when no fraction can work, in an amber box", () => {
+    renderForm({
+      recommended_test_size: { ...REC, fraction: 0.3, feasible: false, reason: "No fraction works for this file: with 150 labelled rows ..." },
+    });
+    expect(screen.getByText(/No fraction works for this file/)).toHaveClass("bg-amber-500/10");
+  });
+
+  it("falls back to the usual fifth for a plan that carries no recommendation", () => {
+    const onTrain = renderForm();
+    expect(select().value).toBe("0.2");
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].test_size).toBe(0.2);
+  });
+
+  it("sets the choice aside when a sealed holdout is taken, whose parts are fixed", () => {
+    const onTrain = renderForm({
+      recommended_test_size: REC,
+      sealed_holdout_offer: { available: true, final_rows: 45, train_rows: 210, development_rows: 45 },
+      sealed_holdout: true,
+    });
+    expect(select()).toBeDisabled();
+    expect(screen.getByText(/fixed at 70 \/ 15 \/ 15/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].test_size).toBeNull();
+  });
+});

@@ -108,7 +108,8 @@ def _split_block(split: dict, task: str) -> str:
     here; opening them is an explicit act in the app.
     """
     if not split.get("sealed"):
-        return _ordinary_split_block(split, task, DEFAULT_TEST_SIZE)
+        # The fraction the run asked for, so a file that held back 30% is cut the same way here.
+        return _ordinary_split_block(split, task, split.get("requested_test_size") or DEFAULT_TEST_SIZE)
 
     copies = bool(split.get("seal_key_columns"))
     strategy = split.get("strategy") or "random"

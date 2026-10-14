@@ -60,6 +60,8 @@ export function requestFromResult(result: ModelResult): TrainRequest {
     keep_identical_rows_together: result.split.keep_duplicates_together ?? false,
     sealed_holdout: result.split.sealed ?? false,
     calibration: result.calibration?.method ?? "none",
+    // A sealed holdout has fixed parts, so the fraction is not part of what is rebuilt.
+    test_size: result.split.sealed ? null : (result.split.requested_test_size ?? null),
   };
 }
 
@@ -186,6 +188,7 @@ export function ModelPage() {
         base?.keep_identical_rows_together ?? plan?.keep_identical_rows_together ?? false,
       sealed_holdout: base?.sealed_holdout ?? plan?.sealed_holdout ?? false,
       calibration: calibration ?? base?.calibration ?? "none",
+      test_size: base?.test_size ?? null,
       include_deep_diagnostics: true,
       goal: target,
     };

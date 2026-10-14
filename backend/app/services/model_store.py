@@ -152,6 +152,9 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
                 "group_column": split.get("group_column"),
                 "train_rows": split.get("train_rows"),
                 "test_rows": split.get("test_rows"),
+                # What was asked for, not what a date split ended up with. Two runs that held
+                # back different fractions are not the same experiment.
+                "requested_test_size": split.get("requested_test_size"),
             },
             "feature_count": len(result.get("features", {}).get("numeric", []))
             + len(result.get("features", {}).get("categorical", []))

@@ -228,3 +228,18 @@ describe("RunHistory — a change is only coloured when it is real", () => {
     expect(screen.queryByText(/95% range/)).not.toBeInTheDocument();
   });
 });
+
+describe("RunHistory — how much was held back is part of the setup (#44)", () => {
+  const withFraction = (requested_test_size: number | null | undefined) =>
+    run({ split: { strategy: "random", time_column: null, group_column: null, train_rows: 240, test_rows: 60, requested_test_size } });
+
+  it("names an unusual fraction, because a different fraction is a different test set", () => {
+    renderHistory([withFraction(0.3), withFraction(0.2)]);
+    expect(screen.getByText(/30% held back/)).toBeInTheDocument();
+  });
+
+  it("says nothing for the usual fifth, or for a run from before it was recorded", () => {
+    renderHistory([withFraction(0.2), withFraction(undefined)]);
+    expect(screen.queryByText(/held back/)).not.toBeInTheDocument();
+  });
+});

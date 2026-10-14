@@ -26,6 +26,12 @@ function describeSetup(run: ModelRun): string {
   } else if (run.split.strategy === "time" && run.split.time_column) {
     parts.push(`split by ${run.split.time_column}`);
   }
+  // The usual fifth goes unmentioned; anything else is part of the setup, because a different
+  // fraction is a different test set.
+  const heldBack = run.split.requested_test_size;
+  if (heldBack != null && Math.abs(heldBack - 0.2) > 1e-9) {
+    parts.push(`${Math.round(heldBack * 100)}% held back`);
+  }
   if (run.tuned) parts.push("tuned");
   if (run.calibration && run.calibration !== "none") parts.push(`calibrated (${run.calibration})`);
   if (run.feature_recipes?.length) {

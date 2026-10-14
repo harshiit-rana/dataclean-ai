@@ -240,6 +240,32 @@ def check_contradictory_labels(
     )
 
 
+def check_validation_budget(df: pd.DataFrame, target: str, task_type: str | None) -> Check | None:
+    """Whether the file can be split into enough to train on and enough to judge on.
+
+    Said only when it cannot. Every fraction the app will hold back leaves either too few test rows
+    for a score to mean anything or too few training rows to learn from, so the verdict the model
+    page gives will be "not enough test data" however well it does -- better to say so before the
+    model is trained than after.
+    """
+    from app.services import validation_advice
+
+    advice = validation_advice.recommend_for(df[target], task_type) if target in df.columns else None
+    if advice is None or advice["feasible"]:
+        return None
+    return Check(
+        name="validation_budget",
+        label="Enough to hold back a test set",
+        status="warning",
+        finding=advice["reason"],
+        evidence="A test set is only worth having if it is big enough to judge on (at least "
+        "30 rows, and 10 of the rarer answer for two answers) and the model still has enough left "
+        "to learn from. This file cannot give both.",
+        remedy="Collect more labelled rows, especially of the rarer answer.",
+        severity="warning",
+    )
+
+
 def check_repeated_entities(df: pd.DataFrame, target: str) -> Check:
     """Columns whose values repeat across many rows, which a random split would scatter.
 

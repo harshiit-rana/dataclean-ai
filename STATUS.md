@@ -192,6 +192,21 @@ inputs, how the data splits, what gets tried. Leaky columns and row identifiers 
 pre-unticked with the reason attached. A time-based split is offered when there are dates,
 because a random split lets a model learn from the future to predict the past.
 
+**How much to hold back is chosen from the file, not fixed at a fifth.** A fifth of 150 labelled rows
+is 30 test rows, exactly the least a verdict can be given on, and at a 10% positive rate three
+positives, so "not enough test data" was the answer by construction; on 200,000 rows a fifth is forty
+thousand rows taken from training for nothing. The plan now recommends a fraction between 10% and 30%
+from the number of labelled rows and, for two answers, how many carry the rarer one: enough that the
+test rows meet the verdict's own bars (30 rows, and 10 of the rarer answer) with a little headroom,
+less for larger files, with the reason in a sentence ("Raised to 30%: 20% would leave about 8 of the
+rarer answer to test on, and at least 10 are needed..."). The form pre-fills it and shows what was
+chosen if the user overrides it; the fraction is recorded in the split's definition, so it is part of
+the test-set ledger's key and the run history, and `train_model.py` cuts the same rows. When no
+fraction works (too few labelled rows to judge on and train on at once) the plan says so in an amber
+box and the readiness panel carries a warning before anything is trained. The recommendation is a
+function of the counts only, never of which rows end up held back. A sealed holdout keeps its fixed
+70 / 15 / 15 parts and ignores it.
+
 **Training.** Six models across classification and regression. All preprocessing lives *inside*
 the sklearn `Pipeline`, so `fit` sees only the training fold — there's a test asserting the
 fitted imputer's median came from training rows alone.

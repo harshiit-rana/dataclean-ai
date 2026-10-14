@@ -111,6 +111,7 @@ def improve(
     clip_outliers: list[str] | None = None,
     keep_identical_rows_together: bool = False,
     sealed_holdout: bool = False,
+    test_size: float | None = None,
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
 
@@ -194,6 +195,7 @@ def improve(
             strategy=split_strategy,
             time_column=time_column,
             group_column=group_column,
+            test_size=test_size if test_size else modeling.DEFAULT_TEST_SIZE,
             duplicate_columns=duplicate_columns,
         )
     # Captured before the frame is narrowed to the model's inputs, and aligned to the training

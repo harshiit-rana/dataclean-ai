@@ -334,6 +334,13 @@ def _looks_like_an_identifier(series: pd.Series, rows: int) -> bool:
     return True
 
 
+def _recommended_test_size(df: pd.DataFrame, target: str, task: str) -> dict | None:
+    """How much to hold back, from the labelled rows and (for two answers) the rarer one."""
+    from app.services import validation_advice
+
+    return validation_advice.recommend_for(df[target], task) if target in df.columns else None
+
+
 def _group_columns(df: pd.DataFrame, target: str) -> list[str]:
     """Columns that look like an entity repeating across rows, most repeated first.
 
@@ -448,6 +455,7 @@ async def get_model_plan(
         ),
         sealed_holdout_offer=_sealed_offer(df, target, task),
         sealed_holdout=bool(stored["split"].get("sealed")) if stored else False,
+        recommended_test_size=_recommended_test_size(df, target, task),
         suggested_exclusions=suggestions,
         exclusions_basis=exclusions_basis,
         excluded_columns=previously_excluded,
@@ -761,6 +769,7 @@ async def train_model(
             keep_identical_rows_together=request.keep_identical_rows_together,
             sealed_holdout=request.sealed_holdout,
             calibration=request.calibration,
+            test_size=request.test_size,
         )
 
     try:
@@ -826,6 +835,7 @@ def _improve_and_save(
         clip_outliers=request.clip_outliers,
         keep_identical_rows_together=request.keep_identical_rows_together,
         sealed_holdout=request.sealed_holdout,
+        test_size=request.test_size,
     )
     best = found["best"]
     # Plain constructor names, not the `model__`-prefixed pipeline paths the search uses.
@@ -862,6 +872,7 @@ def _improve_and_save(
         keep_identical_rows_together=request.keep_identical_rows_together,
         sealed_holdout=request.sealed_holdout,
         calibration=request.calibration,
+        test_size=request.test_size,
     )
     rebuilt["improvement"] = {
         "rounds": found["rounds"],

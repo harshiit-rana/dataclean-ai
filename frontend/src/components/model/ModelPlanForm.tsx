@@ -11,6 +11,16 @@ import {
 } from "@/components/model/OperatingPointForm";
 import type { ModelPlan, OperatingPointRequest, TrainRequest } from "@/api/types";
 
+/** The fractions offered, in five-point steps, always including the recommendation. */
+function testSizeOptions(recommended?: number): number[] {
+  const steps = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4];
+  if (recommended != null && !steps.some((s) => Math.abs(s - recommended) < 1e-9)) {
+    steps.push(recommended);
+    steps.sort((a, b) => a - b);
+  }
+  return steps;
+}
+
 const EXCLUSION_LABELS: Record<string, string> = {
   leakage: "Gives away the answer",
   identifier: "Looks like an ID",
@@ -35,6 +45,11 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
   const [clip, setClip] = useState<string[]>(plan.features.clipped ?? []);
   const [keepCopies, setKeepCopies] = useState<boolean>(plan.keep_identical_rows_together ?? false);
   const [sealed, setSealed] = useState<boolean>(plan.sealed_holdout ?? false);
+  // Pre-filled with the recommendation; the user can change it, and what they chose is what is
+  // sent. A sealed holdout has fixed parts, so the choice is set aside while it is on.
+  const recommended = plan.recommended_test_size ?? null;
+  const [testSize, setTestSize] = useState<number>(recommended?.fraction ?? 0.2);
+  const sealedOn = Boolean(plan.sealed_holdout_offer?.available) && sealed;
   const [timeColumn, setTimeColumn] = useState<string>(plan.date_columns[0] ?? "");
   // Defaults to the most-repeated column, which is the one the readiness panel names.
   const [groupColumn, setGroupColumn] = useState<string>(plan.group_columns?.[0] ?? "");
@@ -204,6 +219,45 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
             </Select>
           )}
 
+          <div className="flex flex-col gap-2 rounded-md border border-border p-3 text-sm">
+            <label className="flex flex-wrap items-center gap-3">
+              <span className="font-medium">How much to hold back</span>
+              <Select
+                aria-label="Fraction held back for testing"
+                value={String(testSize)}
+                disabled={sealedOn}
+                onChange={(e) => setTestSize(Number(e.target.value))}
+              >
+                {testSizeOptions(recommended?.fraction).map((fraction) => (
+                  <option key={fraction} value={fraction}>
+                    {Math.round(fraction * 100)}%
+                    {recommended && fraction === recommended.fraction ? " (recommended)" : ""}
+                  </option>
+                ))}
+              </Select>
+            </label>
+            {sealedOn ? (
+              <p className="text-xs text-muted-foreground">
+                With a sealed holdout the three parts are fixed at 70 / 15 / 15, so this is not used.
+              </p>
+            ) : (
+              recommended && (
+                <p
+                  className={cn(
+                    "text-xs",
+                    recommended.feasible
+                      ? "text-muted-foreground"
+                      : "rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-amber-900 dark:text-amber-200"
+                  )}
+                >
+                  {recommended.reason}
+                  {testSize !== recommended.fraction &&
+                    ` You chose ${Math.round(testSize * 100)}% instead of the recommended ${Math.round(recommended.fraction * 100)}%.`}
+                </p>
+              )
+            )}
+          </div>
+
           {plan.sealed_holdout_offer && (
             <label
               className={cn(
@@ -331,6 +385,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
               keep_identical_rows_together:
                 splitStrategy === "random" && Boolean(plan.identical_rows) && keepCopies,
               sealed_holdout: Boolean(plan.sealed_holdout_offer?.available) && sealed,
+              test_size: sealedOn ? null : testSize,
             })
           }
           disabled={training || models.length === 0 || blocked || !tradeOffReady}

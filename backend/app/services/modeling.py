@@ -1644,9 +1644,14 @@ def train_candidates(
     keep_identical_rows_together: bool = False,
     sealed_holdout: bool = False,
     calibration: str = "none",
+    test_size: float | None = None,
 ) -> dict:
     """Trains each requested model on the same split and returns everything needed to compare
     them. A model that fails to fit is reported rather than aborting the others.
+
+    `test_size` is the fraction of the labelled rows held back for testing (the plan recommends
+    one from the file's size and class balance; None means `DEFAULT_TEST_SIZE`). It is ignored
+    when a sealed holdout is taken, whose three parts are fixed.
 
     `calibration` ("none", "sigmoid" or "isotonic") asks for the chosen model's probabilities to
     be corrected, fitted on cross-validation folds of the training rows -- see calibration.py.
@@ -1703,6 +1708,7 @@ def train_candidates(
 
     used = features["numeric"] + features["categorical"] + features["frequent"]
     duplicate_columns = used if keep_identical_rows_together and split_strategy == "random" else None
+    held_back = test_size if test_size else DEFAULT_TEST_SIZE
     sealed_info: dict = {"sealed": False}
     parts = None
     if sealed_holdout:
@@ -1735,6 +1741,7 @@ def train_candidates(
             strategy=split_strategy,
             time_column=time_column,
             group_column=group_column,
+            test_size=held_back,
             duplicate_columns=duplicate_columns,
         )
     # Whether copies were actually kept together: asking for it on a file with no copies is the
@@ -2004,7 +2011,7 @@ def train_candidates(
             "test_rows": int(len(X_test)),
             # The rule that held the rows out, as requested: what the test-set ledger keys a
             # look on. Not derived from the row counts, which move with the data.
-            "requested_test_size": SEALED_DEV_SIZE if sealed_info["sealed"] else DEFAULT_TEST_SIZE,
+            "requested_test_size": SEALED_DEV_SIZE if sealed_info["sealed"] else held_back,
             "seed": RANDOM_STATE,
             "keep_duplicates_together": kept_together,
             **sealed_info,

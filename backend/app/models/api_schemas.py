@@ -158,6 +158,9 @@ class ModelPlanResponse(BaseModel):
     # split; the train request re-checks it for whichever split is chosen.
     sealed_holdout_offer: Optional[dict] = None
     sealed_holdout: bool = False
+    # How much to hold back for testing, and why: from the number of labelled rows and, for two
+    # answers, how many carry the rarer one. The form pre-fills it and the user can change it.
+    recommended_test_size: Optional[dict] = None
 
 
 class SetRulesRequest(BaseModel):
@@ -228,6 +231,10 @@ class TrainRequest(BaseModel):
     # targets only; when the data cannot support the method the model is left as it was and the
     # result says why. Isotonic needs a thousand rows and a hundred of the rarer answer.
     calibration: Literal["none", "sigmoid", "isotonic"] = "none"
+    # The fraction of labelled rows to hold back for testing. None means the default; the plan
+    # recommends one from the file's size and class balance. Ignored with a sealed holdout, whose
+    # three parts are fixed.
+    test_size: Optional[float] = Field(default=None, ge=0.05, le=0.5)
 
 
 class ImproveRequest(TrainRequest):

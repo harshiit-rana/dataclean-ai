@@ -381,6 +381,13 @@ are both running locally, you're ready to make changes.
   place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
   does not need this application's class to load. Nothing may build a fold splitter without the groups -- not even to ask whether folds are possible -- or `test_identical_rows_folds.py` rightly flags it. `TestCalibratingTheProbabilities` in
   `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
+- **The held-out fraction is a request, recorded and keyed.** `validation_advice.recommend_test_size`
+  turns the labelled-row count (and the rarer answer's count for two answers) into a fraction in
+  steps of five percent, with the reason; it reads the verdict's own thresholds from `modeling`, so
+  the two cannot disagree about what is judgeable. `TrainRequest.test_size` carries the choice to
+  `split_data`, `improve`, the exported script and `split["requested_test_size"]`, which the ledger
+  keys on; omitting it keeps the key every earlier run had. Never derive it from which rows were
+  held out. A sealed holdout ignores it.
 - **A baseline row is complete or it is not a baseline.** `modeling.baseline_score` returns the
   main strategy at the top level and any others in `others`, each with a value for every metric
   the models report for that task, and the page, the sealed table and the card loop over both. A

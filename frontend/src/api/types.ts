@@ -239,6 +239,17 @@ export interface SplitOption {
   description: string;
 }
 
+export interface RecommendedTestSize {
+  fraction: number;
+  reason: string;
+  /** False when no fraction leaves both enough to judge on and enough to train on. */
+  feasible: boolean;
+  labelled_rows: number;
+  test_rows: number;
+  train_rows: number;
+  test_rare_rows: number | null;
+}
+
 /** What you would get with no model at all: the scores of each naive strategy on every metric
  * the models report. The main strategy sits at the top level; any others, such as guessing at
  * random in proportion, are in `others`. */
@@ -263,6 +274,9 @@ export interface ModelPlan {
   candidate_models: CandidateModel[];
   split_options: SplitOption[];
   date_columns: string[];
+  /** How much to hold back for testing, chosen from the number of labelled rows and (for two
+   * answers) the rarer one, with the reason. The form pre-fills it; the user can change it. */
+  recommended_test_size?: RecommendedTestSize | null;
   /** Candidates for a grouped split, most repeated first. */
   group_columns: string[];
   blockers: string[];
@@ -383,6 +397,8 @@ export interface ModelRun {
     group_column: string | null;
     train_rows: number | null;
     test_rows: number | null;
+    /** The fraction asked for to hold back. Absent on runs from before it was recorded. */
+    requested_test_size?: number | null;
   };
   feature_count: number;
   excluded_columns: string[];
@@ -496,6 +512,9 @@ export interface TrainRequest {
   sealed_holdout?: boolean;
   /** Correct the chosen model's probabilities; two-class targets only. */
   calibration?: CalibrationMethod;
+  /** The fraction of labelled rows to hold back. Left out, the default; ignored with a sealed
+   * holdout, whose three parts are fixed. */
+  test_size?: number | null;
 }
 
 /** The confusion matrix at one cut-off, as counts and rates. */
@@ -706,6 +725,8 @@ export interface ModelResult {
     group_column: string | null;
     train_rows: number;
     test_rows: number;
+    /** The fraction asked for, not the one a date split ended up with. */
+    requested_test_size?: number;
     /** Entities on each side. Row counts alone hide what matters about a grouped split:
      * 800 training rows drawn from 4 customers is not 800 independent observations. */
     train_groups: number | null;

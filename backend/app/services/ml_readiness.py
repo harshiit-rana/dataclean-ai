@@ -748,6 +748,9 @@ def assess_readiness(
 
     non_null = series.dropna()
     _check_target_shape(log, report, task_type, target, non_null, null_count)
+    budget = readiness_checks.check_validation_budget(df, target, task_type)
+    if budget is not None:
+        log.add(budget)
 
     # --- rows that undermine each other ---------------------------------------------------
     if log.passed("has_features"):
