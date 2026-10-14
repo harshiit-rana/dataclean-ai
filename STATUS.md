@@ -524,6 +524,12 @@ Improvements, Reproducibility, Production Readiness -- with priorities, sizes, d
 a recommended order. The first decision is the evaluation protocol: what counts as a look at the
 test set, and how a fresh holdout is obtained.
 
+**The evaluation protocol is decided**, in
+[`docs/decisions/0001-evaluation-protocol.md`](docs/decisions/0001-evaluation-protocol.md): what
+counts as a look at the test set, how looks are counted and what happens as they accumulate
+(warn, never block), and where an honest fresh holdout comes from. The ledger and the rules it
+drives are the next things built.
+
 The direction below is unchanged; the issues are its concrete form. The end state is an
 *honest* AutoML — not a button that hands back a leaderboard score, but a system that takes a
 raw file to a working model, and an honest answer about whether it works, while showing its

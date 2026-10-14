@@ -167,6 +167,15 @@ are both running locally, you're ready to make changes.
   a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and
   checking `X_test`. A round also has to clear `_is_real_gain`, which refuses anything smaller
   than the fold-to-fold spread; without that the loop "improves" forever on noise.
+- **Humans select on the test set too, so the app counts the looks.** An automatic decision can
+  be tested not to read the held-out rows; a person who retrains and compares scores cannot be.
+  `docs/decisions/0001-evaluation-protocol.md` fixes the protocol: which routes are a *look*
+  (train, improve, improve/stream — not a re-read of a stored result, and not apply), that looks
+  are counted per split definition across dataset versions, that the status goes
+  independent → reused (looks 2–3) → exhausted (4+) and never blocks, and that a fresh holdout is
+  new labelled rows or a holdout sealed *before* the first look — never a re-split. **A new route
+  that returns held-out performance adds a row to that ADR's table and a case to the
+  property suite (`test_evaluation_integrity.py`).**
 - **A statistic learned from one file is applied to the next as learned.** Five operations
   read something from the data they run on (`operations.LEARNED_OPERATIONS`: fills and outlier
   limits). When a session is applied to a new file, `replay.freeze` replays the log over
