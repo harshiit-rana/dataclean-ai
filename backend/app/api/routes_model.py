@@ -34,6 +34,7 @@ from app.core.errors import AppError, SessionNotFoundError, UnparseableCSVError
 from app.models.api_schemas import ImproveRequest, ModelPlanResponse, TrainRequest
 from app.models.graph_state import GoalContext
 from app.services import (
+    action_log as action_log_service,
     clipping,
     diagnostics,
     evaluation_ledger,
@@ -47,6 +48,7 @@ from app.services import (
     operating_point,
 )
 from app.api.routes_rules import stored_rules
+from app.dependencies import get_graph_if_any
 from app.api.sse import sse_response
 from app.services.session_store import (
     current_dataset_version_in,
@@ -568,7 +570,7 @@ def _refuse_if_the_data_cannot_support_a_model(df, goal, rules=None) -> str:
     return task
 
 
-def _save_and_record(directory, result: dict, df, *, route: str) -> dict:
+def _save_and_record(directory, result: dict, df, *, route: str, action_log=None) -> dict:
     """Saves a finished run and records the look at the held-out rows that it was.
 
     Every route that fits a model and returns its held-out score ends here, so there is one
@@ -587,6 +589,17 @@ def _save_and_record(directory, result: dict, df, *, route: str) -> dict:
     # say the same thing. The headline is qualified here rather than where the verdict is made:
     # the verdict knows about the numbers, not about how often the rows have been looked at.
     evaluation = evaluation_ledger.evaluation_status(directory, result.get("split"))
+    # Fixes approved earlier that worked a value out over every row -- the held-out ones too --
+    # on columns this model uses. The pipeline's own training-only imputer has nothing left to
+    # do once they are applied, so the run carries a small leak and should say so.
+    inputs = [
+        c
+        for key in ("numeric", "categorical", "frequent")
+        for c in (result.get("features") or {}).get(key, [])
+    ]
+    evaluation["whole_file_statistics"] = action_log_service.whole_file_statistics(
+        action_log, inputs
+    )
     result["evaluation"] = evaluation
     result["assessment"] = evaluation_ledger.qualify(result.get("assessment"), evaluation)
     payload = model_store.save_result(
@@ -614,8 +627,10 @@ async def train_model(
     session_id: str,
     request: TrainRequest,
     settings: Settings = Depends(get_settings),
+    graph=Depends(get_graph_if_any),
 ) -> dict:
     df, goal, directory, rules = _load_session(settings, session_id)
+    log = await action_log_service.read(graph, session_id)
     target = (goal.target_column or "").strip()
     task = _refuse_if_the_data_cannot_support_a_model(df, goal, rules)
 
@@ -652,7 +667,7 @@ async def train_model(
     # Recorded so the plan can show what was excluded last time and the model card can say
     # which columns were deliberately withheld.
     result["features"]["excluded"] = list(request.excluded_columns)
-    return _save_and_record(directory, result, df, route="train")
+    return _save_and_record(directory, result, df, route="train", action_log=log)
 
 
 def _improve_and_save(
@@ -664,6 +679,7 @@ def _improve_and_save(
     point,
     directory,
     route: str = "improve",
+    action_log=None,
     on_progress=None,
     on_stage=None,
 ) -> dict:
@@ -747,7 +763,7 @@ def _improve_and_save(
     rebuilt["features"]["excluded"] = list(request.excluded_columns)
     # One look, however many rounds the search ran: the rounds are scored on training folds and
     # never open the held-out rows. Only this final rebuild does, once.
-    return _save_and_record(directory, rebuilt, df, route=route)
+    return _save_and_record(directory, rebuilt, df, route=route, action_log=action_log)
 
 
 @router.post("/api/model/{session_id}/improve")
@@ -755,6 +771,7 @@ async def improve_model(
     session_id: str,
     request: ImproveRequest,
     settings: Settings = Depends(get_settings),
+    graph=Depends(get_graph_if_any),
 ) -> dict:
     """Search for a better model, then rebuild the result the normal way.
 
@@ -765,6 +782,7 @@ async def improve_model(
     target = (goal_context.target_column or "").strip()
     task = _refuse_if_the_data_cannot_support_a_model(df, goal_context, rules)
     point = _operating_point(request)
+    log = await action_log_service.read(graph, session_id)
 
     try:
         return await asyncio.to_thread(
@@ -775,6 +793,7 @@ async def improve_model(
             request=request,
             point=point,
             directory=directory,
+            action_log=log,
         )
     except modeling.ModelingError as exc:
         raise TrainingFailedError(str(exc)) from exc
@@ -798,6 +817,7 @@ async def improve_model_stream(
     session_id: str,
     request: ImproveRequest,
     settings: Settings = Depends(get_settings),
+    graph=Depends(get_graph_if_any),
 ):
     """The same search as `/improve`, reported as it happens.
 
@@ -822,6 +842,7 @@ async def improve_model_stream(
     target = (goal_context.target_column or "").strip()
     task = _refuse_if_the_data_cannot_support_a_model(df, goal_context, rules)
     point = _operating_point(request)
+    log = await action_log_service.read(graph, session_id)
 
     loop = asyncio.get_running_loop()
     queue: asyncio.Queue[dict] = asyncio.Queue()
@@ -847,6 +868,7 @@ async def improve_model_stream(
                 point=point,
                 directory=directory,
                 route="improve_stream",
+                action_log=log,
                 on_progress=on_progress,
                 on_stage=on_stage,
             )

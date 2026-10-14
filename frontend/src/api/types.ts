@@ -284,6 +284,9 @@ export interface EvaluationStatus {
   /** The qualification the user is shown, including any note about other split rules. */
   message: string;
   looks_on_other_splits: number;
+  /** Fixes approved while cleaning that worked a value out over every row -- the held-out rows
+   * included -- on columns this model uses. Undone fixes and unused columns are left out. */
+  whole_file_statistics?: { operation: string; column: string }[];
 }
 
 /** One completed training run, small enough to keep twenty of.

@@ -75,6 +75,10 @@ are both running locally, you're ready to make changes.
   alone. `source="chat"` still runs them with the warning, because a typed instruction is the
   user's call. If you add an operation that learns a value from the data, add it to that set
   (and to `LEARNED_OPERATIONS`).
+- **A route may read the action log to say more, never to be able to work.** The model routes
+  take `get_graph_if_any`, not `get_graph`, and `action_log.read` returns an empty log when
+  there is no graph or the checkpoint cannot be read. A run then simply carries no
+  `whole_file_statistics`; it is never refused because Redis was slow.
 - **Warnings have to stay believable.** The leakage thresholds in `ml_readiness.py` are
   deliberately high. A warning that fires on ordinary strong correlation teaches users to
   ignore it, and it's only worth having if it's believed the one time it matters.

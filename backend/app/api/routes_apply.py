@@ -33,8 +33,7 @@ from app.core.errors import (
     UnsupportedFileTypeError,
 )
 from app.dependencies import get_graph
-from app.graph.checkpointer import thread_config
-from app.services import drift, evaluation_ledger, model_store, replay, scoring
+from app.services import action_log, drift, evaluation_ledger, model_store, replay, scoring
 from app.services.encoding import read_csv_bytes
 from app.services.session_store import (
     current_dataset_version_in,
@@ -81,12 +80,7 @@ class AppliedFileNotFoundError(AppError):
 async def _action_log(graph, session_id: str) -> list[dict]:
     """The session's action log, or [] when it was never cleaned -- a model trained straight
     from the upload is still worth applying."""
-    try:
-        state = await graph.aget_state(thread_config(session_id))
-    except Exception:  # noqa: BLE001 -- no readable log means no fixes, not a failed request
-        logger.warning("Could not read the action log for session %s", session_id, exc_info=True)
-        return []
-    return list((state.values or {}).get("action_log", [])) if state else []
+    return await action_log.read(graph, session_id)
 
 
 def _run(directory, session_id: str, new: pd.DataFrame, action_log: list[dict], target: str | None) -> dict:
@@ -233,12 +227,12 @@ async def apply_to_new_file(
 
     goal = meta.get("goal_context") or {}
     target = (goal.get("target_column") or "").strip() or None
-    action_log = await _action_log(graph, session_id)
+    log = await _action_log(graph, session_id)
     directory = session_dir(settings.upload_dir, session_id)
 
     try:
         # Off the event loop: replay and prediction are CPU-bound pandas and sklearn.
-        response = await asyncio.to_thread(_run, directory, session_id, new, action_log, target)
+        response = await asyncio.to_thread(_run, directory, session_id, new, log, target)
     except (AppError, UnparseableCSVError):
         raise
     except Exception as exc:  # noqa: BLE001 -- the reason goes back, not a bare 500

@@ -423,8 +423,12 @@ to choose anything*. Every decision the model path makes was traced to the rows 
 
 - **A fix a user types in chat still runs from a whole-file statistic**, with the warning. That
   is deliberate: the app no longer *proposes* them, but an instruction is the user's call.
-  Sessions that approved such fixes before this change carry the small leak; flagging those
-  runs is #12.
+  Sessions that approved such fixes before this change carry the small leak, and so does a model
+  trained after a chat fill: every run now lists, on its result, the applied whole-file fixes on
+  columns it uses (undone ones and unused columns are left out), the card cautions with the
+  operation and column named, and the results page says so in a line. Reading the action log
+  adds a checkpoint read to each train, and a log that cannot be read is an empty one — training
+  never depends on Redis for this.
 - **The profiling-stage leakage cards still read the whole file.** The cards raised while
   cleaning, before any split exists, warn about a column that predicts the answer near-perfectly.
   They propose nothing that drops a column on its own, and no split exists yet to measure

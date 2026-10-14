@@ -340,6 +340,17 @@ export function ModelResults({ result }: { result: ModelResult }) {
             </p>
           )}
           <HeldOutUse evaluation={result.evaluation} split={result.split} />
+          {(result.evaluation?.whole_file_statistics?.length ?? 0) > 0 && (
+            <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
+              Trained on data where{" "}
+              {result.evaluation!.whole_file_statistics!
+                .map((w) => `${w.operation.replace(/_/g, " ")} on ${w.column}`)
+                .join(", ")}{" "}
+              was worked out over every row, the held-out ones included, before the split. A small
+              leak — the score is slightly flattered. Undoing those fixes lets the model do it
+              from the training rows only.
+            </p>
+          )}
           {result.split.strategy === "group" && result.split.test_groups != null && (
             <p className="mt-1 text-muted-foreground">
               That is {result.split.train_groups?.toLocaleString()} distinct{" "}

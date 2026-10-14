@@ -482,6 +482,18 @@ def _deterministic_cautions(result: dict, best: dict) -> list[str]:
     if evaluation.get("message"):
         cautions.append(evaluation["message"])
 
+    whole_file = evaluation.get("whole_file_statistics") or []
+    if whole_file:
+        listed = ", ".join(f"`{w['operation']}` on `{w['column']}`" for w in whole_file)
+        cautions.append(
+            f"These fixes were approved while cleaning and their values were worked out over "
+            f"every row -- the held-out rows included -- before the data was split: {listed}. "
+            f"The effect of a median is usually small, but it is a leak: the scores above are "
+            f"slightly flattered, and the model's own training-only imputer had nothing left "
+            f"to do. To avoid it, undo those fixes and let the model fill the gaps from the "
+            f"training rows only."
+        )
+
     if test_rows and test_rows < 100:
         cautions.append(
             f"Every score here rests on {test_rows} held-out rows. That is a small sample, "

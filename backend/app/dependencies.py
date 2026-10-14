@@ -40,6 +40,16 @@ def get_graph(request: Request):
     return request.app.state.graph
 
 
+def get_graph_if_any(request: Request):
+    """The workflow if the app has one, else None.
+
+    For routes that can do their job without it and use it only to say more -- the model
+    routes read the action log to flag whole-file fixes, but training must never depend on
+    Redis being reachable. `get_graph` is for routes that cannot work without it.
+    """
+    return getattr(request.app.state, "graph", None)
+
+
 def verify_session_access(
     session_id: str,
     x_session_token: Annotated[str | None, Header()] = None,

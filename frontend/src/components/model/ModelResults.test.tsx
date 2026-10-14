@@ -276,3 +276,20 @@ describe("HeldOutUse", () => {
     expect(screen.getByText(/kept whole by customer_id/)).toBeInTheDocument();
   });
 });
+
+describe("ModelResults — whole-file statistics (#12)", () => {
+  it("says so when a fix worked a value out over every row", () => {
+    const evaluation = {
+      ...EVAL(1, "independent"),
+      whole_file_statistics: [{ operation: "fill_median", column: "spend" }],
+    };
+    render(<ModelResults result={result({ evaluation })} />);
+    expect(screen.getByText(/fill median on spend/)).toBeInTheDocument();
+    expect(screen.getByText(/worked out over every row/)).toBeInTheDocument();
+  });
+
+  it("says nothing when there were none", () => {
+    render(<ModelResults result={result({ evaluation: { ...EVAL(1, "independent"), whole_file_statistics: [] } })} />);
+    expect(screen.queryByText(/worked out over every row/)).not.toBeInTheDocument();
+  });
+});
