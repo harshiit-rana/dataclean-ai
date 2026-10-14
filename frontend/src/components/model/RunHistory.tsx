@@ -32,6 +32,7 @@ function describeSetup(run: ModelRun): string {
   if (heldBack != null && Math.abs(heldBack - 0.2) > 1e-9) {
     parts.push(`${Math.round(heldBack * 100)}% held back`);
   }
+  if (run.split_overridden) parts.push("overrode the recommended split");
   if (run.tuned) parts.push("tuned");
   if (run.calibration && run.calibration !== "none") parts.push(`calibrated (${run.calibration})`);
   if (run.feature_recipes?.length) {

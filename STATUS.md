@@ -192,6 +192,23 @@ inputs, how the data splits, what gets tried. Leaky columns and row identifiers 
 pre-unticked with the reason attached. A time-based split is offered when there are dates,
 because a random split lets a model learn from the future to predict the past.
 
+**The way to split is recommended, with the reason, and can be overruled.** The form used to default
+to a random split even when the app had already found a column repeating across rows or a clear time
+order, and anyone who does not know what splitting means took the default and got a score the model
+could not repeat. The plan now carries a recommendation in three rules, in order. A column that looks
+like one entity repeating (the readiness panel's own test, not re-tuned) gets a grouped split on the
+most repeated one, with the evidence ("'customer_id' repeats in 1,180 of 1,218 rows ... a random split
+would put the same customer_id on both sides"); a name that does not look like an identifier gets a
+medium confidence and a caution that a category such as a region should not be grouped on. Otherwise a
+date column that is not a date of birth or a deadline, together with either a goal stated in terms of
+the future ("forecast", "next month") or an answer that drifts between the earliest and latest third of
+the rows (a chi-square or Welch test, with an effect-size floor, read only from the training rows of
+the default split), gets a split by date. Otherwise a random split, stratified for a classification,
+because "no repeated entities or time order found". The form pre-selects it and shows the reasons and
+the confidence; choosing differently is allowed, said on the form, and recorded on the run
+(`split.overridden`, and `split_overridden` in the history), judged on the server from the split the
+run actually used.
+
 **How much to hold back is chosen from the file, not fixed at a fifth.** A fifth of 150 labelled rows
 is 30 test rows, exactly the least a verdict can be given on, and at a 10% positive rate three
 positives, so "not enough test data" was the answer by construction; on 200,000 rows a fifth is forty

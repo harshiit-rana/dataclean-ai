@@ -243,3 +243,15 @@ describe("RunHistory — how much was held back is part of the setup (#44)", () 
     expect(screen.queryByText(/held back/)).not.toBeInTheDocument();
   });
 });
+
+describe("RunHistory — a split nobody recommended is part of the setup (#43)", () => {
+  it("says when the run overrode the recommendation", () => {
+    renderHistory([run({ split_overridden: true }), run({ split_overridden: false })]);
+    expect(screen.getAllByText(/overrode the recommended split/).length).toBe(1);
+  });
+
+  it("says nothing for a run that followed it, or one from before it was recorded", () => {
+    renderHistory([run({ split_overridden: false }), run({ split_overridden: null })]);
+    expect(screen.queryByText(/overrode the recommended split/)).not.toBeInTheDocument();
+  });
+});

@@ -239,6 +239,16 @@ export interface SplitOption {
   description: string;
 }
 
+export interface RecommendedSplit {
+  strategy: "random" | "time" | "group";
+  /** The date or entity column the strategy divides on; null for a random split. */
+  column: string | null;
+  /** The evidence, one sentence each. */
+  reasons: string[];
+  confidence: "high" | "medium" | "low";
+  alternatives?: { strategy: "random" | "time" | "group"; column: string | null }[];
+}
+
 export interface RecommendedTestSize {
   fraction: number;
   reason: string;
@@ -277,6 +287,8 @@ export interface ModelPlan {
   /** How much to hold back for testing, chosen from the number of labelled rows and (for two
    * answers) the rarer one, with the reason. The form pre-fills it; the user can change it. */
   recommended_test_size?: RecommendedTestSize | null;
+  /** How to divide the rows, with the evidence. The form pre-selects it. */
+  recommended_split?: RecommendedSplit | null;
   /** Candidates for a grouped split, most repeated first. */
   group_columns: string[];
   blockers: string[];
@@ -424,6 +436,10 @@ export interface ModelRun {
     positive_label: string | null;
     observed: CutoffMetrics | null;
   } | null;
+  /** What the app would have recommended for how to divide the rows. Absent on older runs. */
+  recommended_split?: { strategy: string; column: string | null; confidence: string } | null;
+  /** True when this run divided the rows differently from the recommendation. */
+  split_overridden?: boolean | null;
   /** The calibration method applied, "none" when the probabilities are the model's own. A run
    * that differs only here is the comparison "did calibrating help?" needs to be able to show. */
   calibration?: CalibrationMethod | null;
@@ -727,6 +743,9 @@ export interface ModelResult {
     test_rows: number;
     /** The fraction asked for, not the one a date split ended up with. */
     requested_test_size?: number;
+    /** What the app would have recommended for dividing the rows, and whether this run differs. */
+    recommended?: { strategy: string; column: string | null; confidence: string } | null;
+    overridden?: boolean;
     /** Entities on each side. Row counts alone hide what matters about a grouped split:
      * 800 training rows drawn from 4 customers is not 800 independent observations. */
     train_groups: number | null;

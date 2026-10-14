@@ -252,6 +252,82 @@ class TestCalibratingTheProbabilities:
         assert rigged["observed"] != honest["observed"]
 
 
+# ------------------------------------------------------------------ recommending the split
+
+
+class TestRecommendingTheSplit:
+    """The advice on how to divide the rows reads the answers once: to see whether they drift over
+    time. It must read only the training side of the default split -- the same convention the
+    leakage suggestions follow -- or the rows held back would have a say in how they are held back."""
+
+    @pytest.fixture
+    def drifting(self) -> pd.DataFrame:
+        rng = np.random.default_rng(31)
+        n = 600
+        return pd.DataFrame(
+            {
+                "created_on": pd.date_range("2021-01-01", periods=n).astype(str),
+                "x": rng.normal(0, 1, n),
+                "outcome": np.where(rng.random(n) < np.linspace(0.05, 0.6, n), "yes", "no"),
+            }
+        )
+
+    def _pin(self, monkeypatch, df):
+        """The honest frame, the frame with the held-back answers flipped, and the partition
+        pinned so the only difference between them is those answers."""
+        _, X_test, _, _ = modeling.split_data(df, "outcome", "classification")
+        test_index = X_test.index
+        flipped = df.copy()
+        flipped.loc[test_index, "outcome"] = flipped.loc[test_index, "outcome"].map({"yes": "no", "no": "yes"})
+
+        def fixed_partition(frame, target, task, **_kwargs):
+            labelled = frame[frame[target].notna()]
+            train_index = labelled.index.difference(test_index)
+            features = labelled.drop(columns=[target])
+            return (
+                features.loc[train_index], features.loc[test_index],
+                labelled.loc[train_index, target], labelled.loc[test_index, target],
+            )
+
+        monkeypatch.setattr(modeling, "split_data", fixed_partition)
+        return flipped, test_index
+
+    def test_flipping_the_held_back_answers_does_not_move_the_recommendation(self, drifting, monkeypatch):
+        from app.api import routes_model
+
+        flipped, _ = self._pin(monkeypatch, drifting)
+        honest = routes_model._recommended_split(drifting, "outcome", "classification", "")
+        rigged = routes_model._recommended_split(flipped, "outcome", "classification", "")
+        assert honest["strategy"] == "time"  # there is a decision to protect
+        assert rigged == honest
+
+    def test_a_computation_over_every_row_would_have_moved(self, drifting, monkeypatch):
+        """The flip has to bite: read over the whole file the same drift test gives other numbers."""
+        from app.services import validation_advice
+
+        flipped, test_index = self._pin(monkeypatch, drifting)
+        train_only = drifting.drop(index=test_index)
+        everything = validation_advice.drift_over_time(flipped, "created_on", "outcome", "classification")
+        training = validation_advice.drift_over_time(train_only, "created_on", "outcome", "classification")
+        assert everything["text"] != training["text"] and everything["effect"] != training["effect"]
+
+    def test_the_drift_test_is_given_no_held_back_row(self, drifting, monkeypatch):
+        from app.api import routes_model
+        from app.services import validation_advice
+
+        _, test_index = self._pin(monkeypatch, drifting)
+        seen = {}
+        real = validation_advice.drift_over_time
+
+        def spy(frame, *args, **kwargs):
+            seen["index"] = set(frame.index)
+            return real(frame, *args, **kwargs)
+
+        monkeypatch.setattr(validation_advice, "drift_over_time", spy)
+        routes_model._recommended_split(drifting, "outcome", "classification", "")
+        assert seen["index"] and not (seen["index"] & set(test_index))
+
+
 # ------------------------------------------------------------------ the improvement loop
 
 

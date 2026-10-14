@@ -334,6 +334,67 @@ def _looks_like_an_identifier(series: pd.Series, rows: int) -> bool:
     return True
 
 
+def _goal_text(goal) -> str:
+    """What the user said they are building this for, which is where "forecast" or "next month"
+    would be."""
+    return f"{getattr(goal, 'use_case', '') or ''} {getattr(goal, 'expected_output', '') or ''}".strip()
+
+
+def _recommended_split(df: pd.DataFrame, target: str, task: str, goal_text: str = "") -> dict | None:
+    """How to divide the rows, from the file's shape, the stated goal and -- for the drift test
+    only -- the training side of the default split. Never raises: advice is context for the plan,
+    not a reason to refuse one."""
+    from app.services import validation_advice
+
+    try:
+        training_rows = None
+        try:
+            X_train, _, y_train, _ = modeling.split_data(df, target, task)
+            training_rows = X_train.assign(**{target: y_train})
+        except modeling.ModelingError:
+            pass
+        return validation_advice.recommend_split(
+            df,
+            target,
+            task,
+            group_columns=_group_columns(df, target),
+            date_columns=_date_columns(df),
+            goal_text=goal_text,
+            training_rows=training_rows,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Could not work out a recommended split", exc_info=True)
+        return None
+
+
+def _note_the_split_choice(result: dict, df: pd.DataFrame, goal_text: str) -> None:
+    """Records, on the run, what the app would have recommended and whether this run differs.
+
+    Worked out here, on the server, from the split the run actually used -- not trusted from the
+    client -- so "the user overrode the recommendation" means the same thing whichever route made
+    the run. The history shows it, because a score from a split nobody recommended is a different
+    kind of evidence.
+    """
+    split = result.get("split")
+    if not isinstance(split, dict):
+        return
+    advice = _recommended_split(df, result.get("target_column") or "", result.get("task") or "", goal_text)
+    if advice is None:
+        return
+    strategy = split.get("strategy") or "random"
+    column = (
+        split.get("time_column") if strategy == "time"
+        else split.get("group_column") if strategy == "group"
+        else None
+    )
+    split["recommended"] = {
+        "strategy": advice["strategy"],
+        "column": advice["column"],
+        "confidence": advice["confidence"],
+    }
+    split["overridden"] = (strategy, column) != (advice["strategy"], advice["column"])
+
+
 def _recommended_test_size(df: pd.DataFrame, target: str, task: str) -> dict | None:
     """How much to hold back, from the labelled rows and (for two answers) the rarer one."""
     from app.services import validation_advice
@@ -456,6 +517,7 @@ async def get_model_plan(
         sealed_holdout_offer=_sealed_offer(df, target, task),
         sealed_holdout=bool(stored["split"].get("sealed")) if stored else False,
         recommended_test_size=_recommended_test_size(df, target, task),
+        recommended_split=_recommended_split(df, target, task, _goal_text(goal)),
         suggested_exclusions=suggestions,
         exclusions_basis=exclusions_basis,
         excluded_columns=previously_excluded,
@@ -622,7 +684,9 @@ def _refuse_if_the_data_cannot_support_a_model(df, goal, rules=None) -> str:
     return task
 
 
-def _save_and_record(directory, result: dict, df, *, route: str, action_log=None) -> dict:
+def _save_and_record(
+    directory, result: dict, df, *, route: str, action_log=None, goal_text: str = ""
+) -> dict:
     """Saves a finished run and records the look at the held-out rows that it was.
 
     Every route that fits a model and returns its held-out score ends here, so there is one
@@ -637,6 +701,7 @@ def _save_and_record(directory, result: dict, df, *, route: str, action_log=None
     """
     result["run_id"] = uuid.uuid4().hex[:12]
     result["split_key"] = evaluation_ledger.split_key(result.get("split"))
+    _note_the_split_choice(result, df, goal_text)
     # Worked out from the ledger *before* this look is written, so the first run of a split
     # reads independent, and carried on the result so the page, the card and the history all
     # say the same thing. The headline is qualified here rather than where the verdict is made:
@@ -785,7 +850,9 @@ async def train_model(
     # Recorded so the plan can show what was excluded last time and the model card can say
     # which columns were deliberately withheld.
     result["features"]["excluded"] = list(request.excluded_columns)
-    return _save_and_record(directory, result, df, route="train", action_log=log)
+    return _save_and_record(
+        directory, result, df, route="train", action_log=log, goal_text=_goal_text(goal)
+    )
 
 
 def _improve_and_save(
@@ -800,6 +867,7 @@ def _improve_and_save(
     action_log=None,
     on_progress=None,
     on_stage=None,
+    goal_text: str = "",
 ) -> dict:
     """Search, rebuild the winner the normal way, and save it. Runs in a worker thread.
 
@@ -886,7 +954,9 @@ def _improve_and_save(
     rebuilt["features"]["excluded"] = list(request.excluded_columns)
     # One look, however many rounds the search ran: the rounds are scored on training folds and
     # never open the held-out rows. Only this final rebuild does, once.
-    return _save_and_record(directory, rebuilt, df, route=route, action_log=action_log)
+    return _save_and_record(
+        directory, rebuilt, df, route=route, action_log=action_log, goal_text=goal_text
+    )
 
 
 @router.post("/api/model/{session_id}/improve")
@@ -917,6 +987,7 @@ async def improve_model(
             point=point,
             directory=directory,
             action_log=log,
+            goal_text=_goal_text(goal_context),
         )
     except modeling.ModelingError as exc:
         raise TrainingFailedError(str(exc)) from exc
@@ -994,6 +1065,7 @@ async def improve_model_stream(
                 action_log=log,
                 on_progress=on_progress,
                 on_stage=on_stage,
+                goal_text=_goal_text(goal_context),
             )
             await queue.put({"type": "result", "result": result})
         except modeling.ModelingError as exc:

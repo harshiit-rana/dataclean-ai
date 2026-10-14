@@ -381,6 +381,14 @@ are both running locally, you're ready to make changes.
   place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
   does not need this application's class to load. Nothing may build a fold splitter without the groups -- not even to ask whether folds are possible -- or `test_identical_rows_folds.py` rightly flags it. `TestCalibratingTheProbabilities` in
   `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
+- **The split recommendation reads the answers only from the training side of the default split.**
+  `validation_advice.recommend_split` is pure; its one use of the target, the drift test, is handed
+  `training_rows` by `routes_model._recommended_split` and nothing else, and
+  `TestRecommendingTheSplit` in `test_evaluation_integrity.py` flips every held-back answer and shows
+  the advice does not move. Entity candidates come from `_group_columns`, which shares its test with
+  `readiness_checks.check_repeated_entities`: do not re-tune thresholds in the advice. Whether a run
+  "overrode" it is decided in `_note_the_split_choice` from the split the run used, never from a flag
+  the client sends.
 - **The held-out fraction is a request, recorded and keyed.** `validation_advice.recommend_test_size`
   turns the labelled-row count (and the rarer answer's count for two answers) into a fraction in
   steps of five percent, with the reason; it reads the verdict's own thresholds from `modeling`, so

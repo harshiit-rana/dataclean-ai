@@ -339,3 +339,112 @@ describe("ModelPlanForm — how much to hold back (#44)", () => {
     expect(onTrain.mock.calls[0][0].test_size).toBeNull();
   });
 });
+
+describe("ModelPlanForm — a recommended way to split (#43)", () => {
+  const GROUP_PLAN: Partial<ModelPlan> = {
+    group_columns: ["customer_id", "store"],
+    date_columns: ["created_on"],
+    split_options: [
+      { value: "random", label: "Random split", description: "" },
+      { value: "time", label: "Split by date", description: "" },
+      { value: "group", label: "Keep related rows together", description: "" },
+    ],
+    recommended_split: {
+      strategy: "group",
+      column: "customer_id",
+      reasons: [
+        "'customer_id' repeats in 1,180 of 1,218 rows (240 distinct values, about 5.1 rows each): a random split would put the same customer_id on both sides.",
+      ],
+      confidence: "high",
+    },
+  };
+  const radio = (name: RegExp) => screen.getByRole("radio", { name }) as HTMLInputElement;
+
+  it("pre-selects the recommended strategy and column", () => {
+    renderForm(GROUP_PLAN);
+    expect(radio(/Keep related rows together/).checked).toBe(true);
+    expect(radio(/Random split/).checked).toBe(false);
+    expect((screen.getByDisplayValue(/customer_id/) as HTMLSelectElement).value).toBe("customer_id");
+  });
+
+  it("shows the reason with its evidence and the confidence", () => {
+    renderForm(GROUP_PLAN);
+    const box = screen.getByTestId("split-recommendation");
+    expect(box).toHaveTextContent("Recommended: Keeping related rows together on customer_id");
+    expect(box).toHaveTextContent("high confidence");
+    expect(box).toHaveTextContent("'customer_id' repeats in 1,180 of 1,218 rows");
+  });
+
+  it("marks the option it recommends", () => {
+    renderForm(GROUP_PLAN);
+    expect(radio(/Keep related rows together/).closest("label")).toHaveTextContent("recommended");
+    expect(radio(/Random split/).closest("label")).not.toHaveTextContent("recommended");
+  });
+
+  it("sends the recommendation when the user changes nothing", () => {
+    const onTrain = renderForm(GROUP_PLAN);
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    const request = onTrain.mock.calls[0][0];
+    expect(request.split_strategy).toBe("group");
+    expect(request.group_column).toBe("customer_id");
+  });
+
+  it("lets the user choose differently, says so, and sends the choice", () => {
+    const onTrain = renderForm(GROUP_PLAN);
+    fireEvent.click(radio(/Random split/));
+    expect(screen.getByTestId("split-recommendation")).toHaveTextContent(
+      "You chose a random split instead of the recommendation"
+    );
+    expect(screen.getByTestId("split-recommendation")).toHaveTextContent("the run will record that you did");
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].split_strategy).toBe("random");
+  });
+
+  it("says nothing about overriding while the recommendation is being followed", () => {
+    renderForm(GROUP_PLAN);
+    expect(screen.queryByText(/instead of the recommendation/)).not.toBeInTheDocument();
+  });
+
+  it("pre-selects a date split and its column", () => {
+    const onTrain = renderForm({
+      ...GROUP_PLAN,
+      recommended_split: {
+        strategy: "time",
+        column: "created_on",
+        reasons: ["You described the goal in terms of the future ('forecast')."],
+        confidence: "medium",
+      },
+    });
+    expect(radio(/Split by date/).checked).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0]).toMatchObject({ split_strategy: "time", time_column: "created_on" });
+  });
+
+  it("pre-selects a random split with the reason when there is nothing to protect against", () => {
+    renderForm({
+      recommended_split: {
+        strategy: "random",
+        column: null,
+        reasons: ["No repeated entities or time order found.", "A random split, stratified so the rarer answer reaches both sides."],
+        confidence: "medium",
+      },
+    });
+    expect(radio(/Random split/).checked).toBe(true);
+    expect(screen.getByTestId("split-recommendation")).toHaveTextContent("No repeated entities or time order found.");
+  });
+
+  it("falls back to a random split rather than selecting an option the form cannot offer", () => {
+    renderForm({
+      date_columns: [],
+      recommended_split: { strategy: "time", column: "created_on", reasons: ["x"], confidence: "medium" },
+    });
+    expect(radio(/Random split/).checked).toBe(true);
+    expect(screen.queryByTestId("split-recommendation")).not.toBeInTheDocument();
+  });
+
+  it("is unchanged for a plan with no recommendation", () => {
+    renderForm();
+    expect(radio(/Random split/).checked).toBe(true);
+    expect(screen.queryByTestId("split-recommendation")).not.toBeInTheDocument();
+  });
+});

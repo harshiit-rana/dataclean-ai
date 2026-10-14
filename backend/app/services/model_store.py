@@ -122,6 +122,11 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
             # Which rows were held out, by the rule that held them. Two runs can be compared on
             # the same rows only if this matches as well as the data.
             "split_key": result.get("split_key"),
+            # What the app would have recommended for how to divide the rows, and whether this run
+            # divided them differently. A score from a split nobody recommended is a different kind
+            # of evidence, and the history has to be able to say so.
+            "recommended_split": (result.get("split") or {}).get("recommended"),
+            "split_overridden": (result.get("split") or {}).get("overridden"),
             "target_column": result.get("target_column"),
             "task": result.get("task"),
             "best_model": result.get("best_model"),

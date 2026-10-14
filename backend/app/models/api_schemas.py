@@ -161,6 +161,10 @@ class ModelPlanResponse(BaseModel):
     # How much to hold back for testing, and why: from the number of labelled rows and, for two
     # answers, how many carry the rarer one. The form pre-fills it and the user can change it.
     recommended_test_size: Optional[dict] = None
+    # How to divide the rows, with the evidence: {strategy, column, reasons[], confidence,
+    # alternatives[]}. The form pre-selects it; the user can choose differently, and the run
+    # records that they did.
+    recommended_split: Optional[dict] = None
 
 
 class SetRulesRequest(BaseModel):
