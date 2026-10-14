@@ -666,7 +666,23 @@ def _save_and_record(directory, result: dict, df, *, route: str, action_log=None
         metrics=best.get("metrics"),
         extra={"primary_metric": payload.get("primary_metric"), "model": payload.get("best_model")},
     )
-    return payload
+    return _with_later_evidence(directory, payload)
+
+
+def _with_later_evidence(directory, result: dict) -> dict:
+    """Adds what happened to the model after it was built: checks on new data, and the sealed
+    final holdout once opened.
+
+    Looked up when a result is read rather than stored with it, because both arrive later and a
+    stored copy would be stale the moment one did. It is added to a fresh result too, so the
+    response to a train and the response to reading it back have the same shape: what a stream's
+    last event shows and what a refresh shows must not be able to differ.
+    """
+    if isinstance(result.get("evaluation"), dict):
+        run_id = result.get("run_id")
+        result["evaluation"]["new_data"] = evaluation_ledger.new_data_summary(directory, run_id)
+        result["evaluation"]["final"] = evaluation_ledger.final_summary(directory, run_id)
+    return result
 
 
 def _record_the_seal(directory, split: dict, version: dict | None) -> int:
@@ -1006,16 +1022,7 @@ async def get_model_result(
     stored = model_store.load_result(directory)
     if stored is None:
         raise NoTrainedModelError()
-    # Looked up at read time, not stored with the run: the model is checked against new files
-    # after it is built, and a stored copy would be stale the moment one arrived.
-    if isinstance(stored.get("evaluation"), dict):
-        stored["evaluation"]["new_data"] = evaluation_ledger.new_data_summary(
-            directory, stored.get("run_id")
-        )
-        stored["evaluation"]["final"] = evaluation_ledger.final_summary(
-            directory, stored.get("run_id")
-        )
-    return stored
+    return _with_later_evidence(directory, stored)
 
 
 def _open_the_sealed_holdout(df, stored: dict, pipeline) -> dict:

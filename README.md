@@ -269,6 +269,19 @@ goes back through the normal training path, so the charts, the model card and th
 script all work on it, and the script carries the tuned settings rather than reverting to the
 defaults.
 
+**And it counts how often you look.** The search can be kept honest by code; you can't. Retrain,
+read the score, change a column, retrain — ten rounds of that and the number on the page is the
+best of ten draws on the same fifth of the rows. So every look at the held-out rows is recorded.
+The first is an independent estimate; the second and third carry a note that if you changed
+anything because of an earlier score this one no longer is; from the fourth, the verdict itself
+says the score is optimistic and points you to the way out. Nothing is blocked — a strict limit
+would make small files unusable. The ways out are rows that didn't exist yet ("Use this on a
+new file" records a check on a file's real answers, never on rows the model was built from) or
+a final holdout sealed *before* your first look, which only an explicit "open it" ever scores,
+once. Every number on the page is labelled as one of three kinds — fold score, held-out
+evaluation, new data — because they aren't interchangeable. The reasoning is in
+[`docs/decisions/0001-evaluation-protocol.md`](docs/decisions/0001-evaluation-protocol.md).
+
 **And you leave with something you can run.** The export includes `train_model.py`, which
 rebuilds the model from scratch with the same preprocessing, split and settings, plus the
 fitted `model.joblib` and a model card. There's a test that runs the generated script in a
@@ -318,7 +331,9 @@ Fixture datasets in `backend/tests/fixtures/` are built to guarantee specific is
 (missing values, duplicates, mixed types, inconsistent date formats, outliers) so the
 profiler's detectors have known-good test targets. The end-to-end graph test
 (`tests/integration/test_graph_end_to_end.py`) uses LangGraph's in-memory checkpointer and
-a mocked LLM client, so it doesn't need Redis or a real API key.
+a mocked LLM client, so it doesn't need Redis or a real API key. A second integration test
+(`tests/integration/test_http_session_end_to_end.py`) runs a whole session over HTTP — upload to
+apply — on the churn sample with the real graph and models and a fake LLM, in about twenty seconds.
 
 ```bash
 cd frontend
