@@ -23,7 +23,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from app.services import diagnostics, features as feature_recipes, operating_point
+from app.services import diagnostics, features as feature_recipes, operating_point, uncertainty
 
 logger = logging.getLogger(__name__)
 
@@ -863,6 +863,38 @@ def resolve_positive_label(labels: list[str], requested: str | None) -> str:
     return labels[-1]
 
 
+def interval_report(
+    pipeline, X_test, y_test, task: str, positive_label: str | None = None, groups=None
+) -> dict | None:
+    """95% intervals for the headline held-out metrics of one fitted model, or None.
+
+    One `predict` (and one `predict_proba`), then a bootstrap over those predictions -- see
+    `uncertainty`. A grouped split resamples whole entities, because the rows of one customer are
+    not independent observations. Below the size at which a verdict can be given at all
+    (`MIN_TEST_ROWS_TO_JUDGE`) there is no honest interval to print, and the verdict already
+    says the test set is too small, so this returns None rather than a wide, misleading one.
+
+    Never raises: an interval is context for a score, not a reason to lose a finished run.
+    """
+    if len(y_test) < MIN_TEST_ROWS_TO_JUDGE:
+        return None
+    try:
+        predictions = pipeline.predict(X_test)
+        scores = None
+        if task != "regression" and pd.Series(y_test).nunique() == 2:
+            scores = diagnostics._positive_scores(
+                pipeline, X_test, positive_label or resolve_positive_label(
+                    sorted(pd.Series(y_test).astype(str).unique()), None
+                )
+            )
+        return uncertainty.metric_intervals(
+            y_test, predictions, scores, task, positive_label, groups=groups
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Could not compute intervals for the held-out metrics", exc_info=True)
+        return None
+
+
 def baseline_score(y_train, y_test, task: str) -> dict:
     """What you get without a model at all -- always guess the most common class, or always
     guess the mean. A model that can't beat this is not doing anything, and that fact is
@@ -1468,6 +1500,21 @@ def train_candidates(
         entry["cv_score"] = scored["score"] if scored else None
         entry["cv_std"] = scored["std"] if scored else None
     baseline = baseline_score(y_train, y_test, task)
+    # How far the headline held-out numbers could move on different rows. For the chosen model
+    # only: it is the one whose score is reported, and the candidates' fold scores already
+    # carry their own spread.
+    best["metrics_intervals"] = interval_report(
+        best["pipeline"],
+        X_test,
+        y_test,
+        task,
+        best["metrics"].get("positive_label"),
+        groups=(
+            df.loc[list(X_test.index), group_column]
+            if split_strategy == "group" and group_column
+            else None
+        ),
+    )
 
     # The expensive tier, for the chosen model only. `build` hands back an *unfitted*
     # pipeline each time, because cross-validation and the learning curve must fit from

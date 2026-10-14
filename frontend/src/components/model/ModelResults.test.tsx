@@ -355,3 +355,48 @@ describe("ModelResults — checked on new data (#9)", () => {
     expect(screen.getByText(/Evaluated on these held-out rows once/)).toBeInTheDocument();
   });
 });
+
+describe("ModelResults — how far the score could move (#28)", () => {
+  const withIntervals = (by: "rows" | "groups" = "rows") => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.results[0] = {
+      ...r.results[0],
+      metrics_intervals: {
+        level: 0.95,
+        resamples: 1000,
+        by,
+        metrics: { roc_auc: { low: 0.71, high: 0.84 }, accuracy: { low: 0.74, high: 0.86 } },
+      },
+    };
+    return r;
+  };
+
+  it("prints the interval beside the score", () => {
+    render(<ModelResults result={withIntervals()} />);
+    expect(screen.getByText("(0.710–0.840)")).toBeInTheDocument();
+    expect(screen.getByText("(0.740–0.860)")).toBeInTheDocument();
+  });
+
+  it("says what the brackets are, and that they are not a guarantee", () => {
+    render(<ModelResults result={withIntervals()} />);
+    expect(screen.getByText(/the middle 95% of 1,000 resamples of the held-out rows/)).toBeInTheDocument();
+    expect(screen.getByText(/not a guarantee/)).toBeInTheDocument();
+  });
+
+  it("says whole groups were resampled for a grouped split", () => {
+    render(<ModelResults result={withIntervals("groups")} />);
+    expect(screen.getByText(/resamples of the held-out whole groups/)).toBeInTheDocument();
+  });
+
+  it("shows only the bare score when no interval was computed", () => {
+    render(<ModelResults result={result({ evaluation: EVAL(1, "independent") })} />);
+    expect(screen.queryByText(/resamples of the held-out/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\(0\.\d{3}–/)).not.toBeInTheDocument();
+  });
+
+  it("leaves a metric without an interval alone while printing the others", () => {
+    render(<ModelResults result={withIntervals()} />);
+    // precision has a value but no interval in the fixture
+    expect(screen.queryAllByText(/\(0\.\d{3}–0\.\d{3}\)/).length).toBe(2);
+  });
+});

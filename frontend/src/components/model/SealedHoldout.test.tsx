@@ -184,6 +184,21 @@ describe("ModelResults — the sealed holdout", () => {
     expect(screen.getByText(/These rows are now used up/)).toBeInTheDocument();
   });
 
+  it("prints the interval beside the final evaluation", () => {
+    const withInterval = {
+      ...FINAL,
+      metrics_intervals: {
+        level: 0.95,
+        resamples: 1000,
+        by: "rows",
+        metrics: { roc_auc: { low: 0.7, high: 0.86 } },
+      },
+    };
+    render(<ModelResults result={result({}, { ...EVAL, final: withInterval })} onFinalise={vi.fn()} />);
+    expect(screen.getByText("(0.700–0.860)")).toBeInTheDocument();
+    expect(screen.getByText(/the middle 95% of 1,000 resamples of the held-out rows/)).toBeInTheDocument();
+  });
+
   it("says when a seal was taken after looks, without calling it pristine", () => {
     render(<ModelResults result={result({ sealed_after_looks: 3 })} onFinalise={vi.fn()} />);
     expect(screen.getByText(/Sealed after 3 looks/)).toBeInTheDocument();

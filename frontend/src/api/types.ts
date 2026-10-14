@@ -284,8 +284,18 @@ export interface ModelPlan {
   sealed_holdout?: boolean;
 }
 
+/** How far each headline held-out metric could move on a different set of rows: the middle
+ * `level` of `resamples` bootstrap resamples. Resampled by whole groups for a grouped split. */
+export interface MetricIntervals {
+  level: number;
+  resamples: number;
+  by: "rows" | "groups";
+  metrics: Record<string, { low: number; high: number }>;
+}
+
 /** The model scored once on the sealed final holdout. */
 export interface SealedEvaluation {
+  metrics_intervals?: MetricIntervals | null;
   at: string | null;
   rows: number | null;
   metrics: Record<string, number>;
@@ -373,6 +383,8 @@ export interface ModelRun {
   feature_recipes?: string[];
   /** Which inputs had their extreme values clipped. */
   clipped_columns?: string[];
+  /** The primary metric's 95% interval for this run, when one could be computed. */
+  metric_interval?: { metric: string; low: number; high: number } | null;
   /** How many times the held-out rows had been used, and what that made the score. Absent
    * on runs from before the ledger existed: shown as "not recorded", never "independent". */
   evaluation?: { look_count: number; status: "independent" | "reused" | "exhausted" } | null;
@@ -584,6 +596,9 @@ export interface CandidateResult {
    * absent on results from before models were chosen on folds. */
   cv_score?: number | null;
   cv_std?: number | null;
+  /** 95% intervals for the headline held-out metrics. Present for the chosen model only, and
+   * absent when the test set is too small for an interval to mean anything. */
+  metrics_intervals?: MetricIntervals | null;
 }
 
 /** How the winning model was chosen. The held-out rows are never part of it. */

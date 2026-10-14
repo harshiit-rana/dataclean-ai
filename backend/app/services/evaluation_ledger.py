@@ -313,6 +313,7 @@ def final_summary(directory: Path, run_id: str | None) -> dict | None:
                 "rows": extra.get("rows"),
                 "metrics": entry.get("metrics") or {},
                 "baseline": extra.get("baseline"),
+                "metrics_intervals": extra.get("metrics_intervals"),
                 "assessment": extra.get("assessment"),
                 "primary_metric": extra.get("primary_metric"),
                 "rows_seen_in_training": extra.get("rows_seen_in_training", 0),

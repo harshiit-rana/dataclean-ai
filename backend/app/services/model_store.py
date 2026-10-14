@@ -75,6 +75,12 @@ def strip_pipelines(result: dict) -> dict:
     return _jsonable(cleaned)
 
 
+def _primary_interval(result: dict, best: dict) -> dict | None:
+    key = result.get("primary_metric")
+    found = ((best.get("metrics_intervals") or {}).get("metrics") or {}).get(key)
+    return {"metric": key, **found} if found else None
+
+
 def summarise(result: dict, *, fingerprint: str = "") -> dict:
     """One run, small enough to keep twenty of.
 
@@ -109,6 +115,9 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
             "models_tried": [r.get("model") for r in result.get("results", [])],
             "primary_metric": result.get("primary_metric"),
             "metrics": best.get("metrics", {}),
+            # The primary metric's 95% interval, so a later run can be compared with this one
+            # without pretending a difference inside the noise is a result.
+            "metric_interval": _primary_interval(result, best),
             "baseline": result.get("baseline", {}),
             # How many times the held-out rows had been used when this run was made, and what
             # that made the score. Absent on runs from before the ledger existed, which are

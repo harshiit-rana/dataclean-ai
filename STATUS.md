@@ -317,6 +317,17 @@ class balance, feature importance, permutation importance, cross-validation spre
 curve, correlation matrix — and for regression, predicted-vs-actual, residuals, residual
 distribution, error by range.
 
+**How far a score could move.** "AUC 0.78" on 60 rows and on 6,000 used to look identical. The
+chosen model's headline held-out metrics now carry a 95% interval from a percentile bootstrap over
+the test rows — `0.78 (0.71–0.84)` — resampled within each class so a rare class cannot vanish
+from a resample, and by whole groups for a grouped split, where drawing a customer's rows one at a
+time would claim certainty the data does not hold. It is one `predict` and arithmetic over
+resample weights, so it costs about 0.04 s on 500 rows and 0.3 s on 20,000; below the size at which
+a verdict can be given at all it prints nothing. The primary metric's interval goes into the run
+history, and the sealed final evaluation carries its own. A test shows that the bootstrap's point
+estimates equal `evaluate`'s to the last digit, and that on a problem with a known AUC a 95%
+interval contains it close to 95% of the time.
+
 **Every number says what kind it is.** The app shows three kinds of score that are not
 interchangeable — fold scores on the training rows (*exploratory*), the one-time score on rows
 nothing was chosen against (*held-out evaluation*), and a score on newly uploaded rows (*new

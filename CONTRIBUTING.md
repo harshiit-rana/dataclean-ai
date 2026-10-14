@@ -330,6 +330,11 @@ are both running locally, you're ready to make changes.
   a kind. The comparison of candidate models leads with the fold scores that chose between
   them; the other candidates' held-out scores are behind a button with the reason they are not
   the basis for anything, and `model_card._comparison_table` does the same in the written card.
+- **A headline held-out number carries its interval, and the interval's arithmetic is held to
+  `evaluate`.** `uncertainty.py` recomputes every headline metric as a weighted sum over one set
+  of predictions (a resample is a vector of draw counts). If you add a metric to `evaluate`, add
+  it there and to the equality test in `test_uncertainty.py`; an interval around a number the
+  page does not show is worse than none. A grouped split resamples groups, never rows.
 - **Charts read the app's surface, never the OS.** `useChartTheme` looks only at the `dark`
   class on `<html>` — the same signal Tailwind's `darkMode: ["class"]` uses. Falling back to
   `prefers-color-scheme` is how the correlation heatmap ended up painting near-zero cells

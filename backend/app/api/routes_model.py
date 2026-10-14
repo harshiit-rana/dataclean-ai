@@ -1040,8 +1040,9 @@ def _open_the_sealed_holdout(df, stored: dict, pipeline) -> dict:
     used = features["numeric"] + features["categorical"] + features.get("frequent", [])
     recipes = [feature_recipes.Recipe(**r) for r in features.get("derived", []) or []]
 
+    frame = feature_recipes.apply(df, recipes)
     X_train, X_dev, X_final, y_train, y_dev, y_final = modeling.split_with_sealed_holdout(
-        feature_recipes.apply(df, recipes),
+        frame,
         target,
         task,
         strategy=split["strategy"],
@@ -1060,6 +1061,18 @@ def _open_the_sealed_holdout(df, stored: dict, pipeline) -> dict:
         best.get("metrics") or {}
     ).get("positive_label")
     metrics = modeling.evaluate(pipeline, X_final[used], y_final, task, positive)
+    intervals = modeling.interval_report(
+        pipeline,
+        X_final[used],
+        y_final,
+        task,
+        metrics.get("positive_label"),
+        groups=(
+            frame.loc[list(X_final.index), split["group_column"]]
+            if split.get("strategy") == "group" and split.get("group_column")
+            else None
+        ),
+    )
     baseline = modeling.baseline_score(y_train, y_final, task)
     assessment = modeling.assess_result(
         metrics,
@@ -1077,6 +1090,7 @@ def _open_the_sealed_holdout(df, stored: dict, pipeline) -> dict:
         "rows": int(len(y_final)),
         "metrics": {k: v for k, v in metrics.items() if isinstance(v, (int, float))},
         "baseline": baseline,
+        "metrics_intervals": intervals,
         "assessment": assessment,
         "primary_metric": stored.get("primary_metric"),
         "rows_seen_in_training": modeling.test_rows_seen_in_training(
@@ -1119,6 +1133,7 @@ async def finalise_model(
             "rows": extra.get("rows"),
             "metrics": earlier.get("metrics"),
             "baseline": extra.get("baseline"),
+            "metrics_intervals": extra.get("metrics_intervals"),
             "assessment": extra.get("assessment"),
             "primary_metric": extra.get("primary_metric"),
             "rows_seen_in_training": extra.get("rows_seen_in_training", 0),
@@ -1155,7 +1170,13 @@ async def finalise_model(
         run_id=stored.get("run_id"),
         version=version,
         metrics=opened["metrics"],
-        extra={k: opened[k] for k in ("rows", "baseline", "assessment", "primary_metric", "rows_seen_in_training")},
+        extra={
+            k: opened[k]
+            for k in (
+                "rows", "baseline", "assessment", "primary_metric", "rows_seen_in_training",
+                "metrics_intervals",
+            )
+        },
     )
     return {
         "already_opened": False,

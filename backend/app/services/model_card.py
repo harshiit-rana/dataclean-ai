@@ -51,6 +51,13 @@ def _split_description(split: dict) -> str:
     return "at random"
 
 
+def _fmt_with_interval(value, interval: dict | None) -> str:
+    """A number, and where it could plausibly land: `0.78 (0.71–0.84)`."""
+    if not interval:
+        return _fmt(value)
+    return f"{_fmt(value)} ({_fmt(interval.get('low'))}–{_fmt(interval.get('high'))})"
+
+
 def _fmt(value) -> str:
     if value is None:
         return "—"
@@ -120,6 +127,16 @@ def _selection_tables(result: dict) -> list[str]:
         "chosen model only."
     )
     lines += _held_out_comparison(result, chosen_only=True)
+    chosen = next((r for r in result.get("results", []) if r.get("model") == result.get("best_model")), {})
+    intervals = chosen.get("metrics_intervals") or {}
+    if intervals.get("metrics"):
+        unit = "whole groups" if intervals.get("by") == "groups" else "rows"
+        lines += [
+            "",
+            f"Figures in brackets are the middle {round(intervals['level'] * 100)}% of "
+            f"{intervals['resamples']:,} resamples of the held-out {unit}: the range the score could "
+            f"plausibly land in on a different set of {unit}, not a guarantee.",
+        ]
     return lines
 
 
@@ -152,7 +169,12 @@ def _held_out_comparison(result: dict, chosen_only: bool = False) -> list[str]:
         if entry.get("model") == result.get("best_model"):
             name = f"**{name}** (chosen)"
         metrics = entry.get("metrics", {})
-        rows.append(f"| {name} | " + " | ".join(_fmt(metrics.get(k)) for k in present) + " |")
+        intervals = ((entry.get("metrics_intervals") or {}).get("metrics")) or {}
+        rows.append(
+            f"| {name} | "
+            + " | ".join(_fmt_with_interval(metrics.get(k), intervals.get(k)) for k in present)
+            + " |"
+        )
 
     baseline = result.get("baseline") or {}
     baseline_cells = [_fmt(baseline.get(k)) for k in present]

@@ -26,7 +26,7 @@ import {
 } from "@/components/charts/ModelCharts";
 import { OperatingPointCard } from "@/components/model/OperatingPointCard";
 import { HeldOutUse, ScoreLabel } from "@/components/model/ScoreLabel";
-import type { CandidateResult, ModelResult } from "@/api/types";
+import type { CandidateResult, MetricIntervals, ModelResult } from "@/api/types";
 
 const METRIC_LABELS: Record<string, string> = {
   accuracy: "Accuracy",
@@ -59,6 +59,37 @@ function formatMetric(value: unknown): string {
   return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(3);
 }
 
+/** A metric with where it could plausibly land: `0.78 (0.71–0.84)`. The bracket is what lets 60
+ * rows and 6,000 rows look different on the page, which a bare number cannot do. */
+function MetricWithInterval({
+  value,
+  interval,
+}: {
+  value: unknown;
+  interval?: { low: number; high: number };
+}) {
+  return (
+    <>
+      {formatMetric(value)}
+      {interval && (
+        <span className="ml-1 text-xs text-muted-foreground">
+          ({interval.low.toFixed(3)}–{interval.high.toFixed(3)})
+        </span>
+      )}
+    </>
+  );
+}
+
+function intervalNote(intervals?: MetricIntervals | null): string | null {
+  if (!intervals || Object.keys(intervals.metrics).length === 0) return null;
+  const unit = intervals.by === "groups" ? "whole groups" : "rows";
+  return (
+    `Brackets: the middle ${Math.round(intervals.level * 100)}% of ` +
+    `${intervals.resamples.toLocaleString()} resamples of the held-out ${unit} — the range the ` +
+    `score could plausibly land in on a different set of ${unit}, not a guarantee.`
+  );
+}
+
 /** The chosen model's held-out scores, with the no-model baseline for contrast.
  *
  * This is the only place a test-set score is shown by default. Candidates other than the one
@@ -79,6 +110,7 @@ function HeldOutScores({
       <table className="w-full border-collapse text-sm">
         <caption className="pb-1 text-left text-xs text-muted-foreground">
           Scored once on the held-out rows, for the chosen model only.
+          {intervalNote(best.metrics_intervals) && ` ${intervalNote(best.metrics_intervals)}`}
         </caption>
         <thead>
           <tr>
@@ -95,7 +127,10 @@ function HeldOutScores({
             <td className="px-2 py-1.5 font-medium">{best.label}</td>
             {keys.map((key) => (
               <td key={key} className="px-2 py-1.5 text-right tabular-nums">
-                {formatMetric(best.metrics[key])}
+                <MetricWithInterval
+                  value={best.metrics[key]}
+                  interval={best.metrics_intervals?.metrics?.[key]}
+                />
               </td>
             ))}
           </tr>
@@ -413,6 +448,7 @@ function SealedHoldout({
               <table className="w-full border-collapse text-sm">
                 <caption className="pb-1 text-left text-xs text-muted-foreground">
                   Scored once on the {final.rows?.toLocaleString()} sealed rows.
+                  {intervalNote(final.metrics_intervals) && ` ${intervalNote(final.metrics_intervals)}`}
                 </caption>
                 <thead>
                   <tr>
@@ -429,7 +465,10 @@ function SealedHoldout({
                     <td className="px-2 py-1.5 font-medium">Final evaluation</td>
                     {shown.map((key) => (
                       <td key={key} className="px-2 py-1.5 text-right tabular-nums">
-                        {formatMetric(final.metrics[key])}
+                        <MetricWithInterval
+                          value={final.metrics[key]}
+                          interval={final.metrics_intervals?.metrics?.[key]}
+                        />
                       </td>
                     ))}
                   </tr>
