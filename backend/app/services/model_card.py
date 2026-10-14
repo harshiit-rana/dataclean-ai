@@ -315,7 +315,7 @@ def _trust_section(result: dict) -> list[str]:
 
     if cv:
         lines += [
-            f"Re-scored across {len(cv['folds'])} different splits of the same data, "
+            f"Re-scored across {len(cv['folds'])} different splits of the training rows, "
             f"**{cv['metric']}** came out at {cv['mean']:.3f} on average, ranging "
             f"{min(cv['folds']):.3f} to {max(cv['folds']):.3f}.",
             "",

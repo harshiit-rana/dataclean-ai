@@ -224,7 +224,7 @@ export function CrossValidationChart({ cv }: { cv: CrossValidation }) {
   return (
     <ChartCard
       title="Would a different split have said the same thing?"
-      description={`The same model scored on ${cv.folds.length} different splits of the data.`}
+      description={`The same model scored on ${cv.folds.length} different splits of the training rows.`}
       tableColumns={[
         { key: "fold", label: "Split" },
         { key: "score", label: cv.metric, numeric: true, format: ratio },

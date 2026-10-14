@@ -354,6 +354,15 @@ to choose anything*. Every decision the model path makes was traced to the rows 
   now counted, shown on the results page and cautioned in the model card.
 - **`drop_outlier_rows` wasn't warned about** alongside the other fixes that read a statistic
   from the whole file before any split.
+- **The cross-validation spread and the learning curve were scored with the test rows inside
+  their folds.** They sit on the results page as the independent check on the test score, and
+  were computed over training and test rows joined together. Both now use the training rows
+  only; permutation importance still reads the test rows, because it explains the evaluated
+  model and chooses nothing. On a small file the training-only spread is wider, which is the
+  honest number. The learning curve was also the one fold-producing call that never received
+  the grouping column, so a grouped run drew it from folds that scattered each customer; it
+  does now. A test flips every test answer and asserts neither moves — under the old code the
+  spread went from 0.013 to 0.054.
 - **The plan's leakage suggestions read the test rows' answers.** Which columns to pre-untick as
   giving away the answer was measured over every labelled row. It is now measured on the training
   rows of the default split, and the plan says so; a file too small to split falls back to every

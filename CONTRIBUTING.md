@@ -147,7 +147,10 @@ are both running locally, you're ready to make changes.
 - **Nothing selects on the test set -- including the plain train.** `train_candidates` used to
   keep whichever candidate scored best on the held-out rows; it now calls
   `choose_on_training_folds`, and a test flips every test-set answer and asserts the choice
-  does not move. The improvement loop searches against cross-validated
+  does not move. The leakage suggestions in the plan and the cross-validation spread and
+  learning curve on the results page follow the same rule: they read the training rows only,
+  and `compute_deep_diagnostics` takes `groups` aligned with `X_train`. The improvement loop
+  searches against cross-validated
   folds of the training data and opens the held-out set exactly once, at the end. If you add
   a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and
   checking `X_test`. A round also has to clear `_is_real_gain`, which refuses anything smaller

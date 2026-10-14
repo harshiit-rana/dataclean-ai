@@ -304,6 +304,134 @@ class TestDeepDiagnostics:
         assert result["cross_validation"]["folds"]
 
 
+class TestDeepDiagnosticsStayOffTheTestSet:
+    """The cross-validation spread and the learning curve sit on the results page beside the
+    test score, as the independent check on it. They were computed over the training and test
+    rows joined together, which put the test rows inside the folds of that check. The test
+    set's one job is to be the single evaluation nothing else touched."""
+
+    @staticmethod
+    def _spy(monkeypatch):
+        seen: dict[str, dict] = {}
+        real_cv = diagnostics.cross_validate_pipeline
+        real_curve = diagnostics.learning_curve_points
+
+        def cv(build, X, y, task, *args, **kwargs):
+            seen["cross_validation"] = {"X": X, "groups": kwargs.get("groups")}
+            return real_cv(build, X, y, task, *args, **kwargs)
+
+        def curve(build, X, y, task, *args, **kwargs):
+            seen["learning_curve"] = {"X": X, "groups": kwargs.get("groups")}
+            return real_curve(build, X, y, task, *args, **kwargs)
+
+        monkeypatch.setattr(diagnostics, "cross_validate_pipeline", cv)
+        monkeypatch.setattr(diagnostics, "learning_curve_points", curve)
+        return seen
+
+    def test_both_receive_exactly_the_training_rows(self, learnable_df, monkeypatch):
+        seen = self._spy(monkeypatch)
+        X_train, X_test, _, _ = modeling.split_data(learnable_df, "outcome", "classification")
+
+        result = modeling.train_candidates(
+            learnable_df, target_column="outcome", task="classification",
+            model_names=["logistic_regression"], include_deep_diagnostics=True,
+        )
+
+        assert result["split"]["train_rows"] == len(X_train)
+        for key in ("cross_validation", "learning_curve"):
+            received = seen[key]["X"]
+            assert len(received) == len(X_train), key
+            assert set(received.index) == set(X_train.index), key
+            assert not set(received.index) & set(X_test.index), key
+
+    def test_flipping_every_test_answer_does_not_move_either(self, learnable_df, monkeypatch):
+        honest = modeling.train_candidates(
+            learnable_df, target_column="outcome", task="classification",
+            model_names=["logistic_regression"], include_deep_diagnostics=True,
+        )["deep_diagnostics"]
+
+        real_split = modeling.split_data
+
+        def flipped(*args, **kwargs):
+            X_train, X_test, y_train, y_test = real_split(*args, **kwargs)
+            return X_train, X_test, y_train, y_test.map({"yes": "no", "no": "yes"})
+
+        monkeypatch.setattr(modeling, "split_data", flipped)
+        rigged = modeling.train_candidates(
+            learnable_df, target_column="outcome", task="classification",
+            model_names=["logistic_regression"], include_deep_diagnostics=True,
+        )["deep_diagnostics"]
+
+        assert rigged["cross_validation"] == honest["cross_validation"]
+        assert rigged["learning_curve"] == honest["learning_curve"]
+        # The patch has to bite, or the equalities above prove nothing: permutation
+        # importance explains the evaluated model on the test rows, so it does move.
+        assert rigged["permutation_importance"] != honest["permutation_importance"]
+
+    def test_a_grouped_run_hands_over_the_training_rows_groups(self, monkeypatch):
+        rng = np.random.default_rng(5)
+        customers, per = 80, 6
+        base = rng.normal(0, 1, customers)
+        df = pd.DataFrame(
+            {
+                "customer": np.repeat([f"c{i:03d}" for i in range(customers)], per),
+                "signal": np.repeat(base, per) + rng.normal(0, 0.5, customers * per),
+                "outcome": np.repeat(
+                    np.where(rng.random(customers) < 1 / (1 + np.exp(-2 * base)), "yes", "no"), per
+                ),
+            }
+        )
+        seen = self._spy(monkeypatch)
+
+        modeling.train_candidates(
+            df, target_column="outcome", task="classification",
+            model_names=["logistic_regression"], include_deep_diagnostics=True,
+            split_strategy="group", group_column="customer",
+        )
+
+        for key in ("cross_validation", "learning_curve"):
+            X, groups = seen[key]["X"], seen[key]["groups"]
+            assert groups is not None, key
+            # Row for row with the frame the folds are cut from -- not train plus test.
+            assert list(groups.index) == list(X.index), key
+
+    def test_the_learning_curve_keeps_an_entity_on_one_side_of_every_fold(self, monkeypatch):
+        """The curve was the one fold-producing call that never received `groups`."""
+        from sklearn.model_selection import GroupKFold
+        import sklearn.model_selection as selection
+
+        used = {}
+        real = selection.learning_curve
+
+        def spy(*args, **kwargs):
+            used.update(cv=kwargs.get("cv"), groups=kwargs.get("groups"))
+            return real(*args, **kwargs)
+
+        monkeypatch.setattr(selection, "learning_curve", spy)
+        rng = np.random.default_rng(6)
+        n = 240
+        groups = np.repeat(np.arange(40), 6)
+        X = pd.DataFrame({"signal": rng.normal(0, 1, n)})
+        y = pd.Series(np.where(X["signal"] + rng.normal(0, 0.5, n) > 0, "yes", "no"))
+
+        points = diagnostics.learning_curve_points(
+            lambda: modeling.build_pipeline("logistic_regression", ["signal"], []),
+            X, y, "classification", groups=pd.Series(groups, index=X.index),
+        )
+
+        assert points
+        assert isinstance(used["cv"], GroupKFold)
+        assert used["groups"] is not None
+
+    def test_the_learning_curve_gives_up_cleanly_with_one_group(self):
+        X = pd.DataFrame({"signal": np.arange(30.0)})
+        y = pd.Series(["yes", "no"] * 15)
+        assert diagnostics.learning_curve_points(
+            lambda: modeling.build_pipeline("logistic_regression", ["signal"], []),
+            X, y, "classification", groups=pd.Series(["only"] * 30),
+        ) == []
+
+
 class TestIntegrationWithTraining:
     def test_a_classification_run_carries_its_charts(self, learnable_df):
         result = modeling.train_candidates(

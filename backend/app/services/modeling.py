@@ -1083,13 +1083,6 @@ def train_candidates(
     # scratch on each fold -- reusing a fitted one would score it on rows it trained on.
     deep: dict = {}
     if include_deep_diagnostics:
-        # Indexed off the concatenated train+test frames rather than the original, so the
-        # groups line up row for row with what cross-validation is handed.
-        cv_groups = None
-        if split_strategy == "group" and group_column:
-            order = list(X_train.index) + list(X_test.index)
-            cv_groups = df.loc[order, group_column]
-
         deep = diagnostics.compute_deep_diagnostics(
             lambda: build_pipeline(
                 best["model"],
@@ -1104,7 +1097,8 @@ def train_candidates(
             y_train,
             y_test,
             task,
-            groups=cv_groups,
+            # The training rows' groups, row for row with what cross-validation is handed.
+            groups=selection_groups,
             ordered=split_strategy == "time",
         )
 

@@ -385,7 +385,7 @@ def cross_validate_pipeline(
 
     if ordered:
         # Date-based split: each fold validated on rows later than it trained on. X arrives
-        # as training rows then test rows, both in time order, so the whole is in order.
+        # in time order (the training rows come out of `split_data` that way).
         from sklearn.model_selection import TimeSeriesSplit
 
         usable_folds = int(min(folds, len(y) - 1))
@@ -450,12 +450,18 @@ def cross_validate_pipeline(
     }
 
 
-def learning_curve_points(build, X, y, task: str, ordered: bool = False) -> list[dict]:
+def learning_curve_points(
+    build, X, y, task: str, ordered: bool = False, groups=None
+) -> list[dict]:
     """Score against training-set size, for both the training and validation folds.
 
     Reads the two failure modes directly off the shape: the curves converging at a poor score
     means the model is too simple for the problem; a wide persistent gap means it is
     memorizing, and more data would help more than more tuning.
+
+    `groups` keeps an entity whole inside each fold, for the same reason `cross_validate_pipeline`
+    takes it. The curve used to be the one fold-producing call that never received it, so a
+    grouped run drew a curve from folds that scattered each customer across both sides.
     """
     from sklearn.model_selection import learning_curve
 
@@ -467,6 +473,13 @@ def learning_curve_points(build, X, y, task: str, ordered: bool = False) -> list
         from sklearn.model_selection import TimeSeriesSplit
 
         cv, shuffle = TimeSeriesSplit(n_splits=3), False
+    elif groups is not None:
+        from sklearn.model_selection import GroupKFold
+
+        usable_folds = int(min(3, pd.Series(groups).nunique()))
+        if usable_folds < 2:
+            return []
+        cv, shuffle = GroupKFold(n_splits=usable_folds), True
     else:
         cv, shuffle = 3, True
     sizes, train_scores, validation_scores = learning_curve(
@@ -479,6 +492,7 @@ def learning_curve_points(build, X, y, task: str, ordered: bool = False) -> list
         n_jobs=1,
         shuffle=shuffle,
         random_state=42 if shuffle else None,
+        groups=groups,
     )
     return [
         {
@@ -529,6 +543,14 @@ def compute_deep_diagnostics(
     """The expensive tier: refits the model many times. Run for the chosen model only, and
     skipped on data large enough for the cost to be felt.
 
+    Cross-validation and the learning curve use the **training rows only**. They used to be
+    handed the training and test rows joined together, which put the test rows inside the
+    folds of the number shown as the independent check on the test score. The test set's
+    one job is to be the single evaluation nothing else touched; permutation importance still
+    reads it, because that explains the model already evaluated and chooses nothing.
+
+    `groups` is aligned with `X_train`, not with train plus test.
+
     Each part is guarded separately -- cross-validation failing is no reason to lose the
     learning curve.
     """
@@ -542,16 +564,20 @@ def compute_deep_diagnostics(
             )
         }
 
-    X_all = pd.concat([X_train, X_test])
-    y_all = pd.concat([pd.Series(y_train), pd.Series(y_test)])
-
     result: dict = {"skipped": None}
     for key, work in (
         (
             "cross_validation",
-            lambda: cross_validate_pipeline(build, X_all, y_all, task, groups=groups, ordered=ordered),
+            lambda: cross_validate_pipeline(
+                build, X_train, y_train, task, groups=groups, ordered=ordered
+            ),
         ),
-        ("learning_curve", lambda: learning_curve_points(build, X_all, y_all, task, ordered=ordered)),
+        (
+            "learning_curve",
+            lambda: learning_curve_points(
+                build, X_train, y_train, task, ordered=ordered, groups=groups
+            ),
+        ),
         (
             "permutation_importance",
             lambda: permutation_importance_scores(pipeline, X_test, y_test, task),
