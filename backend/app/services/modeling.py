@@ -1860,6 +1860,7 @@ def train_candidates(
             positive_label=best["metrics"]["positive_label"],
             groups=train_groups,
             ordered=split_strategy == "time",
+            calibrated_with=applied_calibration["method"] if applied_calibration else None,
         )
 
     return {

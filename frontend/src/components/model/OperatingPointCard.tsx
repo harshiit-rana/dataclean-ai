@@ -43,6 +43,13 @@ export function OperatingPointCard({
           when the model gives it a probability of {point.threshold.toFixed(2)} or more. The
           line was chosen on {point.chosen_on}.
         </p>
+        {point.calibrated_with && (
+          <p className="text-sm text-muted-foreground">
+            The probabilities were calibrated ({point.calibrated_with}), so this line is on
+            calibrated probabilities: {point.threshold.toFixed(2)} means the model says it is{" "}
+            {Math.round(point.threshold * 100)}% likely, and means it.
+          </p>
+        )}
       </CardHeader>
       <CardContent className="flex flex-col gap-3 text-sm">
         {point.note && (

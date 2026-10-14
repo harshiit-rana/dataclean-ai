@@ -263,8 +263,13 @@ def apply(
     positive_label: str,
     groups=None,
     ordered: bool = False,
+    calibrated_with: str | None = None,
 ) -> dict | None:
     """Chooses the cut-off on the training folds and reports it against the test set.
+
+    `calibrated_with` names the calibration method when `build` and `pipeline` are calibrated
+    estimators. The line is then on calibrated probabilities -- chosen on out-of-fold scores
+    from a calibrated model, and applied to a calibrated model -- and the result says so.
 
     Returns None when the model has no probabilities to threshold, or the training data
     cannot be folded. Never raises: an operating point is a refinement of a result that
@@ -282,6 +287,7 @@ def apply(
             observed = metrics_at(test_binary, test_scores, DEFAULT_THRESHOLD)
             return {
                 **_request_fields(point, positive_label),
+                "calibrated_with": calibrated_with,
                 "threshold": DEFAULT_THRESHOLD,
                 "chosen_on": "the default; nothing was chosen",
                 "folds": 0,
@@ -308,10 +314,12 @@ def apply(
 
         return {
             **_request_fields(point, positive_label),
+            "calibrated_with": calibrated_with,
             "threshold": threshold,
             "chosen_on": (
                 f"out-of-fold predictions over {len(train_binary):,} training rows "
-                f"({folds} folds{', each validated on rows later than it trained on' if ordered else ''}); "
+                f"({folds} folds{', each validated on rows later than it trained on' if ordered else ''}"
+                f"{f', with the probabilities calibrated ({calibrated_with}) inside each fold, so the line is on calibrated probabilities' if calibrated_with else ''}); "
                 f"the test set was not consulted"
             ),
             "folds": folds,

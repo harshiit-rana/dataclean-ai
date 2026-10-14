@@ -380,6 +380,11 @@ are both running locally, you're ready to make changes.
   place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
   does not need this application's class to load. `TestCalibratingTheProbabilities` in
   `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
+- **A cut-off is chosen on the probabilities it will be applied to.** `train_candidates` passes
+  `operating_point.apply` the calibrated estimator factory as `build` when calibration is on, and
+  `calibrated_with` so the result and the card say so. Never choose the line on one scale and apply
+  it on another. The price is nested folds (outer x (inner + 1) fits); `test_calibrated_cutoff.py`
+  pins the count, and a change that makes it worse should say why.
 - **A new two-class metric goes in four places.** `modeling.evaluate` computes it, `uncertainty`
   recomputes it as a weighted sum (so it gets a range, and a test holds the two equal), the card's
   `_METRIC_LABELS` explains it in plain English, and the frontend's `CLASSIFICATION_KEYS` lists it.

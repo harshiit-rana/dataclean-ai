@@ -511,6 +511,8 @@ export interface OperatingPointResult {
   positive_label: string;
   threshold: number;
   chosen_on: string;
+  /** The calibration method when the line is on calibrated probabilities; null otherwise. */
+  calibrated_with?: "sigmoid" | "isotonic" | null;
   folds: number;
   /** False when a floor was asked for that no cut-off clears; `note` says what was set. */
   reachable: boolean;

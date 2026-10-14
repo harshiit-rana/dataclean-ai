@@ -90,4 +90,19 @@ describe("OperatingPointCard", () => {
     const delivered = screen.getByText(/Test set delivered/).closest("th")!;
     expect(delivered).toHaveTextContent("used 3 times");
   });
+
+  it("says the line is on calibrated probabilities when they were calibrated", () => {
+    render(<OperatingPointCard point={{ ...POINT, calibrated_with: "sigmoid" }} />);
+    expect(
+      screen.getByText(/The probabilities were calibrated \(sigmoid\), so this line is on calibrated probabilities/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/0\.31 means the model says it is\s+31% likely, and means it/)).toBeInTheDocument();
+  });
+
+  it("says nothing of the kind for a line on the model's own probabilities", () => {
+    render(<OperatingPointCard point={{ ...POINT, calibrated_with: null }} />);
+    expect(screen.queryByText(/calibrated probabilities/)).not.toBeInTheDocument();
+    render(<OperatingPointCard point={POINT} />);
+    expect(screen.queryByText(/calibrated probabilities/)).not.toBeInTheDocument();
+  });
 });

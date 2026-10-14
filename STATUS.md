@@ -358,6 +358,21 @@ probabilities, calibration appears in the run history, and applying it re-runs t
 counts as another look at the test rows. A test with every held-out answer flipped shows the fitted
 calibrator and the cut-off do not move.
 
+The cut-off is chosen on calibrated probabilities. With calibration on, the out-of-fold scores the
+line is chosen on come from a calibrated model, with the calibration fitted inside each fold, and
+the line is applied to the calibrated model, so the precision and recall in the table are what the
+delivered model does; the card says the line is on calibrated probabilities. Choosing the line
+before calibrating would not have been a small error: on a lopsided target a line of 0.46 promised
+81% recall and delivered 55% once the probabilities were honest, where the line chosen on the
+calibrated probabilities (0.22) delivered what it promised. The cost is nested folds, outer x
+(inner + 1) fits instead of one per outer fold -- 30 rather than 5 -- which measured about six
+times the uncalibrated cut-off step for a random forest (roughly 2-3 s to 14-17 s at 2,000-10,000
+rows) and under a second for logistic regression. No bound was agreed, so none is enforced beyond
+a test that pins the fit count; the resource guard planned for Milestone 3 is where a ceiling
+belongs. The cheaper alternative, fitting the mapping once on the pooled out-of-fold scores and
+applying it to them, costs no extra fits but lets the mapping see the rows it is scoring, which
+flatters an isotonic fit.
+
 The exported `train_model.py` rebuilds the calibrated model: the same method, the same
 `ensemble` setting, and the same folds listed explicitly (stratified, whole groups, copies together,
 or forward in time), so it reproduces the reported accuracy and Brier score to four places; the

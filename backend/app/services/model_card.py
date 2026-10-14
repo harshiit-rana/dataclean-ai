@@ -382,6 +382,16 @@ def _operating_point_section(result: dict) -> list[str]:
         f"It was chosen on {point.get('chosen_on')}. The held-out figures below are "
         f"therefore measured at a line the test set had no say in, and the gap between the "
         f"two columns is how much the training folds over- or under-promised.",
+        *(
+            [
+                "",
+                f"The probabilities were calibrated ({point['calibrated_with']}), so this line is on "
+                f"calibrated probabilities: {point.get('threshold')} means the model says it is "
+                f"{float(point.get('threshold') or 0):.0%} likely, and means it.",
+            ]
+            if point.get("calibrated_with")
+            else []
+        ),
         "",
         "| At this cut-off | Expected (training folds) | Held-out test set | Test set at 0.50 |",
         "| --- | --- | --- | --- |",
