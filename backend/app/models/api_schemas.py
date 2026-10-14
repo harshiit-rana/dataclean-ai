@@ -148,6 +148,11 @@ class ModelPlanResponse(BaseModel):
     # ticked: clipping changes what the model sees, and a change is the user's to opt into.
     # What the last run clipped is in `features.clipped`.
     suggested_clipping: list[dict] = []
+    # Exact copies found among the default inputs plus the answer, or None when there are none.
+    # Offered with the count as evidence and pre-selected, because a copy in the test set is a
+    # question the model has already been shown the answer to.
+    identical_rows: Optional[dict] = None
+    keep_identical_rows_together: bool = False
 
 
 class SetRulesRequest(BaseModel):
@@ -206,6 +211,10 @@ class TrainRequest(BaseModel):
     # Numeric inputs whose extreme values are clipped to limits learned from the training rows,
     # inside the pipeline. Off unless ticked; names that are not numeric inputs are ignored.
     clip_outliers: list[str] = []
+    # Put rows that are exact copies of each other (the model's inputs and the answer) on one
+    # side of a random split. Off unless asked for; the plan pre-selects it when copies exist.
+    # Ignored by the other split strategies, which keep their own units whole.
+    keep_identical_rows_together: bool = False
 
 
 class ImproveRequest(TrainRequest):

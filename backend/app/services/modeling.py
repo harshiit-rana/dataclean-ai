@@ -342,6 +342,50 @@ def time_cut(times: pd.Series, test_size: float, column: str = "the date column"
     return min(boundaries, key=lambda boundary: (abs(boundary - target), -boundary))
 
 
+def split_keeping_identical_rows_together(labels, groups, classification, test_size, seed):
+    """Positions `(train, test)` for a split that never separates rows with the same group id.
+
+    Written to stand alone -- it imports what it needs and touches nothing else in this module
+    -- because `model_export` copies its source verbatim into `train_model.py`. The script has
+    to cut the same rows as the app, and a second hand-written copy is how it would stop doing
+    so. A classification target is stratified, so the rarer class still reaches both sides;
+    when it cannot be (a class with fewer groups than folds) or for a numeric target, it falls
+    back to an ordinary grouped shuffle.
+    """
+    import warnings
+
+    import numpy as np
+    from sklearn.model_selection import GroupShuffleSplit, StratifiedGroupKFold
+
+    positions = np.arange(len(labels))
+    if classification and labels.value_counts().min() >= 2:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                splitter = StratifiedGroupKFold(
+                    n_splits=max(2, round(1 / test_size)), shuffle=True, random_state=seed
+                )
+                return next(splitter.split(positions, labels, groups=groups))
+        except ValueError:
+            pass
+    splitter = GroupShuffleSplit(n_splits=1, test_size=test_size, random_state=seed)
+    return next(splitter.split(positions, labels, groups=groups))
+
+
+def identical_row_ids(df: pd.DataFrame, columns: list[str], target_column: str) -> pd.Series:
+    """One id per distinct (model inputs, answer) among the rows that have an answer.
+
+    Two rows share an id when a model would see them as the same question with the same
+    answer -- the columns it learns from, plus the target. Columns it never sees (an excluded
+    identifier) are left out on purpose: two rows that differ only in a customer number are
+    still, to the model, a question it has already been shown the answer to.
+    """
+    labelled = df[df[target_column].notna()]
+    present = [c for c in dict.fromkeys(columns) if c in labelled.columns and c != target_column]
+    hashed = pd.util.hash_pandas_object(labelled[[*present, target_column]], index=False)
+    return pd.Series(hashed.to_numpy(), index=labelled.index)
+
+
 def split_data(
     df: pd.DataFrame,
     target_column: str,
@@ -351,6 +395,7 @@ def split_data(
     time_column: str | None = None,
     group_column: str | None = None,
     test_size: float = DEFAULT_TEST_SIZE,
+    duplicate_columns: list[str] | None = None,
 ):
     """Holds out a test set. Returns (X_train, X_test, y_train, y_test).
 
@@ -364,6 +409,12 @@ def split_data(
     their rows in training and some in test, and the model scores well by recognising the
     entity rather than learning the pattern. The app has detected this for a while and could
     only advise treating the scores as optimistic; this is the fix it was pointing at.
+
+    `duplicate_columns` (random strategy only) names the model's input columns. When given, rows
+    that are exact copies of each other -- those inputs and the answer -- go to the same side,
+    so no test row is a question the model was shown the answer to. It changes nothing when
+    there are no copies: the split is then exactly the ordinary one. Other strategies already
+    keep their units whole (an entity, a timestamp); copies across those are still counted.
     """
     from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
@@ -425,6 +476,19 @@ def split_data(
             labels.iloc[train_pos],
             labels.iloc[test_pos],
         )
+
+    if duplicate_columns:
+        ids = identical_row_ids(labelled, duplicate_columns, target_column)
+        if ids.nunique() < len(ids):
+            train_pos, test_pos = split_keeping_identical_rows_together(
+                labels, ids.to_numpy(), task == "classification", test_size, RANDOM_STATE
+            )
+            return (
+                features.iloc[train_pos],
+                features.iloc[test_pos],
+                labels.iloc[train_pos],
+                labels.iloc[test_pos],
+            )
 
     # Stratify classification splits so a rare class isn't absent from one side entirely.
     stratify = None
@@ -1035,6 +1099,7 @@ def train_candidates(
     point: operating_point.OperatingPoint | None = None,
     feature_recipes_wanted: list[str] | None = None,
     clip_outliers: list[str] | None = None,
+    keep_identical_rows_together: bool = False,
 ) -> dict:
     """Trains each requested model on the same split and returns everything needed to compare
     them. A model that fails to fit is reported rather than aborting the others.
@@ -1053,7 +1118,11 @@ def train_candidates(
     leaks. See features.py.
 
     `clip_outliers` are numeric inputs to clip to limits learned from the training fold, inside
-    the pipeline. See clipping.py."""
+    the pipeline. See clipping.py.
+
+    `keep_identical_rows_together` puts exact copies (the model's inputs and the answer) on one
+    side of a random split, so none of the test rows is a question the model has already been
+    shown the answer to. See `split_data`."""
     point = point or operating_point.OperatingPoint()
     if target_column not in df.columns:
         raise ModelingError(f"'{target_column}' is not in the data.")
@@ -1076,6 +1145,8 @@ def train_candidates(
             "excluded, empty, constant, or too unique to learn from."
         )
 
+    used = features["numeric"] + features["categorical"] + features["frequent"]
+    duplicate_columns = used if keep_identical_rows_together and split_strategy == "random" else None
     X_train, X_test, y_train, y_test = split_data(
         df,
         target_column,
@@ -1083,8 +1154,14 @@ def train_candidates(
         strategy=split_strategy,
         time_column=time_column,
         group_column=group_column,
+        duplicate_columns=duplicate_columns,
     )
-    used = features["numeric"] + features["categorical"] + features["frequent"]
+    # Whether copies were actually kept together: asking for it on a file with no copies is the
+    # ordinary split, and the ledger should key it as one.
+    kept_together = False
+    if duplicate_columns:
+        ids = identical_row_ids(df, duplicate_columns, target_column)
+        kept_together = bool(ids.nunique() < len(ids))
     X_train, X_test = X_train[used], X_test[used]
 
     results = []
@@ -1249,6 +1326,7 @@ def train_candidates(
             # look on. Not derived from the row counts, which move with the data.
             "requested_test_size": DEFAULT_TEST_SIZE,
             "seed": RANDOM_STATE,
+            "keep_duplicates_together": kept_together,
             # The fraction actually held out. A time split moves its cut to a timestamp
             # boundary, so this can differ from the 20% asked for.
             "test_fraction": round(len(X_test) / (len(X_train) + len(X_test)), 4),

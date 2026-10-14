@@ -375,6 +375,15 @@ to choose anything*. Every decision the model path makes was traced to the rows 
   finds identical inputs with different answers; identical rows with the *same* answer on both
   sides of the split — questions the model has already seen answered — were invisible. They are
   now counted, shown on the results page and cautioned in the model card.
+- **Copies of training rows in the test set can now be prevented, not just counted.** The plan
+  offers "keep identical rows together" when exact copies exist (the model's inputs and the
+  answer), pre-ticked because it guards against harm, with the count as evidence. Ticked, all
+  copies of a row go to one side of a random split — stratified so the rarer class still reaches
+  both — and the count of test rows seen in training is zero. It changes nothing when there are no
+  copies, applies only to the random split (the others already keep their own units whole), is
+  recorded as its own split rule in the test-set ledger, and the exported script carries the app's
+  own splitting function so it cuts the same rows. Near-duplicates (one cell different) are not
+  addressed.
 - **`drop_outlier_rows` wasn't warned about** alongside the other fixes that read a statistic
   from the whole file before any split.
 - **The app proposed fixes that leaked the test set into the training rows.** Filling blanks

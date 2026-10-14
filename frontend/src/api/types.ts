@@ -266,6 +266,12 @@ export interface ModelPlan {
   feature_recipes?: string[];
   /** Numeric inputs with extreme values, each with the evidence. Offered, never pre-ticked. */
   suggested_clipping?: ClippingOffer[];
+  /** Rows that are exact copies of another row -- inputs and answer -- among the default
+   * inputs, or null when there are none. */
+  identical_rows?: { copies: number; share: number; rows: number } | null;
+  /** Whether the form should open with "keep identical rows together" ticked: on when copies
+   * exist, or what the last run used. */
+  keep_identical_rows_together?: boolean;
 }
 
 /** How the held-out rows had been used when a run was made (decision 0001). */
@@ -368,6 +374,8 @@ export interface TrainRequest {
   /** Numeric inputs to clip to limits learned from the training rows, inside the pipeline.
    * Names that are not numeric inputs are ignored by the server. */
   clip_outliers?: string[];
+  /** Put exact copies of a row on one side of a random split. Ignored by the other splits. */
+  keep_identical_rows_together?: boolean;
 }
 
 /** The confusion matrix at one cut-off, as counts and rates. */
@@ -554,6 +562,8 @@ export interface ModelResult {
     test_groups: number | null;
     /** Test rows that are exact copies of a training row, answer included. */
     test_rows_seen_in_training?: number;
+    /** True when exact copies were kept on one side of the split. */
+    keep_duplicates_together?: boolean;
   };
   baseline: Record<string, number | string>;
   primary_metric: string;

@@ -109,6 +109,7 @@ def improve(
     feature_recipes_wanted: list[str] | None = None,
     on_stage: Callable[[str, str], None] | None = None,
     clip_outliers: list[str] | None = None,
+    keep_identical_rows_together: bool = False,
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
 
@@ -170,6 +171,9 @@ def improve(
         strategy=split_strategy,
         time_column=time_column,
         group_column=group_column,
+        duplicate_columns=(
+            used if keep_identical_rows_together and split_strategy == "random" else None
+        ),
     )
     # Captured before the frame is narrowed to the model's inputs, and aligned to the training
     # rows -- every round below compares configurations on these folds.

@@ -12,9 +12,11 @@ code template beside a hand-written pipeline drifts silently; this cannot.
 
 from __future__ import annotations
 
+import inspect
+import textwrap
 from datetime import datetime, timezone
 
-from app.services import clipping, features as feature_recipes
+from app.services import clipping, features as feature_recipes, modeling
 from app.services.modeling import (
     DEFAULT_TEST_SIZE,
     MODELS,
@@ -89,6 +91,12 @@ def _preprocessing_block(
     return entries, []
 
 
+def _function_source(function) -> str:
+    """A function's source, for copying into the script. See `_clipper_block` for why the app's
+    own text is used rather than a hand-written twin."""
+    return inspect.getsource(function).rstrip()
+
+
 def _split_block(split: dict, task: str) -> str:
     if split.get("strategy") == "time" and split.get("time_column"):
         return f'''# Time-based split: train on older rows, test on the most recent.
@@ -124,7 +132,7 @@ y_train, y_test = labels.iloc[train_pos], labels.iloc[test_pos]'''
         if task == "classification"
         else "\nstratify = None"
     )
-    return f"""{stratify}
+    standard = f"""{stratify}
 X_train, X_test, y_train, y_test = train_test_split(
     features,
     labels,
@@ -132,6 +140,29 @@ X_train, X_test, y_train, y_test = train_test_split(
     random_state={RANDOM_STATE},
     stratify=stratify,
 )"""
+
+    if not split.get("keep_duplicates_together"):
+        return standard
+
+    # Exact copies stay on one side. The function is the app's own, copied from its source
+    # rather than rewritten, so this script cuts the same rows the app did; where there are no
+    # copies the split is the ordinary one, as it is in the app.
+    return f"""{_function_source(modeling.split_keeping_identical_rows_together)}
+
+# Rows that are exact copies of each other -- the model's inputs and the answer -- stay on one
+# side of the split. A copy in the test set is a question the model was already shown the
+# answer to, and it would flatter every number below.
+duplicate_key = pd.util.hash_pandas_object(
+    labelled[NUMERIC_FEATURES + CATEGORICAL_FEATURES + FREQUENT_FEATURES + [TARGET]], index=False
+)
+if duplicate_key.nunique() < len(duplicate_key):
+    train_pos, test_pos = split_keeping_identical_rows_together(
+        labels, duplicate_key.to_numpy(), {task == "classification"}, {DEFAULT_TEST_SIZE}, {RANDOM_STATE}
+    )
+    X_train, X_test = features.iloc[train_pos], features.iloc[test_pos]
+    y_train, y_test = labels.iloc[train_pos], labels.iloc[test_pos]
+else:
+{textwrap.indent(standard.strip(chr(10)), "    ")}"""
 
 
 def _evaluation_block(task: str, point: dict | None = None) -> str:

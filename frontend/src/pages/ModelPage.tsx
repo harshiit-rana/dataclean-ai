@@ -55,6 +55,7 @@ export function requestFromResult(result: ModelResult): TrainRequest {
         : null,
     feature_recipes: (result.features.derived ?? []).map((recipe) => recipe.id),
     clip_outliers: result.features.clipped ?? [],
+    keep_identical_rows_together: result.split.keep_duplicates_together ?? false,
   };
 }
 
@@ -155,6 +156,8 @@ export function ModelPage() {
       // Part of what is being improved, not something the loop searches over: a run that
       // clipped its inputs should be improved with them clipped.
       clip_outliers: base?.clip_outliers ?? plan?.features.clipped ?? [],
+      keep_identical_rows_together:
+        base?.keep_identical_rows_together ?? plan?.keep_identical_rows_together ?? false,
       include_deep_diagnostics: true,
       goal: target,
     };

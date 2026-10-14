@@ -154,6 +154,12 @@ are both running locally, you're ready to make changes.
   is never split across the two; `model_export._split_block` writes the same lines into
   `train_model.py`, and a test executes that block against the app's split. Change one, change
   both.
+- **Splitting rules that the script must reproduce are one function, copied by source.**
+  `modeling.split_keeping_identical_rows_together` is self-contained and `model_export` embeds
+  its text with `inspect.getsource`, as it does `clipping.IQRClipper`. Where the app's rule is a
+  few lines of pandas (the date cut), a test executes the generated block and compares the app's
+  test indices. Either way, a split the script cannot reproduce makes every exported number
+  wrong.
 - **A grouped split has to be grouped all the way down.** Choosing `split_strategy="group"`
   changes four things, not one: the train/test split uses `GroupShuffleSplit`, cross-validation
   uses `GroupKFold`, the improvement loop's search folds are grouped, and the grouping column

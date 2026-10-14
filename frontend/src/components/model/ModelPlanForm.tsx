@@ -33,6 +33,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
   const [splitStrategy, setSplitStrategy] = useState<"random" | "time" | "group">("random");
   const [recipes, setRecipes] = useState<string[]>(plan.feature_recipes ?? []);
   const [clip, setClip] = useState<string[]>(plan.features.clipped ?? []);
+  const [keepCopies, setKeepCopies] = useState<boolean>(plan.keep_identical_rows_together ?? false);
   const [timeColumn, setTimeColumn] = useState<string>(plan.date_columns[0] ?? "");
   // Defaults to the most-repeated column, which is the one the readiness panel names.
   const [groupColumn, setGroupColumn] = useState<string>(plan.group_columns?.[0] ?? "");
@@ -202,6 +203,28 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
             </Select>
           )}
 
+          {splitStrategy === "random" && plan.identical_rows && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-md border border-amber-500/50 p-3">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={keepCopies}
+                onChange={() => setKeepCopies((on) => !on)}
+              />
+              <span className="flex-1 text-sm">
+                <span className="font-medium">Keep identical rows together</span>
+                <span className="mt-0.5 block text-xs text-muted-foreground">
+                  {plan.identical_rows.copies.toLocaleString()} rows (
+                  {Math.round(plan.identical_rows.share * 100)}%) are exact copies of another row,
+                  answer included. A copy in the test set is a question the model has already
+                  been shown the answer to, which flatters every score. Ticked, all copies of a
+                  row go to the same side. If they are genuine repeats rather than duplicated
+                  records, untick it.
+                </span>
+              </span>
+            </label>
+          )}
+
           {splitStrategy === "group" && (plan.group_columns?.length ?? 0) > 0 && (
             <div className="flex flex-col gap-1">
               <Select value={groupColumn} onChange={(e) => setGroupColumn(e.target.value)}>
@@ -279,6 +302,8 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
               operating_point: twoClass ? operatingPoint : null,
               feature_recipes: liveRecipes,
               clip_outliers: liveClip,
+              keep_identical_rows_together:
+                splitStrategy === "random" && Boolean(plan.identical_rows) && keepCopies,
             })
           }
           disabled={training || models.length === 0 || blocked || !tradeOffReady}
