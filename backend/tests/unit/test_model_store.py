@@ -13,6 +13,10 @@ happened would be a lie. It is kept, and labelled.
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
+import time
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -131,6 +135,96 @@ class TestFingerprinting:
         """A fingerprint is a nicety. Failing a completed training run over one would be
         losing a result that exists."""
         assert model_store.fingerprint_frame(object()) == ""
+
+    def test_a_change_past_the_first_fifty_rows_changes_it(self):
+        """The old fingerprint hashed `head(50)`, so a fix that touched only later rows -- an
+        undo, or a chat instruction replacing a value -- left it unchanged and two different
+        datasets were compared as like for like."""
+        df = pd.DataFrame({"a": range(1000), "b": ["x", "y"] * 500})
+        edited = df.copy()
+        edited.loc[500, "a"] = -1
+        assert model_store.fingerprint_frame(df) != model_store.fingerprint_frame(edited)
+
+    def test_a_single_text_cell_changes_it(self):
+        df = pd.DataFrame({"a": range(1000), "b": ["x", "y"] * 500})
+        edited = df.copy()
+        edited.loc[777, "b"] = "z"
+        assert model_store.fingerprint_frame(df) != model_store.fingerprint_frame(edited)
+
+    def test_reordering_columns_changes_it(self):
+        df = pd.DataFrame({"a": range(20), "b": range(20, 40)})
+        assert model_store.fingerprint_frame(df) != model_store.fingerprint_frame(df[["b", "a"]])
+
+    def test_reordering_rows_changes_it(self):
+        """Row order matters to a time-based split and to anything ordered, so it is part of
+        what the data is."""
+        df = pd.DataFrame({"a": range(20), "b": range(20, 40)})
+        assert model_store.fingerprint_frame(df) != model_store.fingerprint_frame(df.iloc[::-1])
+
+    def test_the_row_index_alone_does_not_change_it(self):
+        df = pd.DataFrame({"a": range(20), "b": range(20, 40)})
+        reindexed = df.set_axis(range(100, 120))
+        assert model_store.fingerprint_frame(df) == model_store.fingerprint_frame(reindexed)
+
+    def test_a_changed_column_type_changes_it(self):
+        """int64 in one export and float64 in the next is not the same data to a model."""
+        df = pd.DataFrame({"a": [1, 2, 3, 4]})
+        assert model_store.fingerprint_frame(df) != model_store.fingerprint_frame(
+            df.astype({"a": "float64"})
+        )
+
+    def test_missing_values_are_hashed_consistently(self):
+        df = pd.DataFrame({"a": [1.0, None, 3.0], "b": ["x", None, "z"]})
+        assert model_store.fingerprint_frame(df) == model_store.fingerprint_frame(df.copy())
+
+    def test_the_short_form_is_a_prefix_of_the_full_digest(self):
+        """The ledger stores the full digest; history and the UI use the short one. They have
+        to be the same fact at two lengths."""
+        df = pd.DataFrame({"a": range(20)})
+        full = model_store.full_fingerprint(df)
+        assert len(full) == 64
+        assert len(model_store.fingerprint_frame(df)) == 16
+        assert full.startswith(model_store.fingerprint_frame(df))
+
+    def test_it_is_the_same_in_another_process(self, tmp_path):
+        """Python randomises `hash()` per process. A fingerprint built on it would call the
+        same file two different things on either side of a restart."""
+        df = pd.DataFrame(
+            {"a": range(300), "b": ["x", "y", None] * 100, "c": np.linspace(0, 1, 300)}
+        )
+        path = tmp_path / "data.csv"
+        df.to_csv(path, index=False)
+        here = model_store.full_fingerprint(pd.read_csv(path))
+        backend = Path(model_store.__file__).resolve().parents[2]
+        code = (
+            "import sys, pandas as pd; from app.services import model_store; "
+            "print(model_store.full_fingerprint(pd.read_csv(sys.argv[1])))"
+        )
+        out = subprocess.run(
+            [sys.executable, "-c", code, str(path)],
+            cwd=backend,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+        assert out == here
+
+    def test_a_file_at_the_upload_limit_is_hashed_quickly(self):
+        """500k rows by 12 columns is about the 50 MB upload limit. The bound is loose
+        (the issue's target is under a second) so a slow runner does not make it flaky; its
+        job is to catch a regression to something quadratic or per-cell in Python."""
+        rng = np.random.default_rng(0)
+        rows = 500_000
+        df = pd.DataFrame({f"n{i}": rng.normal(size=rows) for i in range(6)})
+        for i in range(3):
+            df[f"i{i}"] = rng.integers(0, 1000, size=rows)
+        for i in range(3):
+            df[f"t{i}"] = rng.choice(["alpha", "beta", "gamma", "delta", None], size=rows)
+        started = time.perf_counter()
+        digest = model_store.full_fingerprint(df)
+        elapsed = time.perf_counter() - started
+        assert len(digest) == 64
+        assert elapsed < 5, f"fingerprinting took {elapsed:.1f}s"
 
 
 class TestBookkeepingNeverLosesAResult:

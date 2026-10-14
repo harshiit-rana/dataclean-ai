@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -214,27 +215,46 @@ def pipeline_path(directory: Path) -> Optional[Path]:
     return path if path.exists() else None
 
 
-def fingerprint_frame(df) -> str:
-    """A short digest of the data a run was trained on.
+def full_fingerprint(df) -> str:
+    """A SHA-256 digest of everything the model would see: every cell, the column names and
+    order, the column types and the row order.
 
-    Shape plus column names plus the target's own values. Not a full content hash: hashing
-    every cell of a large frame on every training run would cost more than the fact is worth,
-    and this catches what actually changes between runs -- rows dropped, columns removed, a
-    column's values rewritten by a fix.
+    This used to sample the first 50 rows, on the grounds that hashing every cell on every
+    training run cost more than it was worth. It cost almost nothing -- pandas hashes a row at
+    a time in compiled code -- and the sample missed the case that matters: a fix that only
+    touches rows past the first 50 left the fingerprint unchanged, so two runs on different
+    data were compared as like for like, and nothing could reliably key an evaluation to the
+    data version it was made on.
+
+    Deterministic across processes: `hash_pandas_object` uses a fixed key, not Python's
+    per-process randomised `hash`. Types are part of it on purpose -- a column that arrives as
+    int64 in one export and float64 in the next changes what the model is given, so it is not
+    the same data. The row index is not: a position carries no information the cells do not.
+    """
+    digest = hashlib.sha256()
+    digest.update(json.dumps([str(c) for c in df.columns]).encode("utf-8"))
+    digest.update(json.dumps([str(t) for t in df.dtypes]).encode("utf-8"))
+    digest.update(str(df.shape).encode("utf-8"))
+    digest.update(pd.util.hash_pandas_object(df, index=False).to_numpy().tobytes())
+    return digest.hexdigest()
+
+
+def fingerprint_frame(df) -> str:
+    """The short form of `full_fingerprint`, for display and for tagging run history.
+
+    Sixteen hex characters. Anything that needs to *rely* on the identity of a dataset -- the
+    test-set ledger, for one -- should store `full_fingerprint`.
+
+    Never raises: a fingerprint is a nicety, and failing a finished training run over one
+    would lose a result that exists. History entries written before the full hash have the
+    old twelve-character form; they never match a new fingerprint, which is the right answer,
+    because they were taken from a sample and cannot be shown to describe the current data.
     """
     try:
-        parts = [str(df.shape), "|".join(map(str, df.columns))]
-        digest = hashlib.sha256("::".join(parts).encode("utf-8"))
-        # Cheap sample of the contents, so an edit that keeps the shape still moves the hash.
-        digest.update(pd_head_bytes(df))
-        return digest.hexdigest()[:12]
+        return full_fingerprint(df)[:16]
     except Exception:  # noqa: BLE001 -- a fingerprint is a nicety; never fail a run for it
         logger.warning("Could not fingerprint the training data", exc_info=True)
         return ""
-
-
-def pd_head_bytes(df, rows: int = 50) -> bytes:
-    return df.head(rows).to_csv(index=False).encode("utf-8", errors="replace")
 
 
 def clear(directory: Path) -> None:
