@@ -116,8 +116,26 @@ def _classification_metrics(weights, y_true, y_pred, scores, positive_label) -> 
     metrics.update({"precision": precision, "recall": recall, "f1": f1})
 
     if binary and scores is not None:
-        metrics["roc_auc"] = _binary_auc(weights, y_true == positive_label, scores)
+        is_case = y_true == positive_label
+        metrics["roc_auc"] = _binary_auc(weights, is_case, scores)
+        metrics.update(_calibration_metrics(weights, is_case.astype(float), scores, total))
     return metrics
+
+
+def _calibration_metrics(weights, y_binary, scores, total) -> dict[str, np.ndarray]:
+    """Brier score and expected calibration error, weighted. The error is the count-weighted mean
+    of |predicted - observed| per bin, which is |sum of w * (p - y) in the bin| summed over bins and
+    divided by the total weight -- so each resample needs one matrix product, not a loop."""
+    from app.services import diagnostics
+
+    residual = scores - y_binary
+    slots = diagnostics.calibration_slots(scores)
+    members = np.zeros((len(scores), diagnostics.CALIBRATION_BINS))
+    members[np.arange(len(scores)), slots] = residual
+    return {
+        "brier_score": _ratio(weights @ (residual**2), total),
+        "expected_calibration_error": _ratio(np.abs(weights @ members).sum(axis=1), total),
+    }
 
 
 def _regression_metrics(weights, y_true, y_pred) -> dict[str, np.ndarray]:

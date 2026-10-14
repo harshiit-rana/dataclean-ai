@@ -361,6 +361,12 @@ are both running locally, you're ready to make changes.
   from the data, not from the call. Do not interpret the interval with a plain paired t-test:
   `uncertainty.fold_difference` applies the Nadeau-Bengio correction for overlapping training
   sets, and the page's wording depends on it.
+- **A new two-class metric goes in four places.** `modeling.evaluate` computes it, `uncertainty`
+  recomputes it as a weighted sum (so it gets a range, and a test holds the two equal), the card's
+  `_METRIC_LABELS` explains it in plain English, and the frontend's `CLASSIFICATION_KEYS` lists it.
+  Brier score and calibration error are the template: they share their bins with the chart through
+  `diagnostics.calibration_slots`, so the figure printed beside the chart is the chart's own, and
+  they are shown lower-is-better without a pass/fail colour.
 - **A headline held-out number carries its interval, and the interval's arithmetic is held to
   `evaluate`.** `uncertainty.py` recomputes every headline metric as a weighted sum over one set
   of predictions (a resample is a vector of draw counts). If you add a metric to `evaluate`, add

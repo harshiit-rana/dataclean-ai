@@ -36,6 +36,17 @@ _METRIC_LABELS = {
     "recall": ("Recall", "Of the real cases, how many it catches."),
     "f1": ("F1", "A single score balancing precision and recall."),
     "roc_auc": ("ROC AUC", "How well it ranks cases. 0.50 is a coin flip, 1.00 is perfect."),
+    "brier_score": (
+        "Brier score",
+        "How far its probabilities are from what happened, squared and averaged. 0 is perfect; "
+        "lower is better, and the 'no model at all' row is what always predicting the overall "
+        "rate scores.",
+    ),
+    "expected_calibration_error": (
+        "Calibration error",
+        "On average, how far 'X% likely' is from how often it really happens. 0 means honest "
+        "probabilities; lower is better. Noisy on a small test set, so read it with its range.",
+    ),
     "r2": ("R²", "How much of the variation it explains. 0 is no better than the average."),
     "mae": ("Mean absolute error", "The typical size of a miss, in the target's own units."),
     "rmse": ("RMSE", "Like the above, but punishes large misses more."),
@@ -155,7 +166,7 @@ def _held_out_comparison(result: dict, chosen_only: bool = False) -> list[str]:
     keys = (
         ["r2", "mae", "rmse"]
         if task == "regression"
-        else ["accuracy", "precision", "recall", "f1", "roc_auc"]
+        else ["accuracy", "precision", "recall", "f1", "roc_auc", "brier_score", "expected_calibration_error"]
     )
     present = [
         k

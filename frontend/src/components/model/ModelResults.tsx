@@ -34,10 +34,31 @@ const METRIC_LABELS: Record<string, string> = {
   recall: "Recall",
   f1: "F1",
   roc_auc: "ROC AUC",
+  brier_score: "Brier score",
+  expected_calibration_error: "Calibration error",
   r2: "R²",
   mae: "Mean error",
   rmse: "RMSE",
 };
+
+/** Held-out scores for a classification, in reading order. The last two are about the
+ * probabilities rather than the answers, are lower-is-better, and exist for two classes only. */
+const CLASSIFICATION_KEYS = [
+  "accuracy",
+  "precision",
+  "recall",
+  "f1",
+  "roc_auc",
+  "brier_score",
+  "expected_calibration_error",
+];
+const LOWER_IS_BETTER = new Set(["brier_score", "expected_calibration_error"]);
+
+function lowerIsBetterNote(keys: string[]): string {
+  return keys.some((key) => LOWER_IS_BETTER.has(key))
+    ? " For Brier score and calibration error, lower is better."
+    : "";
+}
 
 const VERDICT_STYLES: Record<string, { title: string; className: string }> = {
   useful: { title: "This model works", className: "border-emerald-500/40 bg-emerald-500/5" },
@@ -53,6 +74,8 @@ const VERDICT_STYLES: Record<string, { title: string; className: string }> = {
     className: "border-sky-500/40 bg-sky-500/5",
   },
 };
+
+const numberOrUndefined = (value: unknown) => (typeof value === "number" ? value : undefined);
 
 function formatMetric(value: unknown): string {
   if (typeof value !== "number") return "—";
@@ -111,6 +134,7 @@ function HeldOutScores({
         <caption className="pb-1 text-left text-xs text-muted-foreground">
           Scored once on the held-out rows, for the chosen model only.
           {intervalNote(best.metrics_intervals) && ` ${intervalNote(best.metrics_intervals)}`}
+          {lowerIsBetterNote(keys)}
         </caption>
         <thead>
           <tr>
@@ -405,10 +429,7 @@ function SealedHoldout({
   }
 
   const final = result.evaluation?.final;
-  const keys =
-    result.task === "regression"
-      ? ["r2", "mae", "rmse"]
-      : ["accuracy", "precision", "recall", "f1", "roc_auc"];
+  const keys = result.task === "regression" ? ["r2", "mae", "rmse"] : CLASSIFICATION_KEYS;
   const shown = keys.filter((key) => typeof final?.metrics?.[key] === "number");
   const late = (split.sealed_after_looks ?? 0) > 0;
 
@@ -460,6 +481,7 @@ function SealedHoldout({
                 <caption className="pb-1 text-left text-xs text-muted-foreground">
                   Scored once on the {final.rows?.toLocaleString()} sealed rows.
                   {intervalNote(final.metrics_intervals) && ` ${intervalNote(final.metrics_intervals)}`}
+                  {lowerIsBetterNote(shown)}
                 </caption>
                 <thead>
                   <tr>
@@ -524,10 +546,7 @@ export function ModelResults({
   const diagnostics = best?.diagnostics ?? {};
   const deep = result.deep_diagnostics ?? {};
 
-  const metricKeys =
-    result.task === "regression"
-      ? ["r2", "mae", "rmse"]
-      : ["accuracy", "precision", "recall", "f1", "roc_auc"];
+  const metricKeys = result.task === "regression" ? ["r2", "mae", "rmse"] : CLASSIFICATION_KEYS;
   const presentKeys = metricKeys.filter((key) =>
     result.results.some((r) => typeof r.metrics[key] === "number")
   );
@@ -662,7 +681,16 @@ export function ModelResults({
               }
             />
           )}
-          {diagnostics.calibration && <CalibrationChart points={diagnostics.calibration} />}
+          {diagnostics.calibration && (
+            <CalibrationChart
+              points={diagnostics.calibration}
+              summary={{
+                brierScore: numberOrUndefined(best?.metrics.brier_score),
+                brierBaseline: numberOrUndefined(result.baseline.brier_score),
+                calibrationError: numberOrUndefined(best?.metrics.expected_calibration_error),
+              }}
+            />
+          )}
           {diagnostics.class_distribution && (
             <ClassDistributionChart counts={diagnostics.class_distribution} />
           )}

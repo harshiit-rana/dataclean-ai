@@ -101,6 +101,14 @@ def precision_recall_points(y_binary: np.ndarray, scores: np.ndarray) -> list[di
     return _thin(points, MAX_CURVE_POINTS)
 
 
+def calibration_slots(scores, bins: int = CALIBRATION_BINS) -> np.ndarray:
+    """Which of the equal-width probability bins each score falls in. The one definition of the
+    bins: the chart, the calibration error and its bootstrap interval all use it, so the number
+    printed beside the chart is the chart's own."""
+    edges = np.linspace(0.0, 1.0, bins + 1)
+    return np.clip(np.digitize(np.asarray(scores, dtype=float), edges[1:-1]), 0, bins - 1)
+
+
 def calibration_points(y_binary: np.ndarray, scores: np.ndarray, bins: int = CALIBRATION_BINS) -> list[dict]:
     """Does "70% likely" actually happen 70% of the time?
 
@@ -108,7 +116,7 @@ def calibration_points(y_binary: np.ndarray, scores: np.ndarray, bins: int = CAL
     that matters the moment anyone treats the number as a probability rather than a ranking.
     """
     edges = np.linspace(0.0, 1.0, bins + 1)
-    slots = np.clip(np.digitize(scores, edges[1:-1]), 0, bins - 1)
+    slots = calibration_slots(scores, bins)
 
     points = []
     for b in range(bins):
@@ -126,6 +134,38 @@ def calibration_points(y_binary: np.ndarray, scores: np.ndarray, bins: int = CAL
             }
         )
     return points
+
+
+def expected_calibration_error(y_binary, scores, bins: int = CALIBRATION_BINS) -> float:
+    """How far "X% likely" is from how often it happened, averaged over the rows.
+
+    The count-weighted mean of |predicted - observed| over the same bins as `calibration_points`,
+    so a bin holding most of the rows counts for most of it. 0 is perfectly honest probabilities.
+    It is noisy on a small test set -- a bin with six rows swings by a sixth with each row -- so
+    it is shown beside its interval and the bin counts, not as a pass or a fail.
+    """
+    y = np.asarray(y_binary, dtype=float)
+    p = np.asarray(scores, dtype=float)
+    if len(y) == 0:
+        return float("nan")
+    slots = calibration_slots(p, bins)
+    gap = 0.0
+    for b in range(bins):
+        mask = slots == b
+        if mask.any():
+            gap += abs(float((p[mask] - y[mask]).sum()))
+    return gap / len(y)
+
+
+def calibration_summary(y_binary, scores, bins: int = CALIBRATION_BINS) -> dict:
+    """The two numbers that summarise the calibration chart: the Brier score (the mean squared
+    distance between each probability and what happened, 0 perfect) and the calibration error."""
+    from sklearn.metrics import brier_score_loss
+
+    return {
+        "brier_score": round(float(brier_score_loss(y_binary, scores)), 4),
+        "expected_calibration_error": round(float(expected_calibration_error(y_binary, scores, bins)), 4),
+    }
 
 
 def threshold_table(y_binary: np.ndarray, scores: np.ndarray, steps: int = 19) -> list[dict]:

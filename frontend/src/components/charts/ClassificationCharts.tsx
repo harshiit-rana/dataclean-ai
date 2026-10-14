@@ -178,14 +178,49 @@ export function PrecisionRecallChart({ points }: { points: PrecisionRecallPoint[
   );
 }
 
-export function CalibrationChart({ points }: { points: CalibrationPoint[] }) {
+/** The two numbers that summarise the chart, stated beside it rather than only drawn. */
+export interface CalibrationSummary {
+  /** Mean squared distance between each probability and what happened; 0 is perfect. */
+  brierScore?: number;
+  /** What always predicting the overall rate scores, the figure the Brier score is read against. */
+  brierBaseline?: number;
+  /** Count-weighted mean |predicted - observed| over these same bins; 0 is perfect. */
+  calibrationError?: number;
+}
+
+function calibrationSentence(summary?: CalibrationSummary): string {
+  if (!summary) return "";
+  const parts: string[] = [];
+  if (typeof summary.calibrationError === "number") {
+    parts.push(
+      `On average its probabilities are off by ${(summary.calibrationError * 100).toFixed(1)} percentage points (calibration error).`
+    );
+  }
+  if (typeof summary.brierScore === "number") {
+    const against =
+      typeof summary.brierBaseline === "number"
+        ? ` against ${summary.brierBaseline.toFixed(3)} for always predicting the overall rate`
+        : "";
+    parts.push(`Brier score ${summary.brierScore.toFixed(3)}${against} (lower is better).`);
+  }
+  if (parts.length) parts.push("Both are noisy on a small test set, so read them with the row counts.");
+  return parts.length ? ` ${parts.join(" ")}` : "";
+}
+
+export function CalibrationChart({
+  points,
+  summary,
+}: {
+  points: CalibrationPoint[];
+  summary?: CalibrationSummary;
+}) {
   const theme = useChartTheme();
   if (!points?.length) return null;
 
   return (
     <ChartCard
       title="Can you trust the probabilities?"
-      description="When it says 70% likely, does that happen 70% of the time? Points on the diagonal mean yes."
+      description={`When it says 70% likely, does that happen 70% of the time? Points on the diagonal mean yes.${calibrationSentence(summary)}`}
       tableColumns={[
         { key: "predicted", label: "Model said", numeric: true, format: (v) => pct(Number(v)) },
         { key: "actual", label: "Actually happened", numeric: true, format: (v) => pct(Number(v)) },

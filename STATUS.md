@@ -332,6 +332,16 @@ so on a lopsided target the curve could sit flat while the AUC improved and the 
 disagreeing about one model. All three now use the primary metric (AUC for two classes, accuracy
 for more, R² for a number), fixed from the training rows, and every chart and the card name it.
 
+**Calibration, in numbers.** The calibration chart showed whether "70% likely" happens 70% of the
+time but gave no figure, so two runs could not be compared on it, and the cut-off and the exported
+probabilities both depend on it. Two-class results now carry the **Brier score** (mean squared
+distance between each probability and what happened), the **expected calibration error** (the
+count-weighted mean of |predicted - observed| over the chart's own ten bins) and the Brier score of
+always predicting the training base rate, which is what the first has to be read against. They sit
+in the held-out table and the card with their bootstrap ranges, in the chart's description, and in
+the run history, are marked lower-is-better, and are deliberately not coloured pass or fail: the
+error is noisy on a small test set. Multi-class and regression results are unchanged.
+
 **The simplest model the folds cannot separate from the best.** The winner used to be the raw
 highest cross-validated score, so a forest that beat logistic regression by 0.002, with the folds
 disagreeing by 0.03, "won" although the evidence does not tell them apart. It is now the

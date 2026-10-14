@@ -855,6 +855,10 @@ def evaluate(pipeline, X_test, y_test, task: str, positive_label: str | None = N
             classes = [str(c) for c in pipeline.classes_]
             probabilities = pipeline.predict_proba(X_test)[:, classes.index(pos_label)]
             scores["roc_auc"] = round(float(sk.roc_auc_score(y_true == pos_label, probabilities)), 4)
+            # How honest the probabilities are, which AUC (a ranking) cannot say. Lower is better.
+            scores.update(
+                diagnostics.calibration_summary((y_true == pos_label).to_numpy().astype(int), probabilities)
+            )
         except Exception:  # noqa: BLE001 -- a missing AUC must not sink the whole evaluation
             logger.debug("ROC AUC could not be computed", exc_info=True)
 
@@ -914,10 +918,14 @@ def held_out_predictions(pipeline, X_test, y_test, task: str, positive_label: st
     return predictions, scores
 
 
-def baseline_score(y_train, y_test, task: str) -> dict:
+def baseline_score(y_train, y_test, task: str, positive_label: str | None = None) -> dict:
     """What you get without a model at all -- always guess the most common class, or always
     guess the mean. A model that can't beat this is not doing anything, and that fact is
-    easy to miss when accuracy alone looks high."""
+    easy to miss when accuracy alone looks high.
+
+    For two classes it also carries the Brier score of always predicting the training base rate
+    as the probability, which is what a model's Brier score has to be read against: 0.18 is
+    excellent when the base rate gives 0.25 and poor when it gives 0.19."""
     from sklearn import metrics as sk
 
     if task == "regression":
@@ -931,10 +939,16 @@ def baseline_score(y_train, y_test, task: str) -> dict:
 
     common = pd.Series(y_train).astype(str).value_counts().index[0]
     y_true = pd.Series(y_test).astype(str)
-    return {
+    baseline = {
         "strategy": f"always answer {common!r}",
         "accuracy": round(float((y_true == common).mean()), 4),
     }
+    labels = sorted(y_true.unique())
+    if len(labels) == 2:
+        positive = resolve_positive_label(labels, positive_label)
+        rate = float((pd.Series(y_train).astype(str) == positive).mean())
+        baseline["brier_score"] = round(float(((y_true == positive).astype(float) - rate).pow(2).mean()), 4)
+    return baseline
 
 
 # One-tailed z for a 5% false-alarm rate spread across k candidate models (0.05 / k). We
@@ -1700,7 +1714,11 @@ def train_candidates(
         scored = selection["scores"].get(entry["model"])
         entry["cv_score"] = scored["score"] if scored else None
         entry["cv_std"] = scored["std"] if scored else None
-    baseline = baseline_score(y_train, y_test, task)
+    baseline = baseline_score(y_train, y_test, task, point.positive_label)
+    for entry in results:
+        # Beside the candidate's own Brier score, where the history and the card can read it.
+        if "brier_score" in entry["metrics"] and "brier_score" in baseline:
+            entry["metrics"]["brier_baseline"] = baseline["brier_score"]
     # How far the headline held-out numbers could move on different rows. For the chosen model
     # only: it is the one whose score is reported, and the candidates' fold scores already
     # carry their own spread.

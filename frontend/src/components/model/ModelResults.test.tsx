@@ -469,3 +469,75 @@ describe("ModelResults — when the folds cannot tell the models apart (#34)", (
     expect(screen.queryByText(/within the noise of each other/)).not.toBeInTheDocument();
   });
 });
+
+describe("ModelResults — how honest the probabilities are (#24)", () => {
+  const calibrated = (): ModelResult => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.baseline = { ...r.baseline, brier_score: 0.2468 };
+    r.results[0].metrics = {
+      ...r.results[0].metrics,
+      brier_score: 0.1799,
+      expected_calibration_error: 0.0614,
+      brier_baseline: 0.2468,
+    };
+    r.results[0].metrics_intervals = {
+      level: 0.95,
+      resamples: 1000,
+      by: "rows",
+      metrics: {
+        brier_score: { low: 0.142, high: 0.2224 },
+        expected_calibration_error: { low: 0.0301, high: 0.1102 },
+      },
+    };
+    r.results[0].diagnostics = {
+      calibration: [
+        { predicted: 0.2, actual: 0.15, count: 80, bin_start: 0.1, bin_end: 0.2 },
+        { predicted: 0.8, actual: 0.85, count: 90, bin_start: 0.7, bin_end: 0.8 },
+      ],
+    };
+    return r;
+  };
+
+  it("adds the two columns to the held-out scores for a two-class result", () => {
+    render(<ModelResults result={calibrated()} />);
+    expect(screen.getByRole("columnheader", { name: "Brier score" })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Calibration error" })).toBeInTheDocument();
+  });
+
+  it("shows each with its range, so a noisy number is not read as exact", () => {
+    render(<ModelResults result={calibrated()} />);
+    expect(screen.getByText("(0.142–0.222)")).toBeInTheDocument();
+    expect(screen.getByText("(0.030–0.110)")).toBeInTheDocument();
+  });
+
+  it("shows the Brier score of predicting the overall rate in the no-model row", () => {
+    render(<ModelResults result={calibrated()} />);
+    expect(screen.getByText("0.247")).toBeInTheDocument();
+  });
+
+  it("says that lower is better for these two, which is the opposite of the others", () => {
+    render(<ModelResults result={calibrated()} />);
+    expect(screen.getByText(/For Brier score and calibration error, lower is better/)).toBeInTheDocument();
+  });
+
+  it("states the numbers in the calibration chart's description", () => {
+    render(<ModelResults result={calibrated()} />);
+    expect(screen.getByText(/off by 6\.1 percentage points \(calibration error\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Brier score 0\.180 against 0\.247 for always predicting the overall rate/)).toBeInTheDocument();
+  });
+
+  it("does not colour either number as passing or failing", () => {
+    const { container } = render(<ModelResults result={calibrated()} />);
+    const cell = screen.getByRole("columnheader", { name: "Calibration error" });
+    const column = Array.from(cell.parentElement!.children).indexOf(cell);
+    const value = cell.closest("table")!.querySelectorAll("tbody tr")[0].children[column];
+    expect(value.className).not.toMatch(/emerald|destructive|amber|red-/);
+    expect(container.querySelector("[data-calibration-verdict]")).toBeNull();
+  });
+
+  it("is unchanged for a result with no probabilities to judge", () => {
+    render(<ModelResults result={result({ evaluation: EVAL(1, "independent") })} />);
+    expect(screen.queryByRole("columnheader", { name: "Brier score" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/lower is better/)).not.toBeInTheDocument();
+  });
+});
