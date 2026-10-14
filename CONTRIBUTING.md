@@ -41,6 +41,12 @@ are both running locally, you're ready to make changes.
 - Frontend: `cd frontend && npm test && npm run build` should both pass.
 - Keep stub signatures intact if you're not implementing them yet -- other code and tests
   are written against those signatures.
+- If you added anything that **decides** something -- picks a model, a setting, a feature, a
+  threshold, a column to drop, a number shown beside the score -- add a case for that decision
+  path to `backend/tests/unit/test_evaluation_integrity.py`. It runs the path twice, once with
+  every held-out answer flipped, and requires the same decision both times. A new round in
+  the improvement loop, a feature-selection step, an ensemble, a calibration fit, a search
+  strategy: each one is a decision path, and each one needs its case before it is merged.
 
 ## Conventions worth knowing
 

@@ -1,0 +1,348 @@
+"""The held-out test set must never inform a decision.
+
+This is the project's central integrity property, pinned in one place. For each decision the app
+makes, the scenario runs twice -- once honestly, once with **every test-set answer flipped** --
+and every decision must be identical: the chosen model, the tuned settings, the derived inputs
+kept, the cut-off, the columns suggested for exclusion, the cross-validation spread and learning
+curve. The only thing allowed to differ is the *report* of how the final model scored on the
+held-out rows, and each case asserts that it did differ, so a patch that silently stopped
+working cannot let the equalities pass over nothing.
+
+Why a flip rather than a shuffle or a deletion: a decision that read the held-out answers
+anywhere -- to rank candidates, to pick a threshold, to decide a column leaks -- moves when the
+answers are reversed, because reversing them turns the best model on that data into the worst.
+
+**Every new decision path adds a case here** (see CONTRIBUTING.md). Feature selection, ensembles,
+calibration and new search strategies belong in this file before they are merged. A case is
+cheap: run the path on `learnable`/`dated`, flip with `flipped_test_answers`, compare decisions,
+assert the report moved.
+"""
+
+from __future__ import annotations
+
+import numpy as np
+import pandas as pd
+import pytest
+
+from app.services import (
+    diagnostics,
+    features as feature_recipes,
+    improvement,
+    ml_readiness,
+    modeling,
+    operating_point,
+)
+from app.services.operating_point import OperatingPoint
+
+MODELS = ["logistic_regression", "random_forest_classifier"]
+
+
+# ------------------------------------------------------------------ the two worlds
+
+
+@pytest.fixture
+def learnable() -> pd.DataFrame:
+    """Non-linear, so the tree model and the linear one genuinely differ, with both classes
+    well represented -- flipping answers must not leave a model nothing to fit."""
+    rng = np.random.default_rng(21)
+    n = 400
+    a, b = rng.normal(0, 1, n), rng.normal(0, 1, n)
+    probability = 1 / (1 + np.exp(-(2.0 * a * b + 0.8 * a)))
+    return pd.DataFrame(
+        {
+            "a": a,
+            "b": b,
+            "noise": rng.normal(0, 1, n),
+            "outcome": np.where(rng.random(n) < probability, "yes", "no"),
+        }
+    )
+
+
+@pytest.fixture
+def dated() -> pd.DataFrame:
+    """The answer depends on the weekday of a date column, so the derived-inputs round of the
+    improvement loop has a real decision to make."""
+    rng = np.random.default_rng(8)
+    n = 420
+    when = pd.date_range("2021-01-01", periods=n, freq="D")
+    weekend = when.dayofweek >= 5
+    signal = rng.normal(0, 1, n)
+    probability = 1 / (1 + np.exp(-(1.5 * signal + 2.0 * weekend - 1.0)))
+    return pd.DataFrame(
+        {
+            "signal": signal,
+            "noise": rng.normal(0, 1, n),
+            "when": when.astype(str),
+            "outcome": np.where(rng.random(n) < probability, "yes", "no"),
+        }
+    )
+
+
+@pytest.fixture
+def flipped_test_answers(monkeypatch):
+    """Call it to switch the rest of the test into the world where every held-out answer is
+    reversed. Training rows are untouched; the partition is the same rows."""
+    real_split = modeling.split_data
+
+    def activate(task: str = "classification"):
+        def flipped(*args, **kwargs):
+            X_train, X_test, y_train, y_test = real_split(*args, **kwargs)
+            if task == "classification":
+                swap = {"yes": "no", "no": "yes"}
+                y_test = y_test.map(swap)
+            else:
+                y_test = y_test.max() + y_test.min() - y_test
+            return X_train, X_test, y_train, y_test
+
+        monkeypatch.setattr(modeling, "split_data", flipped)
+
+    return activate
+
+
+def _chosen(result: dict) -> dict:
+    return next(r for r in result["results"] if r["model"] == result["best_model"])
+
+
+# ------------------------------------------------------------------ which model
+
+
+class TestChoosingTheModel:
+    def _train(self, df, **kwargs):
+        return modeling.train_candidates(
+            df, target_column="outcome", task="classification", model_names=MODELS,
+            include_deep_diagnostics=False, **kwargs,
+        )
+
+    def test_the_chosen_model_and_every_fold_score_are_unmoved(self, learnable, flipped_test_answers):
+        honest = self._train(learnable)
+        flipped_test_answers()
+        rigged = self._train(learnable)
+
+        assert rigged["best_model"] == honest["best_model"]
+        assert [(r["model"], r["cv_score"], r["cv_std"]) for r in rigged["results"]] == [
+            (r["model"], r["cv_score"], r["cv_std"]) for r in honest["results"]
+        ]
+        assert rigged["selection"] == honest["selection"]
+        # The report is allowed to move -- and has to, or the flip did nothing.
+        assert _chosen(rigged)["metrics"]["roc_auc"] != _chosen(honest)["metrics"]["roc_auc"]
+        assert _chosen(rigged)["metrics"]["roc_auc"] < 0.5 < _chosen(honest)["metrics"]["roc_auc"]
+
+    def test_the_same_for_a_regression_target(self, flipped_test_answers):
+        rng = np.random.default_rng(3)
+        n = 400
+        x = rng.normal(0, 1, n)
+        df = pd.DataFrame({"x": x, "z": rng.normal(0, 1, n), "price": 3 * x + rng.normal(0, 0.5, n)})
+        names = ["linear_regression", "random_forest_regressor"]
+
+        def train():
+            return modeling.train_candidates(
+                df, target_column="price", task="regression", model_names=names,
+                include_deep_diagnostics=False,
+            )
+
+        honest = train()
+        flipped_test_answers("regression")
+        rigged = train()
+
+        assert rigged["best_model"] == honest["best_model"]
+        assert [r["cv_score"] for r in rigged["results"]] == [r["cv_score"] for r in honest["results"]]
+        assert _chosen(rigged)["metrics"]["r2"] != _chosen(honest)["metrics"]["r2"]
+
+    def test_the_same_under_a_date_split(self, dated, flipped_test_answers):
+        kwargs = {"split_strategy": "time", "time_column": "when"}
+        honest = self._train(dated, **kwargs)
+        flipped_test_answers()
+        rigged = self._train(dated, **kwargs)
+        assert rigged["best_model"] == honest["best_model"]
+        assert rigged["selection"] == honest["selection"]
+        assert _chosen(rigged)["metrics"]["roc_auc"] != _chosen(honest)["metrics"]["roc_auc"]
+
+
+# ------------------------------------------------------------------ the cut-off
+
+
+class TestChoosingTheCutOff:
+    def _train(self, df):
+        return modeling.train_candidates(
+            df, target_column="outcome", task="classification",
+            model_names=["logistic_regression"], include_deep_diagnostics=False,
+            point=OperatingPoint("f1"),
+        )
+
+    def test_the_line_and_what_the_folds_promised_are_unmoved(self, learnable, flipped_test_answers):
+        honest = self._train(learnable)["operating_point"]
+        flipped_test_answers()
+        rigged = self._train(learnable)["operating_point"]
+
+        assert rigged["threshold"] == honest["threshold"]
+        assert rigged["expected"] == honest["expected"]
+        assert rigged["observed"] != honest["observed"]  # what the test set delivered moves
+
+    def test_the_direct_call_agrees(self, learnable):
+        """`operating_point.apply` itself, without the training wrapper around it."""
+        X_train, X_test, y_train, y_test = modeling.split_data(learnable, "outcome", "classification")
+        features = modeling.classify_features(learnable, "outcome")
+        used = features["numeric"]
+
+        def build():
+            return modeling.build_pipeline("logistic_regression", features["numeric"], [])
+
+        def apply(y_for_test):
+            pipeline = build().fit(X_train[used], y_train)
+            return operating_point.apply(
+                build=build, pipeline=pipeline, X_train=X_train[used], y_train=y_train,
+                X_test=X_test[used], y_test=y_for_test, point=OperatingPoint("f1"),
+                positive_label="yes",
+            )
+
+        honest = apply(y_test)
+        rigged = apply(y_test.map({"yes": "no", "no": "yes"}))
+        assert rigged["threshold"] == honest["threshold"]
+        assert rigged["observed"] != honest["observed"]
+
+
+# ------------------------------------------------------------------ the improvement loop
+
+
+class TestTheImprovementLoop:
+    def _improve(self, df, **kwargs):
+        return improvement.improve(
+            df, target_column="outcome", task="classification", model_names=MODELS,
+            budget=4, **kwargs,
+        )
+
+    def _decisions(self, found: dict) -> dict:
+        return {
+            "model": found["best"]["model"],
+            "settings": found["best"]["params"],
+            "recipes": found["best"]["feature_recipes"],
+            "cv": (found["best"]["cv_score"], found["best"]["cv_std"]),
+            "rounds": found["rounds"],
+            "stopped": found["stopped_because"],
+        }
+
+    def test_the_model_settings_and_every_round_are_unmoved(self, learnable, flipped_test_answers):
+        honest = self._improve(learnable)
+        flipped_test_answers()
+        rigged = self._improve(learnable)
+
+        assert self._decisions(rigged) == self._decisions(honest)
+        assert rigged["test_metrics"] != honest["test_metrics"]
+        assert len(honest["rounds"]) >= 2  # there were decisions to compare
+
+    def test_the_derived_inputs_it_keeps_are_unmoved(self, dated, flipped_test_answers):
+        honest = self._improve(dated, split_strategy="time", time_column="when")
+        flipped_test_answers()
+        rigged = self._improve(dated, split_strategy="time", time_column="when")
+
+        assert rigged["best"]["feature_recipes"] == honest["best"]["feature_recipes"]
+        assert self._decisions(rigged) == self._decisions(honest)
+        assert rigged["test_metrics"] != honest["test_metrics"]
+        # The derived-inputs round ran, so there was a recipe decision to protect.
+        assert any("derived" in r["name"] or "input" in r["name"] for r in honest["rounds"])
+
+    def test_the_loop_has_a_test_report_to_move(self, learnable):
+        """Documents why the equalities above mean something: the loop does score the final
+        model on the held-out rows, once, and reports it separately from its decisions."""
+        found = self._improve(learnable)
+        assert "roc_auc" in found["test_metrics"]
+
+
+# ------------------------------------------------------------------ the inputs
+
+
+@pytest.fixture
+def leaky_labelled() -> pd.DataFrame:
+    rng = np.random.default_rng(17)
+    n = 300
+    signal = rng.normal(0, 1, n)
+    outcome = np.where(rng.random(n) < 1 / (1 + np.exp(-2.4 * signal)), "yes", "no")
+    months = ["january", "february", "march", "april"]
+    return pd.DataFrame(
+        {
+            "signal": signal.round(4),
+            "noise": rng.normal(0, 1, n).round(4),
+            # Present exactly when the answer is yes: it gives the answer away.
+            "exit_note": [f"left in {months[i % 4]}" if o == "yes" else None for i, o in enumerate(outcome)],
+            "outcome": outcome,
+        }
+    )
+
+
+class TestSuggestingColumnsToLeaveOut:
+    def test_the_plan_s_leakage_suggestions_are_unmoved(self, leaky_labelled, monkeypatch):
+        """The plan measures leakage on the training rows of the default split. Flip the held-out
+        rows' answers *in the frame* (a patch to split_data cannot reach the frame the check
+        reads) and pin the partition so the only difference is those answers."""
+        from app.api import routes_model
+
+        _, X_test, _, _ = modeling.split_data(leaky_labelled, "outcome", "classification")
+        test_index = X_test.index
+        flipped = leaky_labelled.copy()
+        flipped.loc[test_index, "outcome"] = flipped.loc[test_index, "outcome"].map(
+            {"yes": "no", "no": "yes"}
+        )
+
+        def fixed_partition(df, target, task, **_kwargs):
+            labelled = df[df[target].notna()]
+            train_index = labelled.index.difference(test_index)
+            features = labelled.drop(columns=[target])
+            return (
+                features.loc[train_index], features.loc[test_index],
+                labelled.loc[train_index, target], labelled.loc[test_index, target],
+            )
+
+        monkeypatch.setattr(modeling, "split_data", fixed_partition)
+
+        def suggestions(frame):
+            rows, _ = routes_model._leakage_rows(frame, "outcome", "classification")
+            goal = type("G", (), {"target_column": "outcome"})()
+            return [s["column"] for s in routes_model._suggested_exclusions(frame, goal, "classification", rows)]
+
+        assert suggestions(flipped) == suggestions(leaky_labelled)
+        assert "exit_note" in suggestions(flipped)
+        # The flip has to bite: a check over every row would have lost the leak.
+        assert ml_readiness.detect_leakage(flipped, "outcome", "classification") == []
+
+    def test_derived_input_proposals_do_not_read_the_answers(self, leaky_labelled):
+        flipped = leaky_labelled.assign(outcome=leaky_labelled["outcome"].map({"yes": "no", "no": "yes"}))
+        honest = [r.as_dict() for r in feature_recipes.propose(leaky_labelled, "outcome")]
+        rigged = [r.as_dict() for r in feature_recipes.propose(flipped, "outcome")]
+        assert rigged == honest and honest  # and there is something to compare
+
+
+# ------------------------------------------------------------------ what is shown beside the score
+
+
+class TestTheChecksShownBesideTheScore:
+    def test_the_spread_and_the_learning_curve_are_unmoved(self, learnable, flipped_test_answers):
+        def deep():
+            return modeling.train_candidates(
+                learnable, target_column="outcome", task="classification",
+                model_names=["logistic_regression"], include_deep_diagnostics=True,
+            )["deep_diagnostics"]
+
+        honest = deep()
+        flipped_test_answers()
+        rigged = deep()
+
+        assert rigged["cross_validation"] == honest["cross_validation"]
+        assert rigged["learning_curve"] == honest["learning_curve"]
+        # Permutation importance explains the evaluated model on the test rows, so it moves.
+        assert rigged["permutation_importance"] != honest["permutation_importance"]
+
+
+# ------------------------------------------------------------------ the guard on the guard
+
+
+def test_contributing_requires_a_case_here_for_every_new_decision_path():
+    """The suite is only a guard while new decision paths keep landing in it. The rule is
+    written where contributors read, and this fails if it is ever edited out."""
+    from pathlib import Path
+
+    contributing = (Path(__file__).resolve().parents[3] / "CONTRIBUTING.md").read_text(
+        encoding="utf-8"
+    )
+    flat = " ".join(contributing.split())
+    assert "test_evaluation_integrity.py" in flat
+    assert "decision path" in flat
