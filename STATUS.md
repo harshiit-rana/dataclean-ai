@@ -971,6 +971,10 @@ the restore rule (#67), so a challenger trained before the data changed cannot b
 says how it came to be the model in use, with the reason. The reason is never sent to the language model: the card's
 prompt is built from a fixed list of fields, which a test checks.
 
+A promotion can be undone (#84). `POST /api/model/{id}/rollback` puts back the champion the last promotion replaced,
+after checking its stored model against its checksum (#74) and by the restore rule (#67), and records the rollback in
+the decision log with the user's reason. A promotion is rolled back once; without one there is nothing to roll back.
+
 ### Where test information could reach a decision — an audit
 
 Prompted by a roadmap review that made the rule explicit: *the final test set must never be used

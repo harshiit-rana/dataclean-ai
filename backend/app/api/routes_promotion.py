@@ -7,6 +7,7 @@
 - `POST /api/model/{id}/comparisons/{comparison_id}/evaluate`  score both on the same rows of a labelled file
 - `POST /api/model/{id}/comparisons/{comparison_id}/decision`  promote or reject, recorded with its evidence
 - `GET  /api/model/{id}/decisions`                        every promotion, rejection and rollback, oldest first
+- `POST /api/model/{id}/rollback`                         put back the champion the last promotion replaced
 
 See services/promotion.py for why the criteria are typed and frozen.
 """
@@ -201,3 +202,39 @@ async def decide_comparison(
 @router.get("/api/model/{session_id}/decisions")
 async def list_decisions(session_id: str, settings: Settings = Depends(get_settings)) -> dict:
     return {"decisions": promotion.decisions(_directory(settings, session_id))}
+
+
+class Rollback(BaseModel):
+    # Stored exactly as written and never sent to the language model.
+    reason: Optional[str] = None
+
+
+@router.post("/api/model/{session_id}/rollback")
+async def roll_back(session_id: str, request: Rollback, settings: Settings = Depends(get_settings)) -> dict:
+    """Puts back the champion the last promotion replaced, and records the rollback in the decision log.
+
+    The previous champion's stored model is checked against its checksum before it is put back, and it follows the
+    restore rule (#67): one trained before the data changed cannot be put in use.
+    """
+    directory = _directory(settings, session_id)
+    promoted = promotion.last_promotion(directory)
+    if promoted is None:
+        raise ComparisonRefusedError("No promotion to roll back: the model in use was not put there by one.",
+                                     "nothing_to_roll_back")
+    previous = promoted["champion_run_id"]
+    if model_store.load_run(directory, previous) is None:
+        raise ComparisonRefusedError(
+            f"The previous champion ({previous}) is no longer stored, so it cannot be put back.", "run_not_found", 404
+        )
+    if not _trained_on_current_data(directory, previous):
+        raise ComparisonRefusedError(
+            "The data has changed since the previous champion was trained, so it cannot be put back in use. Retrain "
+            "on the data as it is now.", "data_changed",
+        )
+    try:
+        model_store.load_run_pipeline(directory, previous)  # the checksum check, before it is put in use
+    except model_store.ModelArtifactError as exc:
+        raise ComparisonRefusedError(str(exc), exc.code) from exc
+    model_store.set_current(directory, previous, rolled_back=promoted["decision_id"])
+    mark_report_stale_if_written(directory)
+    return promotion.record_rollback(directory, promoted, request.reason)

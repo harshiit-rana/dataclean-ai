@@ -442,3 +442,29 @@ def promotion_of(directory: Path, run_id: str | None) -> dict | None:
         if entry.get("decision") == "promoted" and entry.get("challenger_run_id") == run_id:
             return entry
     return None
+
+
+# --- Rolling back (#84) ---------------------------------------------------------------------------------------------
+
+
+def last_promotion(directory: Path) -> dict | None:
+    """The latest promotion not already rolled back: what a rollback undoes."""
+    rolled_back = {e.get("promotion_decision_id") for e in decisions(directory) if e.get("decision") == "rolled_back"}
+    for entry in reversed(decisions(directory)):
+        if entry.get("decision") == "promoted" and entry.get("decision_id") not in rolled_back:
+            return entry
+    return None
+
+
+def record_rollback(directory: Path, promotion_entry: dict, reason: str | None) -> dict:
+    """Appends the rollback to the decision log. Putting the previous champion back in use is the caller's."""
+    return _append_decision(directory, {
+        "decision_id": uuid.uuid4().hex[:12],
+        "at": _now(),
+        "decision": "rolled_back",
+        "promotion_decision_id": promotion_entry.get("decision_id"),
+        "from_run_id": promotion_entry.get("challenger_run_id"),
+        "to_run_id": promotion_entry.get("champion_run_id"),
+        # Verbatim. Never sent to the language model.
+        "reason": reason,
+    })
