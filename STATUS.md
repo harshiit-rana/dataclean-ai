@@ -1015,6 +1015,14 @@ while raising the pure-noise false-positive rate from about 3% to about 11% in t
 keep it; nothing has been changed, and the decision is the owner's. The note also records that on 30 test rows a lucky
 noise run can be called "useful" because the noise bar sits above the 0.70 cut-off, which is a separate question.
 
+**What a model family must meet to join the registry (decision pending, #52).** A recommendation in
+[`docs/decisions/0003-model-registry-criteria.md`](docs/decisions/0003-model-registry-criteria.md): eight criteria (it
+fits the pipeline, reproduces from the exported script, is reproducible, respects the folds, is affordable, has a small
+curated search space, can be explained, and earns its place on evidence after the verdict's candidate correction is
+counted) and the current decisions under them: Extra Trees accepted (#53), gradient-boosting libraries deferred because
+`HistGradientBoosting*` covers the same family without a new dependency, and SVM, k-NN, Naive Bayes and neural networks
+not planned. It is the owner's decision; #53 and #56 wait for it.
+
 The direction below is unchanged; the issues are its concrete form. The end state is an
 *honest* AutoML — not a button that hands back a leaderboard score, but a system that takes a
 raw file to a working model, and an honest answer about whether it works, while showing its

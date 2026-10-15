@@ -468,6 +468,11 @@ are both running locally, you're ready to make changes.
   with rows times candidates times folds belongs in `estimate_cost`, and anything that reduces a request to fit
   (`plan_within_limit`) must say so in `resource_limits` rather than do it silently, and never touch the test set.
   Tests that take minutes go in `tests/slow`, marked `slow`; the default run leaves them out.
+- **Adding a model family means meeting the registry criteria.** They are written down in
+  [`docs/decisions/0003-model-registry-criteria.md`](docs/decisions/0003-model-registry-criteria.md) (a recommendation
+  until the owner accepts it): exportable from scikit-learn and pandas alone, reproducible, honest about the folds,
+  affordable (`cost_weight`, `complexity_rank`), a small search space, explainable or marked not, and shown to earn its
+  place on the benchmark. Argue a request from that note, not from scratch.
 - **Anything that scores an input's usefulness uses validation folds of the training rows.** `improvement.fold_importance`
   shuffles an input only on rows the fold's model was not fitted on; computing importance on the fitted rows, or on the
   test set, would reward memorisation or select on the test set. A round that removes inputs must withhold them from
