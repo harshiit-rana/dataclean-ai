@@ -49,6 +49,7 @@ from app.services import (
     modeling,
     operating_point,
     run_metadata,
+    search_markers,
     why_this_model,
 )
 from app.api.routes_rules import stored_rules
@@ -998,6 +999,44 @@ def _improve_and_save(
     goal_text: str = "",
     cost_limit: int | None = None,
 ) -> dict:
+    """`_search_and_save`, with a marker on disk while it runs (search_markers.py).
+
+    The marker is removed however the search ends -- saved, or failed and recorded by the route -- so only a
+    search whose process died leaves one, and the next read of the history turns it into an `interrupted` entry
+    with the rounds that had finished.
+    """
+    marker = search_markers.SearchMarker(
+        directory, route=route, request=request.model_dump(mode="json"), target=target, task=task
+    )
+
+    def progress(entry) -> None:
+        marker.round_finished(entry.as_dict())
+        if on_progress:
+            on_progress(entry)
+
+    with marker:
+        return _search_and_save(
+            df, target=target, task=task, request=request, point=point, directory=directory, route=route,
+            action_log=action_log, on_progress=progress, on_stage=on_stage, goal_text=goal_text,
+            cost_limit=cost_limit,
+        )
+
+
+def _search_and_save(
+    df,
+    *,
+    target: str,
+    task: str,
+    request: ImproveRequest,
+    point,
+    directory,
+    route: str = "improve",
+    action_log=None,
+    on_progress=None,
+    on_stage=None,
+    goal_text: str = "",
+    cost_limit: int | None = None,
+) -> dict:
     """Search, rebuild the winner the normal way, and save it. Runs in a worker thread.
 
     Two passes on purpose. The loop searches on cross-validated training folds and never
@@ -1516,6 +1555,7 @@ async def get_model_history(
     except Exception:  # noqa: BLE001 -- history is still worth serving without it
         logger.warning("Could not fingerprint the current data for session %s", session_id)
 
+    _record_interrupted_searches(directory)
     runs = model_store.load_history(directory)
     return {
         "session_id": session_id,
@@ -1594,6 +1634,36 @@ async def restore_run(
             directory, model_store.restore_entry(entry or {**model_store.summarise(stored), "run_id": run_id})
         )
     return stored
+
+
+def _record_interrupted_searches(directory) -> None:
+    """Turns the marker of each search whose process died into an `interrupted` history entry. Never raises: the
+    history is still worth serving without it."""
+    try:
+        for path, payload in search_markers.stale_markers(directory):
+            started, beat = payload.get("started_at"), payload.get("heartbeat_at")
+            metadata = run_metadata.describe(
+                request=payload.get("request"),
+                route=payload.get("route") or "improve",
+                dataset_version=current_dataset_version_in(directory),
+                runtime_seconds=(beat - started) if started and beat else None,
+                result={},
+            )
+            entry = model_store.attempt_entry(
+                status="interrupted",
+                reason=search_markers.interrupted_reason(payload),
+                code="interrupted",
+                target_column=payload.get("target_column"),
+                task=payload.get("task"),
+                metadata=metadata,
+            )
+            entry["rounds_completed"] = payload.get("rounds") or []
+            if started:
+                entry["at"] = datetime.fromtimestamp(float(started), timezone.utc).isoformat(timespec="seconds")
+            model_store.record_attempt(directory, entry)
+            path.unlink(missing_ok=True)
+    except Exception:  # noqa: BLE001
+        logger.warning("Interrupted searches could not be recorded", exc_info=True)
 
 
 def _history_comparisons(directory, runs: list[dict]) -> dict[str, dict]:

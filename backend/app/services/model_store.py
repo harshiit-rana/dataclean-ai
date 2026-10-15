@@ -230,7 +230,8 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
     )
 
 
-ATTEMPT_STATUSES = ("failed", "refused")
+# "interrupted": a search whose process died before it finished (search_markers.py).
+ATTEMPT_STATUSES = ("failed", "refused", "interrupted")
 
 
 def succeeded(entry: dict) -> bool:

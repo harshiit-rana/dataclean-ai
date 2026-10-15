@@ -830,6 +830,13 @@ run before it that had a score; the *current* label stays on the model in use. R
 error the user needs to see. In a successful run, a candidate that did not train gives its reason in the held-out table
 instead of a row of dashes.
 
+A search the process never finished is recorded too (#65). Each search writes a marker under `searches/` as it starts,
+adds each round as it finishes and removes the marker on the way out, whether it was saved or failed. While it runs, a
+background thread touches the marker every 30 seconds, so a long round never looks dead. A marker silent for two
+minutes can only belong to a search whose process died (a restart, a deploy, a crash), and the next read of the history
+turns it into an `interrupted` entry listing the rounds that had finished. Markers are per search, so two searches in
+one session never share one.
+
 **Artifacts you can leave with.** `train_model.py` that rebuilds the model from scratch
 (tuned settings included), the fitted `model.joblib`, and a written model card that says what
 not to trust. A test runs the generated script in a subprocess and checks it reproduces the

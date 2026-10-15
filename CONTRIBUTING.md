@@ -131,6 +131,8 @@ are both running locally, you're ready to make changes.
   `_refuse_if_the_data_cannot_support_a_model`, and `_record_attempt` in each `except` before raising, so the run
   history holds what was tried and not only what worked. Codes in `REFUSAL_CODES` are recorded as refused, every
   other one as failed. Anything that reads the history and expects a score checks `model_store.succeeded` first.
+  A long-running search goes through `_improve_and_save`, which holds a `SearchMarker` for it; a new kind of
+  long-running fit should too, so a process that dies mid-fit leaves an `interrupted` entry rather than nothing.
 - **An exported script states its versions through `run_metadata`.** A new exported script (or a new library
   one depends on) uses `install_line` and `versions_block`, so the pins and the start-up check stay in one place.
   The check only prints: a script that refuses to run on a newer library is worse than one that warns.

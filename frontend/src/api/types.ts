@@ -455,11 +455,13 @@ export interface ModelRun {
   at: string;
   /** "failed" or "refused" for an attempt that produced no model: no score, the reason the user
    * was given in `reason`. Absent on entries from before attempts were recorded. */
-  status?: "succeeded" | "failed" | "refused" | "restored";
+  status?: "succeeded" | "failed" | "refused" | "restored" | "interrupted";
   reason?: string | null;
   code?: string | null;
   /** On a "restored" event: the run that was brought back as the model in use. */
   restored_run_id?: string | null;
+  /** On an "interrupted" search: the rounds that had finished when its process stopped. */
+  rounds_completed?: { name: string; label: string | null; accepted: boolean | null }[];
   /** Identifies the data this ran against, so runs from before a cleaning change are visible
    * as such rather than compared as though nothing happened. */
   data_fingerprint: string;

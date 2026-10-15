@@ -15,7 +15,7 @@ import type { ModelRun, RunComparison } from "@/api/types";
 
 /** An attempt that produced no model -- refused before fitting or failed during it. */
 export function isAttempt(run: ModelRun): boolean {
-  return run.status === "failed" || run.status === "refused";
+  return run.status === "failed" || run.status === "refused" || run.status === "interrupted";
 }
 
 /** Anything in the history that is not a run with a score: an attempt, or a model brought back. */
@@ -147,7 +147,13 @@ function EventRow({ run, latest }: { run: ModelRun; latest: boolean }) {
     <tr className="border-b border-border/60 align-top">
       <td className="py-2 pr-3">
         <span className="font-medium">
-          {restored ? "Restored" : run.status === "refused" ? "Refused" : "Failed"}
+          {restored
+            ? "Restored"
+            : run.status === "refused"
+              ? "Refused"
+              : run.status === "interrupted"
+                ? "Interrupted"
+                : "Failed"}
         </span>
         <span className="mt-0.5 block text-xs text-muted-foreground">
           {when(run.at)}

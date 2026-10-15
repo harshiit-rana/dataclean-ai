@@ -394,3 +394,18 @@ describe("RunHistory — bringing back an earlier model (#67)", () => {
     expect(screen.getByText(/can be made the\s+current model again/)).toBeInTheDocument();
   });
 });
+
+describe("RunHistory — a search the server never finished (#65)", () => {
+  it("shows an interrupted search with what had finished, and no score", () => {
+    const interrupted = run({
+      status: "interrupted",
+      code: "interrupted",
+      reason: "The search stopped before it finished: the server restarted. 2 rounds had finished: Baseline, Settings.",
+      metrics: {},
+    });
+    renderHistory([interrupted, run({ metrics: { roc_auc: 0.85 } }), run({ metrics: { roc_auc: 0.8 } })]);
+    expect(screen.getByText("Interrupted")).toBeInTheDocument();
+    expect(screen.getByText(/2 rounds had finished/)).toBeInTheDocument();
+    expect(screen.getByText("+0.0500")).toBeInTheDocument();
+  });
+});
