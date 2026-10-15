@@ -122,6 +122,10 @@ are both running locally, you're ready to make changes.
   so a run from before the change is *labelled* rather than deleted or silently compared.
   History bookkeeping must never fail a training run — losing a result that exists because its
   record couldn't be written is the worst outcome available.
+- **A new seed or default that decides results goes in `run_metadata`.** `seeds()` and `constants()` feed
+  `config_hash`, so a change to one changes the hash of every run made after it. A seed or default left out
+  makes two different experiments look like one. Request fields need nothing: the whole validated request is
+  hashed.
 - **Run-to-run verdicts need the same rows.** `model_store.compare_runs` pairs two runs only when
   `split_key` (strategy, columns, seed, sizes) and `data_fingerprint` match; the history entry
   stores `split_key` and the run's predictions are kept in `run_predictions/`, aligned by row id

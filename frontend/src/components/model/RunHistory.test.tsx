@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { RunHistory } from "./RunHistory";
+import { RunHistory, describeProvenance } from "./RunHistory";
 import type { ModelRun } from "@/api/types";
 
 function run(overrides: Partial<ModelRun> = {}): ModelRun {
@@ -273,5 +273,38 @@ describe("RunHistory — the gap is part of the setup (#20)", () => {
   it("says nothing without one", () => {
     renderHistory([withGap(0), withGap(undefined)]);
     expect(screen.queryByText(/-day gap/)).not.toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — how each run was made (#63)", () => {
+  const recorded = run({
+    config_hash: "0123456789abcdef",
+    runtime_seconds: 74.2,
+    dataset_version: { version: 3, fingerprint: "f", rows: 1200, columns: 9, event: "clean" },
+    selection: { method: "cross_validation", metric: "roc_auc", rule: "one_standard_error", scores: { a: 0.8 } },
+    environment: { python: "3.12.4", scikit_learn: "1.7.0", pandas: "2.2.2", numpy: "2.0.1", joblib: "1.4.2" },
+    seeds: { split: 42, model: 42, search: 42, confirmation: 1729 },
+  });
+
+  it("lists the configuration, runtime, data version, software and seeds", () => {
+    const lines = describeProvenance(recorded)!;
+    expect(lines).toContain("configuration 0123456789abcdef");
+    expect(lines).toContain("took 1 min 14 s");
+    expect(lines).toContain("data version 3 (1,200 rows, 9 columns)");
+    expect(lines).toContain("chosen by cross validation");
+    expect(lines).toContain("Python 3.12.4, scikit-learn 1.7.0, pandas 2.2.2, numpy 2.0.1");
+    expect(lines).toContain("seeds split 42, model 42, search 42, confirmation 1729");
+  });
+
+  it("shows the details on the row", () => {
+    renderHistory([recorded, run()]);
+    expect(screen.getByText("how it was made")).toBeInTheDocument();
+    expect(screen.getByText("configuration 0123456789abcdef")).toBeInTheDocument();
+  });
+
+  it("says not recorded for a run from before it was kept, rather than blanks", () => {
+    expect(describeProvenance(run())).toBeNull();
+    renderHistory([run(), run()]);
+    expect(screen.getAllByText("how it was made: not recorded")).toHaveLength(2);
   });
 });

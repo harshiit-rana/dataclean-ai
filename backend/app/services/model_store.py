@@ -201,6 +201,16 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
                 if (point := result.get("operating_point"))
                 else None
             ),
+            # What exactly produced it (run_metadata.py): the software and seeds, the request as validated,
+            # one hash of everything that decides the result, how long it took, the data version and how the
+            # model was chosen. Absent on runs from before they were recorded, which show as "not recorded".
+            **{
+                key: (result.get("run_metadata") or {}).get(key)
+                for key in (
+                    "environment", "seeds", "request", "config_hash", "runtime_seconds", "dataset_version",
+                    "selection",
+                )
+            },
         }
     )
 

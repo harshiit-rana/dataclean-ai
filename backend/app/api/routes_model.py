@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
 from collections.abc import AsyncIterator
@@ -47,6 +48,7 @@ from app.services import (
     model_store,
     modeling,
     operating_point,
+    run_metadata,
     why_this_model,
 )
 from app.api.routes_rules import stored_rules
@@ -709,7 +711,8 @@ def _refuse_if_the_data_cannot_support_a_model(df, goal, rules=None) -> str:
 
 
 def _save_and_record(
-    directory, result: dict, df, *, route: str, action_log=None, goal_text: str = ""
+    directory, result: dict, df, *, route: str, action_log=None, goal_text: str = "", request=None,
+    started: float | None = None, cost_limit: int | None = None,
 ) -> dict:
     """Saves a finished run and records the look at the held-out rows that it was.
 
@@ -722,6 +725,10 @@ def _save_and_record(
 
     The run id is made here so the saved result, the run history and the ledger all name the
     same run.
+
+    `request` and `started` (a `time.perf_counter()` reading from before the fitting) are recorded with the
+    run as its metadata (run_metadata.py): what was asked for, on which data version, with which software and
+    seeds, and how long it took.
     """
     result["run_id"] = uuid.uuid4().hex[:12]
     result["split_key"] = evaluation_ledger.split_key(result.get("split"))
@@ -745,6 +752,7 @@ def _save_and_record(
     result["evaluation"] = evaluation
     result["assessment"] = evaluation_ledger.qualify(result.get("assessment"), evaluation)
     version = current_dataset_version_in(directory, ensure=True)
+    result["run_metadata"] = _describe_run(result, request, route, version, started, cost_limit)
     if (result.get("split") or {}).get("sealed"):
         result["split"]["sealed_after_looks"] = _record_the_seal(directory, result["split"], version)
     payload = model_store.save_result(
@@ -839,6 +847,22 @@ def _record_the_seal(directory, split: dict, version: dict | None) -> int:
     return looks_so_far
 
 
+def _describe_run(result: dict, request, route: str, version, started, cost_limit) -> dict | None:
+    """The run's metadata, or None if it could not be gathered. Bookkeeping never fails a finished run."""
+    try:
+        return run_metadata.describe(
+            request=None if request is None else request.model_dump(mode="json"),
+            route=route,
+            dataset_version=version,
+            runtime_seconds=None if started is None else time.perf_counter() - started,
+            result=result,
+            cost_limit=cost_limit,
+        )
+    except Exception:  # noqa: BLE001
+        logger.warning("Run metadata could not be gathered", exc_info=True)
+        return None
+
+
 @router.post("/api/model/{session_id}/train")
 async def train_model(
     session_id: str,
@@ -877,6 +901,7 @@ async def train_model(
             cost_limit=settings.training_cost_limit,
         )
 
+    started = time.perf_counter()
     try:
         # Off the event loop: fitting is CPU-bound and would otherwise stall every other
         # request in this process, including in-flight SSE streams.
@@ -891,7 +916,8 @@ async def train_model(
     # which columns were deliberately withheld.
     result["features"]["excluded"] = list(request.excluded_columns)
     return _save_and_record(
-        directory, result, df, route="train", action_log=log, goal_text=_goal_text(goal)
+        directory, result, df, route="train", action_log=log, goal_text=_goal_text(goal), request=request,
+        started=started, cost_limit=settings.training_cost_limit,
     )
 
 
@@ -927,6 +953,7 @@ def _improve_and_save(
     The trail of rounds rides along on the result, including the rounds that were rejected.
     "We tried tuning it and tuning did not help" is a finding about the data.
     """
+    started = time.perf_counter()
     found = improvement.improve(
         df,
         target_column=target,
@@ -1026,7 +1053,8 @@ def _improve_and_save(
     # One look, however many rounds the search ran: the rounds are scored on training folds and
     # never open the held-out rows. Only this final rebuild does, once.
     return _save_and_record(
-        directory, rebuilt, df, route=route, action_log=action_log, goal_text=goal_text
+        directory, rebuilt, df, route=route, action_log=action_log, goal_text=goal_text, request=request,
+        started=started, cost_limit=cost_limit,
     )
 
 

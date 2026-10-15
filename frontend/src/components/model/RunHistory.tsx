@@ -66,6 +66,39 @@ function describeSetup(run: ModelRun): string {
   return parts.join(" · ");
 }
 
+/** What produced the run, one fact per line, for the run's "how it was made" details. Null for a
+ * run from before this was recorded -- shown as "not recorded", never as blank or as unknown values. */
+export function describeProvenance(run: ModelRun): string[] | null {
+  if (!run.config_hash && !run.environment) return null;
+  const lines: string[] = [];
+  if (run.config_hash) lines.push(`configuration ${run.config_hash}`);
+  if (run.runtime_seconds != null) {
+    const seconds = run.runtime_seconds;
+    lines.push(seconds < 60 ? `took ${seconds.toFixed(1)} s` : `took ${Math.floor(seconds / 60)} min ${Math.round(seconds % 60)} s`);
+  }
+  if (run.dataset_version) {
+    lines.push(
+      `data version ${run.dataset_version.version} (${run.dataset_version.rows.toLocaleString()} rows, ${run.dataset_version.columns} columns)`
+    );
+  }
+  if (run.selection?.method) lines.push(`chosen by ${run.selection.method.replace(/_/g, " ")}`);
+  const env = run.environment;
+  if (env) {
+    lines.push(
+      [
+        `Python ${env.python}`,
+        `scikit-learn ${env.scikit_learn ?? "?"}`,
+        `pandas ${env.pandas ?? "?"}`,
+        `numpy ${env.numpy ?? "?"}`,
+      ].join(", ")
+    );
+  }
+  if (run.seeds) {
+    lines.push(`seeds ${Object.entries(run.seeds).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+  }
+  return lines;
+}
+
 function when(iso: string): string {
   const parsed = new Date(iso);
   return Number.isNaN(parsed.getTime())
@@ -79,6 +112,23 @@ const VERDICT_TEXT: Record<string, string> = {
   no_better_than_guessing: "No better than guessing",
   not_enough_test_data: "Can't tell",
 };
+
+function Provenance({ run }: { run: ModelRun }) {
+  const lines = describeProvenance(run);
+  if (!lines) {
+    return <span className="mt-0.5 block text-xs text-muted-foreground">how it was made: not recorded</span>;
+  }
+  return (
+    <details className="mt-0.5 text-xs text-muted-foreground">
+      <summary className="cursor-pointer">how it was made</summary>
+      <ul className="mt-1 space-y-0.5">
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </details>
+  );
+}
 
 export function RunHistory({
   runs,
@@ -144,6 +194,7 @@ export function RunHistory({
                         {when(run.at)}
                         {index === 0 && " · current"}
                       </span>
+                      <Provenance run={run} />
                     </td>
                     <td className="py-2 pr-3 text-xs text-muted-foreground">
                       {describeSetup(run)}

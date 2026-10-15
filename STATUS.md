@@ -797,6 +797,16 @@ most interesting comparison available — it just has to be labelled, so each ru
 fingerprint of the data it trained on and anything older is marked *trained before the data
 changed* and excluded from the arithmetic. It is a record, not a restore point.
 
+Each run also records what exactly produced it (#63): the Python, scikit-learn, pandas, numpy and joblib versions;
+every seed (split, model, search, the fresh folds a winner is confirmed on); the request as the server validated it;
+how long it took; the dataset version it trained on; how the model was chosen, with each candidate's fold score; and
+a `config_hash` over the request, the data's content fingerprint, the defaults in code (test size, folds, repeats,
+budget), the seeds and the processing limit. Two runs with the same hash on the same software should give the same
+numbers; the software versions are kept beside the hash rather than in it, so "same configuration, different
+scikit-learn" can be named. The streamed and the blocking search hash alike, and an undo back to an earlier state
+hashes like that state. The metadata rides on the saved result too, and the history table shows it under each run's
+*how it was made*; runs from before it was kept say *not recorded*. Gathering it can never fail a run.
+
 **Artifacts you can leave with.** `train_model.py` that rebuilds the model from scratch
 (tuned settings included), the fitted `model.joblib`, and a written model card that says what
 not to trust. A test runs the generated script in a subprocess and checks it reproduces the

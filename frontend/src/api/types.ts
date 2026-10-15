@@ -511,6 +511,37 @@ export interface ModelRun {
   /** The calibration method applied, "none" when the probabilities are the model's own. A run
    * that differs only here is the comparison "did calibrating help?" needs to be able to show. */
   calibration?: CalibrationMethod | null;
+  /** What exactly produced the run. All absent on runs from before they were recorded, which
+   * are shown as "not recorded". */
+  environment?: RunEnvironment | null;
+  seeds?: Record<string, number> | null;
+  /** The request as the server validated it. */
+  request?: Record<string, unknown> | null;
+  /** One hash of everything that decides the result: the request, the data, the defaults and
+   * the seeds. Equal hashes on the same software should give the same numbers. */
+  config_hash?: string | null;
+  runtime_seconds?: number | null;
+  dataset_version?: {
+    version: number;
+    fingerprint: string;
+    rows: number;
+    columns: number;
+    event: string;
+  } | null;
+  selection?: {
+    method: string | null;
+    metric: string | null;
+    rule?: string | null;
+    scores: Record<string, number | null>;
+  } | null;
+}
+
+export interface RunEnvironment {
+  python: string;
+  scikit_learn: string | null;
+  pandas: string | null;
+  numpy: string | null;
+  joblib: string | null;
 }
 
 /** Whether the change from the run before is real. `paired` resamples the shared held-out rows
