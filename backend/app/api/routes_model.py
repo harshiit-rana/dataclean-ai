@@ -1522,7 +1522,78 @@ async def get_model_history(
         "runs": runs,
         "current_fingerprint": current,
         "comparisons": _history_comparisons(directory, runs),
+        # The model in use (None when nothing is, after a cleaning change) and the runs whose model is still
+        # stored, so the page can offer to bring one back.
+        "current_run_id": model_store.current_run_id(directory),
+        "stored_run_ids": model_store.stored_runs(directory),
     }
+
+
+class RunNotStoredError(AppError):
+    status_code = 404
+
+    def __init__(self, run_id: str):
+        super().__init__(
+            "That run is not stored",
+            f"Run {run_id} has no stored model -- it was pruned, or it was made before each run kept its own.",
+            code="run_not_stored",
+        )
+
+
+class RunTrainedOnOtherDataError(AppError):
+    status_code = 409
+
+    def __init__(self):
+        super().__init__(
+            "That model was trained on different data",
+            "The data has changed since this run was trained, so its scores describe rows that are no longer the "
+            "data. Retrain to get a model for the data as it is now, or undo the changes to bring that data back.",
+            code="data_changed",
+        )
+
+
+@router.post("/api/model/{session_id}/runs/{run_id}/restore")
+async def restore_run(
+    session_id: str,
+    run_id: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Makes a stored run the model in use again, if it was trained on the data as it is now.
+
+    The result, the download, the script, the card and the export bundle all follow the pointer, so they serve
+    the restored run. Nothing is refitted and the held-out rows are not looked at again: the stored result is
+    revealed as it was, so the ledger records no new look. The restore is a history event, never a run.
+    """
+    meta = read_session_meta(settings.upload_dir, session_id)
+    if meta is None:
+        raise SessionNotFoundError(session_id)
+    directory = session_dir(settings.upload_dir, session_id)
+    stored = model_store.load_run(directory, run_id)
+    if stored is None:
+        raise RunNotStoredError(run_id)
+
+    entry = next((r for r in model_store.load_history(directory) if r.get("run_id") == run_id), None)
+    trained_on = (entry or {}).get("data_fingerprint") or (
+        ((stored.get("run_metadata") or {}).get("dataset_version") or {}).get("fingerprint") or ""
+    )[:16]
+    cleaned = directory / "cleaned.csv"
+    path = cleaned if cleaned.exists() else directory / "original.csv"
+    try:
+        current = model_store.fingerprint_frame(pd.read_csv(path))
+    except Exception:  # noqa: BLE001 -- without the current data there is nothing to check against
+        current = ""
+    # Judged on the content of the data, not on whether a cleaning change happened since: an undo back to the
+    # data a run was trained on makes it usable again.
+    if not trained_on or not current or trained_on != current:
+        raise RunTrainedOnOtherDataError()
+
+    if model_store.current_run_id(directory) != run_id:
+        model_store.set_current(directory, run_id, restored=True)
+        mark_report_stale_if_written(directory)
+        model_store.record_attempt(
+            directory, model_store.restore_entry(entry or {**model_store.summarise(stored), "run_id": run_id})
+        )
+    return stored
 
 
 def _history_comparisons(directory, runs: list[dict]) -> dict[str, dict]:

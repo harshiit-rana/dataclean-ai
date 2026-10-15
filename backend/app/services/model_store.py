@@ -263,6 +263,24 @@ def attempt_entry(
     return _jsonable(entry)
 
 
+def restore_entry(restored: dict) -> dict:
+    """A history event for bringing back a stored run as the model in use (`restored` is that run's history
+    entry). Not a run: no new score was produced and the test rows were not looked at again, so it is left out
+    of every comparison, and it names the run it brought back."""
+    entry = summarise(
+        {"target_column": restored.get("target_column"), "task": restored.get("task"),
+         "best_model": restored.get("best_model")},
+        fingerprint=restored.get("data_fingerprint") or "",
+    )
+    entry.update(
+        status="restored",
+        restored_run_id=restored.get("run_id"),
+        model_label=restored.get("model_label"),
+        reason=f"Brought back the {restored.get('model_label') or 'model'} trained at {restored.get('at')}.",
+    )
+    return _jsonable(entry)
+
+
 def record_attempt(directory: Path, entry: dict) -> None:
     """Appends an attempt to the history. Never raises: the caller is already reporting a failure, and the
     bookkeeping must not replace that failure with one of its own."""

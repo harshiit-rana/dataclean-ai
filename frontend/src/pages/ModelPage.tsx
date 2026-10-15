@@ -18,6 +18,7 @@ import {
   fetchModelPlan,
   fetchModelResult,
   finaliseModel,
+  restoreRun,
   trainModel,
 } from "@/api/client";
 import { StreamRequestError, streamImprove } from "@/api/sse";
@@ -160,6 +161,27 @@ export function ModelPage() {
       setFinaliseError(err instanceof ApiError ? err.detail : String((err as Error)?.message ?? err));
     } finally {
       setFinalising(false);
+    }
+  };
+
+  // Bringing back an earlier run: the result, the card and the history all follow the pointer.
+  const [restoring, setRestoring] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState<string | null>(null);
+
+  const handleRestore = async (runId: string) => {
+    if (!sessionId) return;
+    setRestoring(runId);
+    setRestoreError(null);
+    try {
+      const restored = await restoreRun(sessionId, runId);
+      setResult(restored);
+      setCard(null);
+      setHistory(await fetchModelHistory(sessionId).catch(() => history));
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      setRestoreError(err instanceof ApiError ? err.detail : String((err as Error)?.message ?? err));
+    } finally {
+      setRestoring(null);
     }
   };
 
@@ -496,6 +518,11 @@ export function ModelPage() {
           runs={history.runs}
           currentFingerprint={history.current_fingerprint}
           comparisons={history.comparisons}
+          currentRunId={history.current_run_id}
+          storedRunIds={history.stored_run_ids}
+          onRestore={handleRestore}
+          restoring={restoring}
+          restoreError={restoreError}
         />
       )}
 

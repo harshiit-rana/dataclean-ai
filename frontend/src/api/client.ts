@@ -206,6 +206,17 @@ export async function fetchModelHistory(sessionId: string): Promise<ModelHistory
   return handleResponse<ModelHistory>(response);
 }
 
+/** Makes a stored run the model in use again. Refused (409, code "data_changed") when the data
+ * has changed since it was trained: its scores would describe rows that are no longer the data. */
+export async function restoreRun(sessionId: string, runId: string): Promise<ModelResult> {
+  const response = await sessionFetch(
+    sessionId,
+    `/api/model/${sessionId}/runs/${encodeURIComponent(runId)}/restore`,
+    { method: "POST" }
+  );
+  return handleResponse<ModelResult>(response);
+}
+
 export async function fetchModelCard(sessionId: string): Promise<string> {
   const response = await sessionFetch(sessionId, `/api/model/${sessionId}/card`);
   const body = await handleResponse<{ markdown: string }>(response);

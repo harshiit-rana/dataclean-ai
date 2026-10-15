@@ -804,6 +804,14 @@ since changed. The oldest runs beyond `MAX_STORED_RUNS` (default 10; a fitted fo
 pruned, never the one in use, and the session's retention sweep still removes everything. The export bundle carries
 the current run's pipeline. A session from before run folders still reads its single files until it next trains.
 
+An earlier run can be brought back (#67). `POST /api/model/{id}/runs/{run_id}/restore` makes a stored run the model in
+use if it was trained on the data as it is now, judged by the content of the data, so an undo back to that data makes
+it usable again. Otherwise it is refused with a 409 (`data_changed`) and the reason. The result, download, script, card
+and export bundle all follow the pointer. Nothing is refitted and the held-out rows are not looked at again, so the
+ledger records no new look. The history records the restore as an event with no score, which comparisons skip; the
+history response names the run in use and the runs still stored, and the table offers *Make this the current model* on
+each stored run trained on the current data.
+
 Each run also records what exactly produced it (#63): the Python, scikit-learn, pandas, numpy and joblib versions;
 every seed (split, model, search, the fresh folds a winner is confirmed on); the request as the server validated it;
 how long it took; the dataset version it trained on; how the model was chosen, with each candidate's fold score; and

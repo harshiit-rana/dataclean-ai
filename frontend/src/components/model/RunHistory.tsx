@@ -18,6 +18,11 @@ export function isAttempt(run: ModelRun): boolean {
   return run.status === "failed" || run.status === "refused";
 }
 
+/** Anything in the history that is not a run with a score: an attempt, or a model brought back. */
+export function isEvent(run: ModelRun): boolean {
+  return isAttempt(run) || run.status === "restored";
+}
+
 function metricOf(run: ModelRun): number | null {
   const key = run.primary_metric ?? "";
   const value = run.metrics?.[key];
@@ -135,22 +140,30 @@ function Provenance({ run }: { run: ModelRun }) {
   );
 }
 
-/** A refused or failed attempt, in sequence with the runs, with the reason the user was given. */
-function AttemptRow({ run, current }: { run: ModelRun; current: boolean }) {
+/** A refused or failed attempt, or a model brought back, in sequence with the runs. */
+function EventRow({ run, latest }: { run: ModelRun; latest: boolean }) {
+  const restored = run.status === "restored";
   return (
     <tr className="border-b border-border/60 align-top">
       <td className="py-2 pr-3">
-        <span className="font-medium">{run.status === "refused" ? "Refused" : "Failed"}</span>
+        <span className="font-medium">
+          {restored ? "Restored" : run.status === "refused" ? "Refused" : "Failed"}
+        </span>
         <span className="mt-0.5 block text-xs text-muted-foreground">
           {when(run.at)}
-          {current && " · latest attempt"}
+          {latest && !restored && " · latest attempt"}
         </span>
-        <Provenance run={run} />
+        {!restored && <Provenance run={run} />}
       </td>
       <td className="py-2 pr-3 text-xs text-muted-foreground" colSpan={2}>
-        {run.reason ?? (run.status === "refused" ? "Nothing was trained." : "Training did not finish.")}
+        {run.reason ??
+          (restored
+            ? "An earlier model was made the current one."
+            : run.status === "refused"
+              ? "Nothing was trained."
+              : "Training did not finish.")}
       </td>
-      <td className="py-2 pr-3 text-xs text-muted-foreground">no model</td>
+      <td className="py-2 pr-3 text-xs text-muted-foreground">{restored ? "no new score" : "no model"}</td>
       <td className="py-2 text-xs">—</td>
     </tr>
   );
@@ -160,16 +173,32 @@ export function RunHistory({
   runs,
   currentFingerprint,
   comparisons,
+  currentRunId,
+  storedRunIds,
+  onRestore,
+  restoring = null,
+  restoreError = null,
 }: {
   runs: ModelRun[];
   currentFingerprint: string;
   /** Whether each run's change from the one before is real; see `RunComparison`. */
   comparisons?: Record<string, RunComparison>;
+  /** The run whose model is in use, from the server; null when none is. */
+  currentRunId?: string | null;
+  /** Runs whose model is still stored, and so can be brought back. */
+  storedRunIds?: string[];
+  /** Makes a stored run on the current data the model in use. */
+  onRestore?: (runId: string) => void;
+  /** The run being brought back, while the request is in flight. */
+  restoring?: string | null;
+  restoreError?: string | null;
 }) {
   // One run is not a comparison, and a table of one row implies there is something to compare.
   if (runs.length < 2) return null;
-  // The model in use is the newest run that produced one; a later failed attempt did not replace it.
-  const currentId = runs.find((r) => !isAttempt(r))?.run_id;
+  // The model in use, as the server says. Without that, the newest run that produced one: a later
+  // failed attempt did not replace it.
+  const currentId = currentRunId !== undefined ? currentRunId : runs.find((r) => !isEvent(r))?.run_id;
+  const stored = new Set(storedRunIds ?? []);
 
   return (
     <Card>
@@ -197,11 +226,11 @@ export function RunHistory({
             </thead>
             <tbody>
               {runs.map((run, index) => {
-                if (isAttempt(run)) return <AttemptRow key={run.run_id} run={run} current={index === 0} />;
+                if (isEvent(run)) return <EventRow key={run.run_id} run={run} latest={index === 0} />;
                 const score = metricOf(run);
-                // Compared against the last run before it that has a score: an attempt that
-                // produced no model sits between them in the list but has nothing to subtract.
-                const previous = runs.slice(index + 1).find((r) => !isAttempt(r));
+                // Compared against the last run before it that has a score: an attempt or a restore
+                // sits between them in the list but has nothing to subtract.
+                const previous = runs.slice(index + 1).find((r) => !isEvent(r));
                 const previousScore = previous ? metricOf(previous) : null;
                 const comparable =
                   score != null &&
@@ -225,6 +254,18 @@ export function RunHistory({
                         {run.run_id === currentId && " · current"}
                       </span>
                       <Provenance run={run} />
+                      {/* Only a stored model trained on the data as it is now: an older one's scores
+                          describe rows that are no longer the data. */}
+                      {onRestore && stored.has(run.run_id) && run.run_id !== currentId && !stale && (
+                        <button
+                          type="button"
+                          className="mt-1 block text-xs text-primary underline underline-offset-2 disabled:opacity-50"
+                          disabled={restoring !== null}
+                          onClick={() => onRestore(run.run_id)}
+                        >
+                          {restoring === run.run_id ? "Bringing it back…" : "Make this the current model"}
+                        </button>
+                      )}
                     </td>
                     <td className="py-2 pr-3 text-xs text-muted-foreground">
                       {describeSetup(run)}
@@ -290,9 +331,11 @@ export function RunHistory({
             </tbody>
           </table>
         </div>
+        {restoreError && <p className="mt-3 text-xs text-destructive">{restoreError}</p>}
         <p className="mt-3 text-xs text-muted-foreground">
-          This is a record, not a restore point — an earlier run can&apos;t be brought back.
-          Retraining with the same settings will reproduce it.
+          The models of recent runs are kept. One trained on the data as it is now can be made the
+          current model again, and its card, script and download follow it. A run from before a
+          cleaning change can only be reproduced by retraining.
         </p>
       </CardContent>
     </Card>

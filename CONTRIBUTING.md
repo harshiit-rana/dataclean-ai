@@ -118,7 +118,10 @@ are both running locally, you're ready to make changes.
 - **Run history survives `model_store.clear`.** `clear` fires when the data changes underneath
   a model, unsets the current run and drops the card and script — but not `model_history.json`, and not the
   stored runs in `runs/`, which are marked superseded instead. Read the model in use only through
-  `load_result`, `result_path` and `pipeline_path`, never by a file name: the files live in the current run's folder. That
+  `load_result`, `result_path` and `pipeline_path`, never by a file name: the files live in the current run's folder.
+  Anything cached from the current run (the card, the script, the report) must be dropped when the pointer moves, as
+  `model_store.set_current` does for the card and script; a restore is not a new look at the held-out rows and must
+  never go through `_save_and_record`. That
   moment is exactly when the history is most useful: the user has just changed something and
   wants to know whether it helped. Each entry carries a fingerprint of the data it trained on,
   so a run from before the change is *labelled* rather than deleted or silently compared.

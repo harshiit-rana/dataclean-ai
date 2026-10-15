@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { RunHistory, describeProvenance } from "./RunHistory";
 import type { ModelRun } from "@/api/types";
 
@@ -99,11 +99,6 @@ describe("RunHistory", () => {
   it("marks a tuned run", () => {
     renderHistory([run({ tuned: true }), run()]);
     expect(screen.getByText(/tuned/)).toBeInTheDocument();
-  });
-
-  it("is honest that an old run cannot be restored", () => {
-    renderHistory([run(), run()]);
-    expect(screen.getByText(/a record, not a restore point/)).toBeInTheDocument();
   });
 });
 
@@ -342,5 +337,60 @@ describe("RunHistory — refused and failed attempts are part of the record (#64
     renderHistory([refused, run({ model_label: "Random forest" })]);
     expect(screen.getByText(/· current/)).toBeInTheDocument();
     expect(screen.getByText(/latest attempt/)).toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — bringing back an earlier model (#67)", () => {
+  const older = run({ run_id: "older", model_label: "Random forest" });
+  const newer = run({ run_id: "newer", model_label: "Logistic regression" });
+
+  it("offers a stored run on the current data, and calls back with its id", () => {
+    const onRestore = vi.fn();
+    render(
+      <RunHistory runs={[newer, older]} currentFingerprint="aaa" currentRunId="newer"
+        storedRunIds={["newer", "older"]} onRestore={onRestore} />
+    );
+    const buttons = screen.getAllByRole("button", { name: "Make this the current model" });
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]);
+    expect(onRestore).toHaveBeenCalledWith("older");
+  });
+
+  it("offers nothing for a run trained before the data changed, or one no longer stored", () => {
+    const stale = run({ run_id: "stale", data_fingerprint: "old" });
+    render(
+      <RunHistory runs={[newer, stale, older]} currentFingerprint="aaa" currentRunId="newer"
+        storedRunIds={["newer", "stale"]} onRestore={() => {}} />
+    );
+    expect(screen.queryByRole("button", { name: "Make this the current model" })).not.toBeInTheDocument();
+  });
+
+  it("puts the current label where the server says the model in use is", () => {
+    render(
+      <RunHistory runs={[newer, older]} currentFingerprint="aaa" currentRunId="older"
+        storedRunIds={["newer", "older"]} onRestore={() => {}} />
+    );
+    const current = screen.getByText(/· current/).closest("tr")!;
+    expect(current).toHaveTextContent("Random forest");
+  });
+
+  it("shows a restore as an event with no score, skipped by the changes", () => {
+    const restoredEvent = run({
+      run_id: "event", status: "restored", restored_run_id: "older",
+      reason: "Brought back the Random forest trained at 10:00.", metrics: {},
+    });
+    render(
+      <RunHistory runs={[restoredEvent, run({ metrics: { roc_auc: 0.9 } }), run({ metrics: { roc_auc: 0.8 } })]}
+        currentFingerprint="aaa" />
+    );
+    expect(screen.getByText("Restored")).toBeInTheDocument();
+    expect(screen.getByText("no new score")).toBeInTheDocument();
+    expect(screen.getByText("+0.1000")).toBeInTheDocument();
+  });
+
+  it("no longer says an earlier run cannot be brought back", () => {
+    renderHistory([newer, older]);
+    expect(screen.queryByText(/can't be brought back/)).not.toBeInTheDocument();
+    expect(screen.getByText(/can be made the\s+current model again/)).toBeInTheDocument();
   });
 });
