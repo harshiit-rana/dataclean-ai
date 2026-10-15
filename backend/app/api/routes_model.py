@@ -486,6 +486,14 @@ async def get_model_plan(
     # Proposed against the columns that will actually be inputs: a missing flag on a column
     # withheld for leaking the answer would leak it straight back in.
     proposed_features = feature_recipes.propose(df, target, previously_excluded)
+    if stored:
+        # An interaction is never proposed up front (the improvement loop chooses its pairs), so the ones the
+        # last run kept are added back here: ticked, with the evidence that earned them their place.
+        known = {r.id for r in proposed_features}
+        for payload in stored.get("features", {}).get("derived", []) or []:
+            if isinstance(payload, dict) and payload.get("kind") == "interaction" and payload.get("id") not in known:
+                restored = feature_recipes.select(df, target, previously_excluded, [payload["id"]])
+                proposed_features.extend(restored)
     chosen_features = (
         [r["id"] for r in stored.get("features", {}).get("derived", [])]
         if stored

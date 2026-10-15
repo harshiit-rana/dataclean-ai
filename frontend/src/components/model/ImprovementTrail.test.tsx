@@ -230,3 +230,33 @@ describe("ImprovementTrail — inputs removed by selection (#57)", () => {
     expect(screen.queryByRole("list", { name: "Removed inputs" })).not.toBeInTheDocument();
   });
 });
+
+describe("ImprovementTrail — combinations of inputs (#59)", () => {
+  const round = (kept: unknown[]) => ({
+    name: "interactions", label: "Combinations of inputs", what_it_tried: "Tried 7 products and ratios.",
+    score: 0.91, std: 0.01, gain: 0.12, accepted: kept.length > 0,
+    outcome: kept.length ? "1 combination helps: x1__x__x2. They stay." : "None of them helped.",
+    detail: { tried: 7, kept },
+  });
+
+  it("lists each kept combination with the fresh-fold check that earned its place", () => {
+    render(
+      <ImprovementTrail
+        trail={trail({
+          rounds: [round([{
+            id: "interaction:product:x1 x x2", output: "x1__x__x2", gain: 0.12, search_score: 0.91,
+            confirmation_score: 0.9, incumbent_confirmation_score: 0.78,
+          }])],
+        })}
+      />
+    );
+    const list = screen.getByRole("list", { name: "Kept combinations" });
+    expect(list).toHaveTextContent("x1__x__x2: +0.120 on the training folds; on fresh folds 0.900 against 0.780");
+  });
+
+  it("shows no list when nothing was kept", () => {
+    render(<ImprovementTrail trail={trail({ rounds: [round([])] })} />);
+    expect(screen.queryByRole("list", { name: "Kept combinations" })).not.toBeInTheDocument();
+    expect(screen.getByText("None of them helped.")).toBeInTheDocument();
+  });
+});

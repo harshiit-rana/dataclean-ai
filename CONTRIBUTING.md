@@ -318,7 +318,7 @@ are both running locally, you're ready to make changes.
   noise. When a name *does* carry signal it is usually worse, because what it carries is what
   it stands in for. Suggested, never enforced.
 - **A derived input is a declared recipe, and the export rebuilds it.** `features.Recipe` is
-  a frozen dataclass with a closed set of five kinds; `apply` and `as_pandas` are two
+  a frozen dataclass with a closed set of six kinds; `apply` and `as_pandas` are two
   renderings of the same recipe and a test applies both to one frame and compares them. If
   they drift, `train_model.py` silently builds different inputs from the ones that were
   scored and every number in the app becomes unreproducible. To add a kind, add a branch to
@@ -346,6 +346,11 @@ are both running locally, you're ready to make changes.
   says so. Test a new learned encoding the way `test_target_encoding.py` does: a column of random ids
   must gain no fold score, and an encoding computed over every row must be shown to score far above
   chance, so the test can tell a leak from no leak.
+- **A recipe the loop invents must be rebuildable from its id.** An `interaction` is never in `propose`, so
+  `features.select` parses its id (`interaction:product:a x b`) back into the recipe, under the same rules as any
+  proposal: both columns present, numeric, varying, and neither the target nor excluded. Any new loop-made kind needs
+  the same id round trip, a branch in both `apply` and `as_pandas` with a parity test (include the awkward values:
+  zero denominators, blanks), and a place in the plan so the next run shows it ticked.
 - **Recipe ids are re-proposed, never trusted.** `features.select` re-runs `propose` and keeps
   the ids that come back, so a stale id for a column that no longer supports the recipe is
   dropped quietly rather than failing a run, and a recipe naming an excluded column cannot be

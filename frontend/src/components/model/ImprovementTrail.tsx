@@ -8,6 +8,21 @@ const STRATEGY_LABELS: Record<string, string> = {
   halving: "successive halving",
 };
 
+interface KeptCombination {
+  id: string;
+  output: string;
+  gain: number;
+  search_score: number;
+  confirmation_score: number;
+  incumbent_confirmation_score: number;
+}
+
+/** The combinations an interactions round kept, with the fresh-fold check that earned each its place. */
+function keptCombinationsOf(detail: Record<string, unknown> | undefined): KeptCombination[] {
+  const kept = detail?.kept;
+  return Array.isArray(kept) ? (kept as KeptCombination[]) : [];
+}
+
 interface RemovedInput {
   column: string;
   importance: number;
@@ -181,6 +196,16 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
                   {STRATEGY_LABELS[String(round.detail.strategy)] ?? String(round.detail.strategy)}:{" "}
                   {round.detail.strategy_reason}.
                 </p>
+              )}
+              {keptCombinationsOf(round.detail).length > 0 && (
+                <ul className="mt-2 flex flex-col gap-0.5 text-xs text-muted-foreground" aria-label="Kept combinations">
+                  {keptCombinationsOf(round.detail).map((kept) => (
+                    <li key={kept.id} className="tabular-nums">
+                      {kept.output}: +{kept.gain.toFixed(3)} on the training folds; on fresh folds{" "}
+                      {kept.confirmation_score.toFixed(3)} against {kept.incumbent_confirmation_score.toFixed(3)}
+                    </li>
+                  ))}
+                </ul>
               )}
               {removedOf(round.detail).length > 0 && (
                 <ul className="mt-2 flex flex-col gap-0.5 text-xs text-muted-foreground" aria-label="Removed inputs">

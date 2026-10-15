@@ -67,19 +67,19 @@ class TestWhenTheLimitBites:
     def test_a_search_cut_short_says_how_far_it_got_and_the_later_rounds_are_skipped(self, clock):
         found = improve(time_limit_seconds=25)
         assert found["stopped_because"] == "time_limit" and found["time_limit_seconds"] == 25
-        assert names(found) == ["baseline", "hyperparameters", "other_models", "derived_features"]
+        assert names(found) == ["baseline", "hyperparameters", "other_models", "derived_features", "interactions"]
         settings = next(r for r in found["rounds"] if r["name"] == "hyperparameters")
         assert settings["detail"]["stopped_for_time"] is True and settings["detail"]["tried"] < settings["detail"]["planned"]
         assert "The time limit stopped it after" in settings["what_it_tried"]
         for skipped in found["rounds"][2:]:
             assert skipped["detail"] == {"skipped": "time_limit"} and skipped["accepted"] is False
             assert skipped["outcome"] == "Not run: the 25-second time limit was reached first."
-        assert found["skipped_for_time"] == ["other_models", "derived_features"]
+        assert found["skipped_for_time"] == ["other_models", "derived_features", "interactions"]
 
     def test_a_limit_gone_before_the_second_round_skips_every_search_round(self, clock):
         found = improve(time_limit_seconds=1)
         assert found["stopped_because"] == "time_limit"
-        assert found["skipped_for_time"] == ["hyperparameters", "other_models", "derived_features"]
+        assert found["skipped_for_time"] == ["hyperparameters", "other_models", "derived_features", "interactions"]
         baseline = found["rounds"][0]
         # One family is always scored; the rest were left for want of time and the round says so.
         assert len(baseline["detail"]["scores"]) == 1 and baseline["detail"]["unscored_for_time"]
@@ -94,7 +94,7 @@ class TestWhenTheLimitBites:
         stages = []
         improve(time_limit_seconds=1, on_stage=lambda name, description: stages.append((name, description)))
         skipped = [name for name, description in stages if description.startswith("Skipped:")]
-        assert skipped == ["hyperparameters", "other_models", "derived_features"]
+        assert skipped == ["hyperparameters", "other_models", "derived_features", "interactions"]
 
     def test_runner_ups_are_skipped_one_by_one_when_time_runs_out_between_them(self, clock):
         found = improvement.improve(
@@ -158,7 +158,7 @@ class TestOverHttp:
         assert response.status_code == 200, response.text
         trail = response.json()["improvement"]
         assert trail["stopped_because"] == "time_limit" and trail["time_limit_seconds"] == 1
-        assert trail["skipped_for_time"] == ["hyperparameters", "other_models", "derived_features"]
+        assert trail["skipped_for_time"] == ["hyperparameters", "other_models", "derived_features", "interactions"]
 
     @pytest.mark.parametrize("bad", [0, 0.5, -3, 3601])
     def test_a_limit_out_of_range_is_refused(self, bad):

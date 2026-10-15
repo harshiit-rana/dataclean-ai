@@ -8,7 +8,7 @@ as an "identifier" because nearly every value was distinct, which reaches the ri
 the wrong reason and, in a tool whose premise is that the reason is the product, a wrong reason
 is the defect.
 
-Five kinds of recipe, each a declared piece of data rather than code, so the exported script
+Six kinds of recipe, each a declared piece of data rather than code, so the exported script
 can reproduce it line for line:
 
 - **date_parts**: year, month, weekday and days-since-epoch from a date column.
@@ -25,6 +25,11 @@ can reproduce it line for line:
   encoding on rows that do not include it, inside the pipeline and so inside every training fold.
   Offered only where the common-values recipe is not, and not used with a grouped split, where
   that cross-fitting does not know about the groups.
+- **interaction**: the product or ratio of two numeric inputs (spend per visit, tickets per month of
+  tenure), for the relationships a linear model cannot form. Row-wise like the first three, so it is
+  computed before the split. Never proposed up front: the improvement loop chooses which pairs to try
+  from the inputs that matter, and keeps only those that help; the id names the pair, so it can be
+  rebuilt, and a division by zero is blank rather than infinite.
 
 The first three are row-wise and stateless: a row's weekday does not depend on any other row,
 so deriving it before the split cannot leak. The last two learn something from the rows (which
@@ -45,7 +50,13 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-KINDS = ("date_parts", "text_length", "missing_flag", "frequent_categories", "target_encoding")
+KINDS = (
+    "date_parts", "text_length", "missing_flag", "frequent_categories", "target_encoding", "interaction",
+)
+
+# What stands between the two columns of an interaction in its id, and the name of its output.
+INTERACTION_SEPARATORS = {"product": " x ", "ratio": " / "}
+INTERACTION_OUTPUTS = {"product": "{a}__x__{b}", "ratio": "{a}__per__{b}"}
 
 # A value has to repeat for its average answer to mean anything: a column where nearly every row has
 # its own value is an identifier, and encoding it can only memorise.
@@ -319,6 +330,55 @@ def propose(
     return recipes
 
 
+def interaction_id(op: str, a: str, b: str) -> str:
+    return f"interaction:{op}:{a}{INTERACTION_SEPARATORS[op]}{b}"
+
+
+def interaction_recipe(df: pd.DataFrame, op: str, a: str, b: str) -> Recipe | None:
+    """The product or ratio of two numeric columns, or None if they cannot make one.
+
+    Both must be there, different, numeric and not constant; a ratio's denominator must also be non-zero
+    somewhere. Nothing here reads the target.
+    """
+    if op not in INTERACTION_SEPARATORS or a == b or a not in df.columns or b not in df.columns:
+        return None
+    first, second = pd.to_numeric(df[a], errors="coerce"), pd.to_numeric(df[b], errors="coerce")
+    if not (pd.api.types.is_numeric_dtype(df[a]) and pd.api.types.is_numeric_dtype(df[b])):
+        return None
+    if first.nunique(dropna=True) <= 1 or second.nunique(dropna=True) <= 1:
+        return None
+    if op == "ratio" and not bool((second.fillna(0) != 0).any()):
+        return None
+    word = "times" if op == "product" else "divided by"
+    return Recipe(
+        id=interaction_id(op, a, b),
+        kind="interaction",
+        column=a,
+        outputs=[INTERACTION_OUTPUTS[op].format(a=a, b=b)],
+        reason=f"'{a}' {word} '{b}': a relationship a linear model cannot form from the two columns separately.",
+        evidence={"op": op, "a": a, "b": b},
+    )
+
+
+def _interaction_from_id(df: pd.DataFrame, recipe_id: str) -> Recipe | None:
+    """Rebuilds an interaction recipe from its id, trying every place the separator occurs because a column
+    name may contain it. Returns None unless both halves are columns that make a valid pair."""
+    try:
+        _, op, pair = recipe_id.split(":", 2)
+    except ValueError:
+        return None
+    separator = INTERACTION_SEPARATORS.get(op)
+    if separator is None:
+        return None
+    parts = pair.split(separator)
+    for cut in range(1, len(parts)):
+        a, b = separator.join(parts[:cut]), separator.join(parts[cut:])
+        found = interaction_recipe(df, op, a, b)
+        if found is not None:
+            return found
+    return None
+
+
 def select(
     df: pd.DataFrame,
     target_column: str,
@@ -327,11 +387,22 @@ def select(
 ) -> list[Recipe]:
     """The proposals whose ids the user sent back. Re-proposed rather than trusted from the
     request, so an id for a column that no longer supports the recipe is dropped quietly and
-    a recipe on an excluded column cannot be smuggled in."""
+    a recipe on an excluded column cannot be smuggled in.
+
+    An interaction is never proposed up front (the improvement loop chooses its pairs), so its id is
+    rebuilt from the pair it names -- under the same rule: both columns must be there, numeric, varying,
+    and neither the target nor excluded."""
     if not wanted:
         return []
     wanted_ids = set(wanted)
-    return [r for r in propose(df, target_column, excluded) if r.id in wanted_ids]
+    kept = [r for r in propose(df, target_column, excluded) if r.id in wanted_ids]
+    skip = {target_column, *(excluded or [])}
+    for recipe_id in wanted:
+        if recipe_id.startswith("interaction:"):
+            found = _interaction_from_id(df, recipe_id)
+            if found is not None and not ({found.evidence["a"], found.evidence["b"]} & skip):
+                kept.append(found)
+    return kept
 
 
 # --- applying --------------------------------------------------------------------------------
@@ -366,6 +437,18 @@ def apply(df: pd.DataFrame, recipes: list[Recipe]) -> pd.DataFrame:
             out[f"{recipe.column}__words"] = text.str.split().str.len().astype("float64")
         elif recipe.kind == "missing_flag":
             out[f"{recipe.column}__missing"] = series.isna().astype("float64")
+        elif recipe.kind == "interaction":
+            second_name = recipe.evidence.get("b")
+            if second_name not in out.columns:
+                continue
+            first = pd.to_numeric(series, errors="coerce").astype("float64")
+            second = pd.to_numeric(out[second_name], errors="coerce").astype("float64")
+            if recipe.evidence.get("op") == "product":
+                out[recipe.outputs[0]] = first * second
+            else:
+                # A zero denominator is blank, never infinite: the model's imputer fills a blank, and an
+                # infinity would break the fit.
+                out[recipe.outputs[0]] = first / second.where(second != 0)
     return out
 
 
@@ -429,4 +512,10 @@ def as_pandas(recipes: list[Recipe], frame: str = "df") -> str:
             lines.append(f"{frame}[{recipe.column + '__words'!r}] = _text.str.split().str.len().astype(\"float64\")")
         elif recipe.kind == "missing_flag":
             lines.append(f"{frame}[{recipe.column + '__missing'!r}] = {frame}[{col}].isna().astype(\"float64\")")
+        elif recipe.kind == "interaction":
+            other = repr(recipe.evidence["b"])
+            lines.append(f"_first = pd.to_numeric({frame}[{col}], errors=\"coerce\").astype(\"float64\")")
+            lines.append(f"_second = pd.to_numeric({frame}[{other}], errors=\"coerce\").astype(\"float64\")")
+            expression = "_first * _second" if recipe.evidence["op"] == "product" else "_first / _second.where(_second != 0)"
+            lines.append(f"{frame}[{recipe.outputs[0]!r}] = {expression}")
     return "\n".join(lines)

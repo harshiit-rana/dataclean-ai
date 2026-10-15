@@ -230,7 +230,13 @@ export interface ClippingOffer {
  * frequent_categories, which changes how a column is encoded rather than adding one. */
 export interface FeatureRecipe {
   id: string;
-  kind: "date_parts" | "text_length" | "missing_flag" | "frequent_categories" | "target_encoding";
+  kind:
+    | "date_parts"
+    | "text_length"
+    | "missing_flag"
+    | "frequent_categories"
+    | "target_encoding"
+    | "interaction";
   column: string;
   outputs: string[];
   reason: string;

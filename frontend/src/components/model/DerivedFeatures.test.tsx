@@ -87,3 +87,21 @@ describe("DerivedFeatures — target encoding (#58)", () => {
   });
 });
 
+describe("DerivedFeatures — a combination the loop kept (#59)", () => {
+  const COMBINED: FeatureRecipe = {
+    id: "interaction:product:x1 x x2",
+    kind: "interaction",
+    column: "x1",
+    outputs: ["x1__x__x2"],
+    reason: "'x1' times 'x2': a relationship a linear model cannot form from the two columns separately.",
+    evidence: { op: "product", a: "x1", b: "x2" },
+  };
+
+  it("shows it ticked, labelled for what it is, with the column it adds", () => {
+    render(<DerivedFeatures recipes={[COMBINED]} chosen={[COMBINED.id]} onChange={vi.fn()} />);
+    expect(screen.getByText("Two columns combined")).toBeInTheDocument();
+    expect(screen.getByText("x1__x__x2")).toBeInTheDocument();
+    expect(screen.getByRole("checkbox")).toBeChecked();
+  });
+});
+

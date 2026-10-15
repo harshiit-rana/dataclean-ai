@@ -495,6 +495,34 @@ class TestTheImprovementLoop:
         searched = [r for r in honest["rounds"] if r["detail"].get("rungs")]
         assert searched  # the strategy ran, so there were rungs to protect
 
+    def test_which_combinations_are_kept_never_depends_on_the_test_answers(self, flipped_test_answers):
+        """The sixth round ranks the numeric inputs on validation folds, tries products and ratios of the top
+        few, and confirms the winner on fresh folds. Give it data where a product helps, flip every held-out
+        answer, and the pairs tried, the one kept and every round must be identical."""
+        rng = np.random.default_rng(41)
+        n = 500
+        x1, x2 = rng.normal(size=n), rng.normal(size=n)
+        logit = x1 + x2 + 2.5 * x1 * x2
+        df = pd.DataFrame({
+            "x1": x1, "x2": x2, "n0": rng.normal(size=n),
+            "outcome": np.where(rng.random(n) < 1 / (1 + np.exp(-logit)), "yes", "no"),
+        })
+
+        def linear():  # a forest finds a product by itself; the linear model needs it handed over
+            return improvement.improve(
+                df, target_column="outcome", task="classification", model_names=["logistic_regression"], budget=4
+            )
+
+        honest = linear()
+        flipped_test_answers()
+        rigged = linear()
+
+        kept = next(r for r in honest["rounds"] if r["name"] == "interactions")["detail"].get("kept")
+        assert kept  # the round ran and kept something, so there was a decision to protect
+        assert self._decisions(rigged) == self._decisions(honest)
+        assert rigged["best"]["feature_recipes"] == honest["best"]["feature_recipes"]
+        assert rigged["test_metrics"] != honest["test_metrics"]
+
     def test_which_inputs_are_removed_never_depends_on_the_test_answers(self, learnable, flipped_test_answers):
         """The fifth round ranks inputs by shuffling them on validation folds of the training rows. Give the
         data enough noise columns for it to run, flip every held-out answer, and the importances, the

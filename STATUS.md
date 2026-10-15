@@ -751,6 +751,17 @@ declined for a grouped split and for identical rows kept together, and the resul
 loop's derived-inputs round tries it along with the other recipes under the gain rule, and the exported script builds the
 same encoder with the same folds (a test runs the script and compares its accuracy).
 
+**Combinations of inputs (#59).** A linear model cannot form a ratio or a product, and some relationships only show as
+one (spend per visit, tickets per month of tenure). After the other rounds the loop takes the numeric inputs that matter
+most on validation folds (the same fold importance the previous round uses), tries the products of up to four of them and
+two ratios, at most eight pairs, and keeps a combination only if it clears the gain rule against the incumbent *and* holds on
+fresh folds, since the best of several tried is the luckiest of them. At most two are kept, the second scored on top of
+the first. A combination is a row-wise recipe (`interaction`), so it is computed before the split and cannot leak; a zero
+denominator is blank, never infinite; it is never proposed up front, but its id names the pair (`interaction:product:a x b`),
+so it is rebuilt for the final model, the next plan shows it ticked with its evidence, and the exported script computes it
+with the same lines `apply` runs (a test compares the two, with zero denominators). The trail lists what was kept with the
+check on fresh folds, and how many pairs were tried. On data with no signal nothing is kept.
+
 **A record of what you tried.** Results used to overwrite a single file, so retraining
 discarded the previous run — which made the question people actually ask unanswerable: *did the
 thing I just changed help?* Every run is now kept with its settings, its headline number and

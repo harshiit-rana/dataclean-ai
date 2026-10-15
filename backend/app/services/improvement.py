@@ -58,6 +58,12 @@ WORTH_TUNING_WITHIN = 0.05
 # Fewer inputs than this and there is nothing worth ranking: removing one of three leaves two.
 MIN_INPUTS_TO_SELECT = 4
 
+# The interactions round looks at the numeric inputs that matter most, and only so many: every pair tried is
+# another chance for one to look good by luck, so the number tried is bounded and recorded.
+INTERACTION_TOP_INPUTS = 4
+MAX_INTERACTIONS_TRIED = 8
+MAX_INTERACTIONS_KEPT = 2
+
 
 @dataclass
 class Round:
@@ -827,6 +833,7 @@ def improve(
                 best_score, best_std = scored.score, scored.std
                 recipes, features, used = alt_recipes, alt_features, alt_used
                 X_train, X_test = alt_frame.loc[train_index, used], alt_frame.loc[test_index, used]
+                frames["current"] = (alt_recipes, alt_frame)  # what later rounds add columns to
                 emit(
                     Round(
                         name="derived_features",
@@ -981,6 +988,147 @@ def improve(
                         detail=shown,
                     )
                 )
+        if _goal_met(best_score, goal):
+            stopped_because = "goal_reached"
+
+    # --- Round 6: combinations of the inputs that matter ---------------------------------
+    #
+    # A linear model cannot form a ratio or a product, and some relationships only show as one (spend per
+    # visit, tickets per month of tenure). Take the numeric inputs that matter most, try their products and a
+    # few ratios, and keep a combination only if it clears the gain rule *and* holds on fresh folds -- the
+    # best of several tried is the luckiest of them, which is the winner's curse again. Each candidate is a
+    # row-wise recipe, so it is computed before the split and cannot leak.
+    kept_interactions: list[dict] = []
+    tried_interactions: list[dict] = []
+    if not stopped_because and out_of_time():
+        stopped_because = "time_limit"
+    if (
+        stopped_because == "time_limit"
+        and "interactions" not in skipped_for_time
+        and len([c for c in used if c in features["numeric"]]) >= 2
+    ):
+        skip_for_time(
+            "interactions", "Combinations of inputs",
+            "Tried products and ratios of the numeric inputs that matter most.",
+        )
+    if not stopped_because and len([c for c in used if c in features["numeric"]]) >= 2:
+        starting("interactions", "Trying combinations of the inputs that matter most.")
+        importance = fold_importance(
+            build_for(best_name, best_params, features), X_train, y_train, task,
+            groups=train_groups, ordered=ordered, columns=[c for c in used if c in features["numeric"]],
+        )
+        top = [c for c in sorted(importance, key=lambda c: -importance[c][0])
+               if importance[c][0] > 0][:INTERACTION_TOP_INPUTS]
+        base_frame = frames["current"][1]
+        candidates: list[feature_recipes.Recipe] = []
+        for i, a in enumerate(top):
+            for b in top[i + 1:]:
+                found = feature_recipes.interaction_recipe(base_frame, "product", a, b)
+                if found is not None:
+                    candidates.append(found)
+        for a, b in [(top[0], top[1]), (top[1], top[0])] if len(top) >= 2 else []:
+            found = feature_recipes.interaction_recipe(base_frame, "ratio", a, b)
+            if found is not None:
+                candidates.append(found)
+        candidates = candidates[:MAX_INTERACTIONS_TRIED]
+
+        what = (
+            f"Tried {len(candidates)} products and ratios of the {len(top)} numeric inputs that matter most, "
+            f"each scored on the training folds."
+            if len(top) >= 2
+            else "Looked for numeric inputs that matter enough to combine."
+        )
+
+        def with_interaction(recipe):
+            frame = feature_recipes.apply(frames["current"][1], [recipe])
+            added = {**features, "numeric": [*features["numeric"], *recipe.outputs]}
+            columns = [*used, *recipe.outputs]
+            return frame, added, columns
+
+        def score_with(recipe, *, fresh_folds: bool = False):
+            frame, added, columns = with_interaction(recipe)
+            extra = dict(confirmation=True) if fresh_folds else {}
+            scored = tuning.score_config(
+                build_for(best_name, best_params, added), frame.loc[train_index, columns], y_train, task,
+                groups=train_groups, ordered=ordered, **extra,
+            )
+            return scored, frame, added, columns
+
+        # Each candidate is scored once, against the incumbent as it stands now.
+        ranked: list[tuple[tuning.SearchResult, feature_recipes.Recipe]] = []
+        for recipe in candidates:
+            scored, *_ = score_with(recipe)
+            tried_interactions.append({"id": recipe.id, "score": None if scored is None else scored.score})
+            if scored is not None:
+                ranked.append((scored, recipe))
+            if out_of_time():
+                cut_short = True
+                break
+        ranked.sort(key=lambda pair: -pair[0].score)
+
+        while ranked and len(kept_interactions) < MAX_INTERACTIONS_KEPT and not out_of_time():
+            scored, recipe = ranked.pop(0)
+            if kept_interactions:
+                # The incumbent has changed since this was scored: score it on top of what was kept.
+                scored, *_ = score_with(recipe)
+                tried_interactions.append({"id": recipe.id, "score": None if scored is None else scored.score})
+                if scored is None:
+                    continue
+            if not _is_real_gain(scored.score, best_score, scored.std):
+                break
+            # The best of those tried: confirm it, against the incumbent, on folds that did not pick it.
+            winner, frame, added, columns = score_with(recipe, fresh_folds=True)
+            incumbent = tuning.score_config(
+                build_for(best_name, best_params, features), X_train, y_train, task,
+                groups=train_groups, ordered=ordered, confirmation=True,
+            )
+            if winner is None or incumbent is None or not _is_real_gain(winner.score, incumbent.score, winner.std):
+                break  # the luckiest of those tried did not hold on fresh folds: nothing changes
+            gain = round(scored.score - best_score, 4)
+            best_score, best_std = scored.score, scored.std
+            recipes = [*recipes, recipe]
+            frames["current"] = (recipes, frame)
+            features, used = added, columns
+            X_train, X_test = frame.loc[train_index, used], frame.loc[test_index, used]
+            kept_interactions.append(
+                {"id": recipe.id, "output": recipe.outputs[0], "gain": gain,
+                 "search_score": scored.score, "confirmation_score": winner.score,
+                 "incumbent_confirmation_score": incumbent.score}
+            )
+            # Only the next two best get a second look, on top of what was just kept.
+            ranked = ranked[:2]
+
+        if kept_interactions:
+            emit(
+                Round(
+                    name="interactions",
+                    label="Combinations of inputs",
+                    what_it_tried=what,
+                    score=best_score,
+                    std=best_std,
+                    gain=round(sum(k["gain"] for k in kept_interactions), 4),
+                    accepted=True,
+                    outcome=f"{len(kept_interactions)} combination{'s' if len(kept_interactions) != 1 else ''} "
+                    f"help: {', '.join(k['output'] for k in kept_interactions)}. They stay.",
+                    detail={"tried": len(tried_interactions), "kept": kept_interactions},
+                )
+            )
+        else:
+            emit(
+                Round(
+                    name="interactions",
+                    label="Combinations of inputs",
+                    what_it_tried=what,
+                    accepted=False,
+                    outcome=(
+                        "Fewer than two numeric inputs matter enough to combine."
+                        if len(top) < 2
+                        else "None of them helped by more than the folds disagree with each other, so the inputs "
+                        "were left as they were."
+                    ),
+                    detail={"tried": len(tried_interactions)},
+                )
+            )
         if _goal_met(best_score, goal):
             stopped_because = "goal_reached"
 

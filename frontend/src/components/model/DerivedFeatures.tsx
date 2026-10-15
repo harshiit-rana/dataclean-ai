@@ -14,6 +14,7 @@ const KIND_LABELS: Record<FeatureRecipe["kind"], string> = {
   missing_flag: "From the blanks",
   frequent_categories: "Keeping the common values",
   target_encoding: "Encoded by the average answer",
+  interaction: "Two columns combined",
 };
 
 /** Inputs the model can use, built from columns it otherwise couldn't.
