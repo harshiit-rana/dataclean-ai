@@ -125,7 +125,7 @@ export function ReadinessPanel({
 
         {/* The verdict above is a claim about what *isn't* wrong, which nobody can confirm
             by looking at the data. This is the working behind it. */}
-        <CheckTrail checks={readiness.checks ?? []} counts={readiness.check_counts} />
+        <CheckTrail checks={readiness.checks ?? []} counts={readiness.check_counts} sessionId={sessionId} />
 
 
         {remaining.total > 0 && (

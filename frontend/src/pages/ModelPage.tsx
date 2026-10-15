@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button, buttonClasses } from "@/components/ui/button";
@@ -7,7 +7,7 @@ import { DownloadButton } from "@/components/ui/download-button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ImprovementTrail } from "@/components/model/ImprovementTrail";
 import { LiveImprovement } from "@/components/model/LiveImprovement";
-import { ModelPlanForm } from "@/components/model/ModelPlanForm";
+import { ModelPlanForm, type Preselect } from "@/components/model/ModelPlanForm";
 import { ModelResults } from "@/components/model/ModelResults";
 import { RunHistory } from "@/components/model/RunHistory";
 import { TrainingProblem } from "@/components/model/TrainingProblem";
@@ -75,6 +75,15 @@ export function requestFromResult(result: ModelResult): TrainRequest {
  * plan stays reachable the whole time. */
 export function ModelPage() {
   const { sessionId } = useParams();
+  // A link from a readiness check pre-fills the form (a column to leave out, a grouped split). It only
+  // pre-fills: the user reviews the form and presses train.
+  const [searchParams] = useSearchParams();
+  const preselect: Preselect = {
+    exclude: searchParams.getAll("exclude"),
+    split: searchParams.get("split") === "group" ? "group" : undefined,
+    group: searchParams.get("group") ?? undefined,
+  };
+  const hasPreselect = (preselect.exclude?.length ?? 0) > 0 || preselect.split === "group";
   const [plan, setPlan] = useState<ModelPlan | null>(null);
   const [result, setResult] = useState<ModelResult | null>(null);
   const [card, setCard] = useState<string | null>(null);
@@ -118,12 +127,13 @@ export function ModelPage() {
       setPlan(nextPlan);
       setResult(existing);
       setHistory(runs);
-      setShowPlan(existing === null);
+      // The form is shown when there is nothing to read yet, or when a link asked for it to be set up.
+      setShowPlan(existing === null || hasPreselect);
       setPlanError(null);
     } catch (err) {
       setPlanError(err instanceof ApiError ? err.detail : String((err as Error)?.message ?? err));
     }
-  }, [sessionId]);
+  }, [sessionId, hasPreselect]);
 
   useEffect(() => {
     void load();
@@ -389,7 +399,7 @@ export function ModelPage() {
       )}
 
       {(showPlan || !result) && (
-        <ModelPlanForm plan={plan} onTrain={handleTrain} training={training} />
+        <ModelPlanForm plan={plan} onTrain={handleTrain} training={training} preselect={preselect} />
       )}
 
       {training && (

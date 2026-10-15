@@ -571,6 +571,14 @@ model was trained. Anything that changes the model's evaluation (training again,
 counted check on new data) marks a written report stale, so the next export rebuilds it; a report that was never
 written is left alone.
 
+**Readiness checks say where to go.** The checks that find something now carry `actions`, places to navigate
+to and never something applied: a column that gives away the answer offers "Leave '<column>' out of the model"
+(up to three), a column that repeats across rows offers "Split by '<column>'", and a missing or unnamed target
+offers "Choose a column to predict". The panel shows them as buttons on the failing check only. The first two
+open the model page with the choice already set up in the form (a column left out, a grouped split on that
+column) through `exclude`, `split` and `group` in the address; the user still reviews the form and presses
+train, and a column the plan does not offer is ignored.
+
 **Repeated folds when a small file is compared.** With a few hundred training rows one 5-fold
 partition can rank two close candidates one way and another partition the other way round. Below
 2,000 training rows, choosing the model, tuning it and the fold spread shown beside the score now

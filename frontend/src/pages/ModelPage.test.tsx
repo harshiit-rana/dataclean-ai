@@ -14,10 +14,13 @@ vi.mock("@/api/client", async (original) => ({
   trainModel: (...args: unknown[]) => trainModel(...args),
 }));
 vi.mock("@/components/model/ModelPlanForm", () => ({
-  ModelPlanForm: ({ onTrain }: { onTrain: (request: unknown) => void }) => (
-    <button onClick={() => onTrain({ excluded_columns: [], model_names: [], split_strategy: "random", time_column: null })}>
-      train now
-    </button>
+  ModelPlanForm: ({ onTrain, preselect }: { onTrain: (request: unknown) => void; preselect?: unknown }) => (
+    <div>
+      <span data-testid="preselect">{JSON.stringify(preselect)}</span>
+      <button onClick={() => onTrain({ excluded_columns: [], model_names: [], split_strategy: "random", time_column: null })}>
+        train now
+      </button>
+    </div>
   ),
 }));
 
@@ -35,9 +38,9 @@ const PLAN = {
   },
 } as unknown as ModelPlan;
 
-function renderPage() {
+function renderPage(address = "/model/s1") {
   render(
-    <MemoryRouter initialEntries={["/model/s1"]}>
+    <MemoryRouter initialEntries={[address]}>
       <Routes>
         <Route path="/model/:sessionId" element={<ModelPage />} />
       </Routes>
@@ -84,5 +87,32 @@ describe("ModelPage — a refused or failed training (#99)", () => {
     fireEvent.click(screen.getByText("train now"));
     await waitFor(() => expect(screen.getByText("Training didn't run")).toBeInTheDocument());
     expect(screen.queryByRole("link", { name: "See the failing readiness checks" })).not.toBeInTheDocument();
+  });
+});
+
+
+describe("ModelPage — set up from a readiness check (#100)", () => {
+  beforeEach(() => {
+    trainModel.mockReset();
+    fetchModelPlan.mockReset();
+    fetchModelPlan.mockResolvedValue(PLAN);
+  });
+
+  it("hands the form the columns and split the address names", async () => {
+    renderPage("/model/s1?exclude=leaky&exclude=other&split=group&group=customer");
+    const shown = await screen.findByTestId("preselect");
+    expect(JSON.parse(shown.textContent!)).toEqual({ exclude: ["leaky", "other"], split: "group", group: "customer" });
+  });
+
+  it("hands it nothing when the address names nothing", async () => {
+    renderPage();
+    const shown = await screen.findByTestId("preselect");
+    expect(JSON.parse(shown.textContent!)).toEqual({ exclude: [] });
+  });
+
+  it("does not trust a split that is not grouping", async () => {
+    renderPage("/model/s1?split=time&exclude=x");
+    const shown = await screen.findByTestId("preselect");
+    expect(JSON.parse(shown.textContent!)).toEqual({ exclude: ["x"] });
   });
 });

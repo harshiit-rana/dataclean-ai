@@ -438,6 +438,10 @@ are both running locally, you're ready to make changes.
   record changes, and read the model into the report with `evaluation_ledger.attach_later_evidence`, so the report,
   the card and the page see the same record. The report's model facts come from `model_card.protocol_facts`; do not
   restate them.
+- **A readiness check's action navigates; it never applies.** Build it with `readiness_checks.action(kind, label,
+  column)` and add the kind to `ACTION_KINDS`, to `actionPath` in `CheckTrail.tsx` and to
+  `tests/unit/test_readiness_check_actions.py`. If the place it leads to can be pre-set, pre-set it from the
+  address and still leave the decision to the user.
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,

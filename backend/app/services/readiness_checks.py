@@ -49,12 +49,27 @@ MIN_DISTINCT_FOR_ENTITY = 20
 MIN_REPETITION_FOR_ENTITY = 2.0
 
 
+# What a check's action can ask the page to take the user to. Every one is navigation: it opens the
+# place where the user decides, and applies nothing. The page maps each kind to a route.
+ACTION_KINDS = ("exclude_column", "use_group_split", "choose_target")
+# More than this many columns in one check is a list to read, not a row of buttons to press.
+MAX_ACTIONS_PER_CHECK = 3
+
+
+def action(kind: str, label: str, column: str | None = None) -> dict:
+    """A place a check can send the user: `{"kind", "label", "column"}`. Never applies anything."""
+    if kind not in ACTION_KINDS:
+        raise ValueError(f"Unknown check action: {kind!r}")
+    return {"kind": kind, "label": label, "column": column}
+
+
 @dataclass(frozen=True)
 class Check:
     """One question asked of the data, and the answer with its working.
 
     `remedy` is empty on a pass. On anything else it says what would change the answer --
-    a finding the user cannot act on is only half-reported.
+    a finding the user cannot act on is only half-reported. `actions` say where to go to act on
+    it; they navigate, and approval stays an explicit step on the page they lead to.
     """
 
     name: str
@@ -67,6 +82,7 @@ class Check:
     # impossible. The only kind of edge these checks genuinely have.
     blocked_by: str | None = None
     severity: Severity | None = None
+    actions: tuple[dict, ...] = ()
 
     def as_dict(self) -> dict:
         return {
@@ -78,6 +94,7 @@ class Check:
             "remedy": self.remedy,
             "blocked_by": self.blocked_by,
             "severity": self.severity,
+            "actions": list(self.actions),
         }
 
 
@@ -328,4 +345,8 @@ def check_repeated_entities(df: pd.DataFrame, target: str) -> Check:
         f"A random split will otherwise report a score the model cannot repeat on an entity "
         f"it has not seen.",
         severity="warning",
+        actions=tuple(
+            action("use_group_split", f"Split by '{column}'", column)
+            for column, _ in candidates[:MAX_ACTIONS_PER_CHECK]
+        ),
     )

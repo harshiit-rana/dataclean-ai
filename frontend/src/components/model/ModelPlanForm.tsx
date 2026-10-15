@@ -33,18 +33,36 @@ const EXCLUSION_LABELS: Record<string, string> = {
   personal: "A person's name or contact details",
 };
 
+/** Choices set up by a link from a readiness check. They only pre-fill the form: the user still reviews
+ * it and presses train. A column the plan does not offer is ignored. */
+export interface Preselect {
+  exclude?: string[];
+  split?: "group";
+  group?: string;
+}
+
 interface ModelPlanFormProps {
   plan: ModelPlan;
   onTrain: (request: TrainRequest) => void;
   training: boolean;
+  preselect?: Preselect;
 }
 
 /** The decisions that matter in a model build all happen before any fitting: which columns
  * count as inputs, how the data is split, which models to try. Putting them behind a single
  * "train" button would make them defaults nobody chose, so they are laid out here with the
  * app's reasoning attached and everything adjustable. */
-export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
-  const [excluded, setExcluded] = useState<string[]>(plan.excluded_columns);
+export function ModelPlanForm({ plan, onTrain, training, preselect }: ModelPlanFormProps) {
+  const known = new Set([
+    ...plan.features.numeric,
+    ...plan.features.categorical,
+    ...(plan.features.frequent ?? []),
+    ...plan.features.dropped.map((d) => d.column),
+  ]);
+  const [excluded, setExcluded] = useState<string[]>(() => [
+    ...plan.excluded_columns,
+    ...(preselect?.exclude ?? []).filter((c) => known.has(c) && !plan.excluded_columns.includes(c)),
+  ]);
   const [models, setModels] = useState<string[]>(plan.candidate_models.map((m) => m.name));
   // Pre-selects what the app recommends, with its reasons shown; a recommendation that names a
   // column the form cannot offer (it is not in the lists below) falls back to a random split.
@@ -56,8 +74,13 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
       (advice.strategy === "group" && advice.column != null && (plan.group_columns ?? []).includes(advice.column)))
       ? advice
       : null;
+  const groupChoices = [...(plan.group_columns ?? []), ...(plan.group_column_options ?? [])];
+  const preselectedGroup =
+    preselect?.split === "group" && preselect.group && groupChoices.includes(preselect.group)
+      ? preselect.group
+      : null;
   const [splitStrategy, setSplitStrategy] = useState<"random" | "time" | "group">(
-    usableAdvice?.strategy ?? "random"
+    preselectedGroup ? "group" : (usableAdvice?.strategy ?? "random")
   );
   const [recipes, setRecipes] = useState<string[]>(plan.feature_recipes ?? []);
   const [clip, setClip] = useState<string[]>(plan.features.clipped ?? []);
@@ -80,7 +103,9 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
   // column does not name (a store within a region).
   const [groupColumns, setGroupColumns] = useState<string[]>(() => {
     const first =
-      (usableAdvice?.strategy === "group" ? usableAdvice.column : null) ?? plan.group_columns?.[0];
+      preselectedGroup ??
+      (usableAdvice?.strategy === "group" ? usableAdvice.column : null) ??
+      plan.group_columns?.[0];
     return first ? [first] : [];
   });
   // Entity-shaped columns first, then everything else, so a key can be built from columns that

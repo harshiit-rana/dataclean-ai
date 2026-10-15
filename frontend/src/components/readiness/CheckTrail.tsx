@@ -1,6 +1,23 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
+import { buttonClasses } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import type { ReadinessCheck, ReadinessCheckCounts } from "@/api/types";
+import type { ReadinessAction, ReadinessCheck, ReadinessCheckCounts } from "@/api/types";
+
+/** Where an action leads. Each is a page the user decides on, with the choice set up for them; none
+ * applies anything. The model page reads `exclude`, `split` and `group` from the address to pre-set its
+ * form, and the user still has to press train. */
+export function actionPath(action: ReadinessAction, sessionId: string): string {
+  const column = action.column ? encodeURIComponent(action.column) : "";
+  switch (action.kind) {
+    case "exclude_column":
+      return `/model/${sessionId}?exclude=${column}`;
+    case "use_group_split":
+      return `/model/${sessionId}?split=group&group=${column}`;
+    case "choose_target":
+      return "/";
+  }
+}
 
 const STATUS_STYLES: Record<ReadinessCheck["status"], { mark: string; className: string }> = {
   failed: { mark: "Failed", className: "border-destructive/40 bg-destructive/5" },
@@ -9,7 +26,7 @@ const STATUS_STYLES: Record<ReadinessCheck["status"], { mark: string; className:
   passed: { mark: "Passed", className: "border-border" },
 };
 
-function CheckRow({ check }: { check: ReadinessCheck }) {
+function CheckRow({ check, sessionId }: { check: ReadinessCheck; sessionId: string }) {
   const style = STATUS_STYLES[check.status];
   return (
     <li className={cn("rounded-md border p-3", style.className)}>
@@ -22,6 +39,19 @@ function CheckRow({ check }: { check: ReadinessCheck }) {
       <p className="mt-1">{check.finding}</p>
       {check.evidence && <p className="mt-1 text-xs text-muted-foreground">{check.evidence}</p>}
       {check.remedy && <p className="mt-1 text-xs">{check.remedy}</p>}
+      {check.status !== "passed" && (check.actions?.length ?? 0) > 0 && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          {check.actions!.map((action) => (
+            <Link
+              key={`${action.kind}:${action.column ?? ""}`}
+              to={actionPath(action, sessionId)}
+              className={buttonClasses("outline", "sm")}
+            >
+              {action.label}
+            </Link>
+          ))}
+        </div>
+      )}
     </li>
   );
 }
@@ -37,9 +67,11 @@ function CheckRow({ check }: { check: ReadinessCheck }) {
 export function CheckTrail({
   checks,
   counts,
+  sessionId,
 }: {
   checks: ReadinessCheck[];
   counts: ReadinessCheckCounts;
+  sessionId: string;
 }) {
   const [showPassed, setShowPassed] = useState(false);
   if (!checks.length) return null;
@@ -60,7 +92,7 @@ export function CheckTrail({
         {notable.length > 0 && (
           <ul className="flex flex-col gap-2">
             {notable.map((check) => (
-              <CheckRow key={check.name} check={check} />
+              <CheckRow key={check.name} check={check} sessionId={sessionId} />
             ))}
           </ul>
         )}
@@ -79,7 +111,7 @@ export function CheckTrail({
             {showPassed && (
               <ul className="flex flex-col gap-2">
                 {passed.map((check) => (
-                  <CheckRow key={check.name} check={check} />
+                  <CheckRow key={check.name} check={check} sessionId={sessionId} />
                 ))}
               </ul>
             )}

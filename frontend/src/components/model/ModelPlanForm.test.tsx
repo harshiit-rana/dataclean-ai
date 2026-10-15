@@ -656,3 +656,59 @@ describe("requestFromResult — a group key (#22)", () => {
     expect(request.group_columns).toEqual([]);
   });
 });
+
+
+describe("ModelPlanForm — set up from a readiness check (#100)", () => {
+  const GROUPED_PLAN: Partial<ModelPlan> = {
+    features: { numeric: ["signal", "leaky"], categorical: ["customer_id"], dropped: [] },
+    group_columns: ["customer_id"],
+    split_options: [
+      { value: "random", label: "Random split", description: "" },
+      { value: "group", label: "Keep related rows together", description: "" },
+    ],
+  };
+
+  function renderWith(preselect: import("./ModelPlanForm").Preselect, overrides: Partial<ModelPlan> = {}) {
+    const onTrain = vi.fn();
+    render(
+      <ModelPlanForm
+        plan={{ ...PLAN, ...GROUPED_PLAN, ...overrides }}
+        onTrain={onTrain}
+        training={false}
+        preselect={preselect}
+      />
+    );
+    return onTrain;
+  }
+
+  it("starts with the column to leave out already left out, and still waits for the user to train", () => {
+    const onTrain = renderWith({ exclude: ["leaky"] });
+    expect(screen.getByRole("checkbox", { name: /^leaky/ })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: /^signal/ })).toBeChecked();
+    expect(onTrain).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].excluded_columns).toEqual(["leaky"]);
+  });
+
+  it("starts on a grouped split on the column the check named", () => {
+    const onTrain = renderWith({ split: "group", group: "customer_id" });
+    expect(screen.getByRole("radio", { name: /Keep related rows together/ })).toBeChecked();
+    expect(screen.getByTestId("group-key")).toHaveTextContent("customer_id");
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain).toHaveBeenCalledWith(expect.objectContaining({ split_strategy: "group", group_column: "customer_id" }));
+  });
+
+  it("ignores a column the plan does not have", () => {
+    const onTrain = renderWith({ exclude: ["no_such_column"], split: "group", group: "nor_this" });
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].excluded_columns).toEqual([]);
+    expect(onTrain.mock.calls[0][0].split_strategy).toBe("random");
+  });
+
+  it("does not change a form that was not asked to", () => {
+    const onTrain = renderWith({});
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].excluded_columns).toEqual([]);
+    expect(onTrain.mock.calls[0][0].split_strategy).toBe("random");
+  });
+});

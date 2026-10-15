@@ -92,6 +92,13 @@ export interface ReadinessResponse {
  * `not_run` is the status that earns this its place: "we did not look" and "we looked and it
  * was fine" are different statements, and without this distinction they appear identically
  * as silence. */
+/** Somewhere a check sends the user to act on its finding. Navigation only: nothing is applied. */
+export interface ReadinessAction {
+  kind: "exclude_column" | "use_group_split" | "choose_target";
+  label: string;
+  column: string | null;
+}
+
 export interface ReadinessCheck {
   name: string;
   label: string;
@@ -103,6 +110,8 @@ export interface ReadinessCheck {
   /** The check whose failure made this one impossible. Set only when status is not_run. */
   blocked_by: string | null;
   severity: "blocker" | "warning" | null;
+  /** Where to go to act on it. Absent on a result from before checks carried them. */
+  actions?: ReadinessAction[];
 }
 
 /** One statement about what the data is allowed to contain.

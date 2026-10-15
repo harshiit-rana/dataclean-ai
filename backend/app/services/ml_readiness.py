@@ -583,6 +583,7 @@ def assess_readiness(
                 status="not_run",
                 finding="No prediction target was set for this session, so there is nothing "
                 "to check model readiness against. You can still export the cleaned file.",
+                actions=(readiness_checks.action("choose_target", "Choose a column to predict"),),
             )
         )
         for name, label in _TARGET_DEPENDENT_CHECKS:
@@ -618,6 +619,7 @@ def assess_readiness(
                 f"among them.",
                 remedy="Undo that change, or start again with the column you want to predict.",
                 severity="blocker",
+                actions=(readiness_checks.action("choose_target", "Choose a column to predict"),),
             )
         )
         for name, label in _TARGET_DEPENDENT_CHECKS:
@@ -798,6 +800,12 @@ def assess_readiness(
                 evidence=leaks[0].description,
                 remedy="If it won't be available at the moment you need a prediction, drop it.",
                 severity="warning",
+                actions=tuple(
+                    readiness_checks.action(
+                        "exclude_column", f"Leave '{i.column_name}' out of the model", i.column_name
+                    )
+                    for i in leaks[: readiness_checks.MAX_ACTIONS_PER_CHECK]
+                ),
             )
         )
     else:
