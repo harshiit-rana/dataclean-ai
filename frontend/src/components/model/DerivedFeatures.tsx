@@ -13,6 +13,7 @@ const KIND_LABELS: Record<FeatureRecipe["kind"], string> = {
   text_length: "From free text",
   missing_flag: "From the blanks",
   frequent_categories: "Keeping the common values",
+  target_encoding: "Encoded by the average answer",
 };
 
 /** Inputs the model can use, built from columns it otherwise couldn't.

@@ -188,6 +188,13 @@ export interface FeatureBreakdown {
   /** High-cardinality columns kept under a frequent_categories recipe: the most common
    * values get an input each and the rest are pooled, encoded inside the pipeline. */
   frequent?: string[];
+  /** Which of the `frequent` columns are encoded by the average answer for each value (target encoding)
+   * instead of one input per common value. */
+  target_encoded?: string[];
+  /** Derived inputs that were asked for and not used (target encoding with a grouped split), with why. */
+  declined_recipes?: { id: string; reason: string }[];
+  /** Inputs the improvement loop found the model does better without, with how little each mattered. */
+  removed_by_selection?: { column: string; importance: number; spread: number }[];
   dropped: { column: string; reason: string }[];
   excluded?: string[];
   /** The derived inputs this run used. */
@@ -223,7 +230,7 @@ export interface ClippingOffer {
  * frequent_categories, which changes how a column is encoded rather than adding one. */
 export interface FeatureRecipe {
   id: string;
-  kind: "date_parts" | "text_length" | "missing_flag" | "frequent_categories";
+  kind: "date_parts" | "text_length" | "missing_flag" | "frequent_categories" | "target_encoding";
   column: string;
   outputs: string[];
   reason: string;

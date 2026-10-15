@@ -835,6 +835,9 @@ def caution_items(result: dict, best: dict) -> list[dict]:
     test_rows = split.get("test_rows", 0)
     diagnostics = best.get("diagnostics", {})
 
+    for declined in (result.get("features") or {}).get("declined_recipes") or []:
+        add(f"declined_{declined['id']}", "low", declined["reason"])
+
     # What was left undone to stay within the processing limit -- by the plain train or the improvement
     # loop. Said in full, because a model chosen on a sample or from fewer families is not the same
     # claim as one chosen from everything.

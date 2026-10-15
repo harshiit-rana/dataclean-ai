@@ -61,3 +61,29 @@ describe("DerivedFeatures", () => {
     expect(screen.queryByText(/city__/)).not.toBeInTheDocument();
   });
 });
+
+describe("DerivedFeatures — target encoding (#58)", () => {
+  const ENCODED: FeatureRecipe = {
+    id: "target_encoding:zip",
+    kind: "target_encoding",
+    column: "zip",
+    outputs: [],
+    reason: "'zip' has 150 different values, and each repeats about 10 times. Not used with a grouped split.",
+    evidence: { distinct: 150, rows_per_value: 10 },
+  };
+
+  it("offers it with its reason, labelled for what it does, and promises no new column", () => {
+    render(<DerivedFeatures recipes={[ENCODED]} chosen={[]} onChange={vi.fn()} />);
+    expect(screen.getByText("Encoded by the average answer")).toBeInTheDocument();
+    expect(screen.getByText(/each repeats about 10 times/)).toBeInTheDocument();
+    expect(screen.queryByText(/zip__/)).not.toBeInTheDocument();
+  });
+
+  it("can be ticked like any other proposal", () => {
+    const onChange = vi.fn();
+    render(<DerivedFeatures recipes={[ENCODED]} chosen={[]} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(onChange).toHaveBeenCalledWith([ENCODED.id]);
+  });
+});
+

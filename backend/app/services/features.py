@@ -8,7 +8,7 @@ as an "identifier" because nearly every value was distinct, which reaches the ri
 the wrong reason and, in a tool whose premise is that the reason is the product, a wrong reason
 is the defect.
 
-Four kinds of recipe, each a declared piece of data rather than code, so the exported script
+Five kinds of recipe, each a declared piece of data rather than code, so the exported script
 can reproduce it line for line:
 
 - **date_parts**: year, month, weekday and days-since-epoch from a date column.
@@ -19,10 +19,17 @@ can reproduce it line for line:
 - **frequent_categories**: a high-cardinality column kept rather than dropped, with its most
   common values one-hot encoded and everything else pooled. Done inside the pipeline with
   scikit-learn's own encoder, so the fitted model stays loadable anywhere.
+- **target_encoding**: a high-cardinality column whose values repeat (a postcode, a product code)
+  replaced by the average answer for each value. Naive target encoding hands the answer to the
+  model through its input, so this uses scikit-learn's `TargetEncoder`, which fits each row's
+  encoding on rows that do not include it, inside the pipeline and so inside every training fold.
+  Offered only where the common-values recipe is not, and not used with a grouped split, where
+  that cross-fitting does not know about the groups.
 
 The first three are row-wise and stateless: a row's weekday does not depend on any other row,
-so deriving it before the split cannot leak. The fourth learns which values are common, so it
-is fitted inside the pipeline on the training fold like every other learned statistic.
+so deriving it before the split cannot leak. The last two learn something from the rows (which
+values are common; the average answer for each), so they are fitted inside the pipeline on the
+training fold like every other learned statistic.
 
 Nothing here applies itself. `propose` returns candidates with the evidence behind each; the
 plan shows them ticked; only the ids the user sends back are applied. Same shape as the
@@ -38,7 +45,11 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-KINDS = ("date_parts", "text_length", "missing_flag", "frequent_categories")
+KINDS = ("date_parts", "text_length", "missing_flag", "frequent_categories", "target_encoding")
+
+# A value has to repeat for its average answer to mean anything: a column where nearly every row has
+# its own value is an identifier, and encoding it can only memorise.
+TARGET_ENCODING_MIN_ROWS_PER_VALUE = 2
 
 # A column is free text when the values are mostly distinct *and* look like prose. Distinct
 # alone is what the identifier rule uses, and a paragraph of clinical notes is distinct too.
@@ -246,6 +257,35 @@ def _frequent_categories(column: str, series: pd.Series, limit: int) -> Recipe |
     )
 
 
+def _target_encoding(column: str, series: pd.Series, limit: int) -> Recipe | None:
+    if series.dtype != object or looks_like_free_text(series) or parse_dates(series) is not None:
+        return None
+    non_null = series.dropna().astype(str)
+    if non_null.empty:
+        return None
+    distinct = int(non_null.nunique())
+    rows = len(non_null)
+    if distinct <= limit:
+        return None  # an ordinary categorical: one-hot encoding handles it
+    per_value = rows / distinct
+    if per_value < TARGET_ENCODING_MIN_ROWS_PER_VALUE:
+        return None  # nearly an identifier: each value is a row, and there is no average to learn
+    return Recipe(
+        id=f"target_encoding:{column}",
+        kind="target_encoding",
+        column=column,
+        outputs=[],  # encoded inside the pipeline; no new column in the frame
+        reason=(
+            f"'{column}' has {distinct:,} different values, too many to give each its own input, and "
+            f"each repeats about {per_value:.0f} times. Replacing it with the average answer for its "
+            f"value keeps what it can tell the model. Each row's encoding is worked out without that "
+            f"row's own answer, inside every training fold, so it cannot hand the answer over. Not used "
+            f"with a grouped split, where that cross-fitting does not know about the groups."
+        ),
+        evidence={"distinct": distinct, "rows_per_value": round(per_value, 1)},
+    )
+
+
 def propose(
     df: pd.DataFrame, target_column: str, excluded: list[str] | None = None
 ) -> list[Recipe]:
@@ -265,11 +305,14 @@ def propose(
         series = df[column]
         if series.notna().sum() == 0:
             continue
+        frequent = _frequent_categories(str(column), series, limit)
         for candidate in (
             _date_parts(str(column), series),
             _text_length(str(column), series),
             _missing_flag(str(column), series),
-            _frequent_categories(str(column), series, limit),
+            frequent,
+            # The common-values recipe wins where it applies: a column is encoded one way or the other.
+            None if frequent is not None else _target_encoding(str(column), series, limit),
         ):
             if candidate is not None:
                 recipes.append(candidate)
@@ -297,7 +340,7 @@ def select(
 def apply(df: pd.DataFrame, recipes: list[Recipe]) -> pd.DataFrame:
     """Adds the stateless derived columns. Returns a new frame; the input is untouched.
 
-    `frequent_categories` adds nothing here -- it is a pipeline step, not a frame step.
+    `frequent_categories` and `target_encoding` add nothing here -- they are pipeline steps, not frame steps.
     """
     if not recipes:
         return df
@@ -326,8 +369,33 @@ def apply(df: pd.DataFrame, recipes: list[Recipe]) -> pd.DataFrame:
     return out
 
 
+# Why target encoding is not used where its cross-fitting cannot respect the groups.
+TARGET_ENCODING_DECLINED = (
+    "Target encoding was not used: with rows grouped by an entity (or identical rows kept together) its own "
+    "cross-fitting does not know about the groups, so a row would be encoded from other rows of its own group "
+    "-- the memorisation the grouped split exists to prevent."
+)
+
+
+def without_target_encoding_where_it_leaks(
+    recipes: list[Recipe], *, grouped: bool
+) -> tuple[list[Recipe], list[Recipe]]:
+    """`(kept, declined)`: target encoding is dropped when rows are grouped, because scikit-learn's encoder
+    cross-fits with ordinary folds that split a group between the rows it learns from and the row it encodes."""
+    if not grouped:
+        return list(recipes), []
+    return (
+        [r for r in recipes if r.kind != "target_encoding"],
+        [r for r in recipes if r.kind == "target_encoding"],
+    )
+
+
 def frequent_columns(recipes: list[Recipe]) -> list[str]:
     return [r.column for r in recipes if r.kind == "frequent_categories"]
+
+
+def target_encoded_columns(recipes: list[Recipe]) -> list[str]:
+    return [r.column for r in recipes if r.kind == "target_encoding"]
 
 
 def derived_from(recipes: list[Recipe]) -> dict[str, Recipe]:

@@ -135,7 +135,7 @@ def fold_importance(
 def _without(features: dict, removed: set[str]) -> dict:
     """The feature lists with these inputs taken out."""
     kept = dict(features)
-    for key in ("numeric", "categorical", "frequent", "clipped"):
+    for key in ("numeric", "categorical", "frequent", "target_encoded", "clipped"):
         if key in kept and kept[key] is not None:
             kept[key] = [c for c in kept[key] if c not in removed]
     return kept
@@ -244,6 +244,10 @@ def improve(
     # so the same rows land on the same side of the split whichever frame is in use.
     raw_columns = [c for c in df.columns if c != target_column]
     proposed = feature_recipes.propose(df, target_column, withheld)
+    # Target encoding cross-fits with ordinary folds, which split a group; not offered where rows are grouped.
+    proposed, _declined = feature_recipes.without_target_encoding_where_it_leaks(
+        proposed, grouped=split_strategy == "group" or keep_identical_rows_together
+    )
     wanted_ids = set(feature_recipes_wanted or [])
     recipes = [r for r in proposed if r.id in wanted_ids]
     alternative = [] if recipes else proposed
@@ -470,6 +474,7 @@ def improve(
                 feats["numeric"],
                 feats["categorical"],
                 frequent=feats["frequent"],
+                target_encoded=feats.get("target_encoded"),
                 clip=feats.get("clipped"),
             )
             if params:

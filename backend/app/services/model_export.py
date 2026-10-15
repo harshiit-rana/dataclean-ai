@@ -36,6 +36,8 @@ def _preprocessing_block(
     categorical: list[str],
     frequent: list[str] | None = None,
     clipped: list[str] | None = None,
+    target_encoded: list[str] | None = None,
+    task: str = "classification",
 ) -> tuple[list[str], list[str]]:
     """Returns (transformer entries, notes). Mirrors modeling.build_pipeline exactly, in the
     same order, so the fitted model has its columns laid out the same way as the app's."""
@@ -77,7 +79,22 @@ def _preprocessing_block(
             "            CATEGORICAL_FEATURES,\n"
             "        ),"
         )
-    if frequent:
+    by_answer = [c for c in (target_encoded or []) if c in set(frequent or [])]
+    splitter = "StratifiedKFold" if task == "classification" else "KFold"
+    if by_answer:
+        entries.append(
+            "        (\n"
+            '            "target_encoded",\n'
+            "            Pipeline([\n"
+            '                ("impute", SimpleImputer(strategy="most_frequent")),\n'
+            '                ("encode", TargetEncoder(smooth="auto",\n'
+            f"                                         cv={splitter}(n_splits=5, shuffle=True,\n"
+            f"                                                      random_state={modeling.RANDOM_STATE}))),\n"
+            "            ]),\n"
+            "            TARGET_ENCODED_FEATURES,\n"
+            "        ),"
+        )
+    if [c for c in (frequent or []) if c not in set(by_answer)]:
         entries.append(
             "        (\n"
             '            "frequent",\n'
@@ -87,8 +104,12 @@ def _preprocessing_block(
             f"                                         max_categories={feature_recipes.MAX_FREQUENT_CATEGORIES},\n"
             "                                         sparse_output=False)),\n"
             "            ]),\n"
-            "            FREQUENT_FEATURES,\n"
-            "        ),"
+            + (
+                "            [c for c in FREQUENT_FEATURES if c not in TARGET_ENCODED_FEATURES],\n"
+                if by_answer
+                else "            FREQUENT_FEATURES,\n"
+            )
+            + "        ),"
         )
     return entries, []
 
@@ -434,7 +455,8 @@ def build_training_script(result: dict, *, file_name: str = "cleaned.csv") -> st
     ) or "not recorded"
 
     clipped = [c for c in features.get("clipped", []) if c in set(numeric)]
-    entries, _notes = _preprocessing_block(numeric, categorical, frequent, clipped)
+    target_encoded = [c for c in features.get("target_encoded", []) if c in set(frequent)]
+    entries, _notes = _preprocessing_block(numeric, categorical, frequent, clipped, target_encoded, task)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
     dropped_note = "\n".join(
@@ -446,14 +468,18 @@ def build_training_script(result: dict, *, file_name: str = "cleaned.csv") -> st
     base_import = (
         "from sklearn.base import BaseEstimator, TransformerMixin\n" if clipped else ""
     )
-    encodes = bool(categorical or frequent)
-    encoder_import = (
-        "from sklearn.preprocessing import OneHotEncoder, StandardScaler"
-        if numeric and encodes
-        else "from sklearn.preprocessing import OneHotEncoder"
-        if encodes
-        else "from sklearn.preprocessing import StandardScaler"
-    )
+    one_hot = bool(categorical or [c for c in frequent if c not in set(target_encoded)])
+    encoders = sorted(
+        [*(["OneHotEncoder"] if one_hot else []), *(["StandardScaler"] if numeric else []),
+         *(["TargetEncoder"] if target_encoded else [])]
+    ) or ["StandardScaler"]
+    encoder_import = f"from sklearn.preprocessing import {', '.join(encoders)}"
+    if target_encoded:
+        # The folds the encoder cross-fits on, written out so the script builds the same ones.
+        encoder_import = (
+            f"from sklearn.model_selection import {'StratifiedKFold' if task == 'classification' else 'KFold'}\n"
+            + encoder_import
+        )
     # Each strategy needs a different splitter, and only the one actually used is imported. A
     # time-based split orders the rows itself and imports nothing. Leaving an unused import in
     # a file people are meant to read and edit is a small lie about what the script does.
@@ -501,6 +527,7 @@ TARGET = {_literal(target)}
 NUMERIC_FEATURES = {_literal(numeric)}
 CATEGORICAL_FEATURES = {_literal(categorical)}
 FREQUENT_FEATURES = {_literal(frequent)}
+TARGET_ENCODED_FEATURES = {_literal(target_encoded)}
 CLIPPED_FEATURES = {_literal(clipped)}
 EXCLUDED_BY_CHOICE = {_literal(excluded)}
 {_threshold_constants(point) if has_point else _positive_label_constant(positive_label) if brier else ""}

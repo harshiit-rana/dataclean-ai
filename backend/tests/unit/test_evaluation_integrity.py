@@ -127,6 +127,33 @@ class TestChoosingTheModel:
         assert _chosen(rigged)["metrics"]["roc_auc"] != _chosen(honest)["metrics"]["roc_auc"]
         assert _chosen(rigged)["metrics"]["roc_auc"] < 0.5 < _chosen(honest)["metrics"]["roc_auc"]
 
+    def test_a_target_encoded_column_never_sees_the_test_answers(self, learnable, flipped_test_answers):
+        """The encoding is the average answer for each value, so it is the first place a test answer could
+        leak in. It is fitted inside each training fold, from training rows; flip every held-out answer
+        and the choice, every fold score and the encoded column's place in the model must not move."""
+        rng = np.random.default_rng(12)
+        wide = learnable.copy()
+        wide["city"] = rng.choice([f"c{i:02d}" for i in range(130)], len(wide))
+        assert any(r.kind == "target_encoding" for r in feature_recipes.propose(wide, "outcome"))
+
+        def run():
+            return modeling.train_candidates(
+                wide, target_column="outcome", task="classification", model_names=MODELS,
+                include_deep_diagnostics=False, feature_recipes_wanted=["target_encoding:city"],
+            )
+
+        honest = run()
+        flipped_test_answers()
+        rigged = run()
+
+        assert honest["features"]["target_encoded"] == ["city"]
+        assert rigged["best_model"] == honest["best_model"]
+        assert rigged["selection"] == honest["selection"]
+        assert [(r["model"], r["cv_score"], r["cv_std"]) for r in rigged["results"]] == [
+            (r["model"], r["cv_score"], r["cv_std"]) for r in honest["results"]
+        ]
+        assert _chosen(rigged)["metrics"]["roc_auc"] != _chosen(honest)["metrics"]["roc_auc"]
+
     def test_a_comparison_made_on_a_sample_is_unmoved_too(self, learnable, flipped_test_answers, monkeypatch):
         """Over the processing limit the models are compared on a sample of the training rows. The sample is
         drawn from the training rows only, so flipping every held-out answer moves neither it nor the choice."""

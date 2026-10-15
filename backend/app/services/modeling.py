@@ -260,11 +260,13 @@ def classify_features(
     recipes = list(recipes or [])
     replaced = feature_recipes.derived_from(recipes)
     frequent_set = set(feature_recipes.frequent_columns(recipes))
+    target_set = set(feature_recipes.target_encoded_columns(recipes))
     derived_outputs = {o for r in recipes for o in r.outputs}
 
     numeric: list[str] = []
     categorical: list[str] = []
     frequent: list[str] = []
+    target_encoded: list[str] = []
     dropped: list[dict] = []
     limit = category_limit(len(df))
 
@@ -302,6 +304,13 @@ def classify_features(
 
         if column in frequent_set:
             frequent.append(column)
+            continue
+
+        if column in target_set:
+            # A high-cardinality column encoded inside the pipeline, like the common-values ones, so it
+            # is counted with them; `target_encoded` says which of them are encoded by the answer.
+            frequent.append(column)
+            target_encoded.append(column)
             continue
 
         if feature_recipes.looks_like_dates(series):
@@ -350,6 +359,7 @@ def classify_features(
         "numeric": numeric,
         "categorical": categorical,
         "frequent": frequent,
+        "target_encoded": target_encoded,
         "clipped": [c for c in dict.fromkeys(clip or []) if c in numeric],
         "dropped": dropped,
         "derived": [r.as_dict() for r in recipes],
@@ -829,6 +839,7 @@ def build_pipeline(
     model_params: dict | None = None,
     frequent: list[str] | None = None,
     clip: list[str] | None = None,
+    target_encoded: list[str] | None = None,
 ):
     """Assembles preprocessing + model into one Pipeline.
 
@@ -844,6 +855,12 @@ def build_pipeline(
     `clip` are numeric inputs whose extreme values are pulled back to limits learned from the
     training fold, before the imputer and scaler so the statistics they learn describe the
     clipped values. Cleaning offers the same fix computed over the whole file, which leaks.
+
+    `target_encoded` are the `frequent` columns encoded by the average answer for each value instead
+    of one-hot. scikit-learn's `TargetEncoder` fits each training row's encoding on the other
+    internal folds, so a row's own answer is not in its own input; the rows it is later applied to
+    (validation, test) are encoded with the full training fit. All of it happens inside `fit`, so
+    inside the training fold.
     """
     from sklearn.compose import ColumnTransformer
     from sklearn.impute import SimpleImputer
@@ -914,6 +931,32 @@ def build_pipeline(
             )
         )
 
+    encoded_by_answer = [c for c in (target_encoded or []) if c in set(frequent or [])]
+    frequent = [c for c in (frequent or []) if c not in set(encoded_by_answer)]
+    if encoded_by_answer:
+        from sklearn.model_selection import KFold, StratifiedKFold
+        from sklearn.preprocessing import TargetEncoder
+
+        # The splitter is passed as `cv` (scikit-learn 1.9 deprecates the shuffle and random_state arguments),
+        # stratified for a classifier so a rare answer is in every internal fold.
+        inner = (StratifiedKFold if spec.task == "classification" else KFold)(
+            n_splits=5, shuffle=True, random_state=RANDOM_STATE
+        )
+        transformers.append(
+            (
+                "target_encoded",
+                Pipeline(
+                    [
+                        ("impute", SimpleImputer(strategy="most_frequent")),
+                        (
+                            "encode",
+                            TargetEncoder(smooth="auto", cv=inner),
+                        ),
+                    ]
+                ),
+                encoded_by_answer,
+            )
+        )
     if frequent:
         transformers.append(
             (
@@ -1954,6 +1997,7 @@ def best_single_column_baseline(
                 None,
                 [column] if column in features["frequent"] else [],
                 clip=[column] if column in (features.get("clipped") or []) else None,
+                target_encoded=[column] if column in (features.get("target_encoded") or []) else None,
             ),
             X_train[[column]], y_train, task, folds=folds, groups=groups, ordered=ordered,
         )
@@ -2373,12 +2417,19 @@ def train_candidates(
             withheld += [c for c in to_withhold if c not in withheld]
 
     recipes = feature_recipes.select(df, target_column, withheld, feature_recipes_wanted)
+    recipes, declined_recipes = feature_recipes.without_target_encoding_where_it_leaks(
+        recipes, grouped=split_strategy == "group" or bool(keep_identical_rows_together)
+    )
     # What the sealed rows are judged on when copies are kept together: the file's own columns,
     # captured before derived inputs are added, so a ticked recipe cannot move them.
     seal_columns = [str(c) for c in df.columns if c != target_column]
     df = feature_recipes.apply(df, recipes)
 
     features = classify_features(df, target_column, withheld, recipes, clip_outliers)
+    # Said in the result, not only dropped: the user ticked it (or the loop wanted it) and it was not used.
+    features["declined_recipes"] = [
+        {"id": r.id, "reason": feature_recipes.TARGET_ENCODING_DECLINED} for r in declined_recipes
+    ]
     if not features["numeric"] and not features["categorical"] and not features["frequent"]:
         raise ModelingError(
             "There are no usable columns left to predict from. Every other column was "
@@ -2473,6 +2524,7 @@ def train_candidates(
                 tuned,
                 features["frequent"],
                 clip=features.get("clipped"),
+                target_encoded=features.get("target_encoded"),
             )
             pipeline.fit(X_train, y_train)
             scores = evaluate(pipeline, X_test, y_test, task, point.positive_label)
@@ -2531,6 +2583,7 @@ def train_candidates(
                 (model_params or {}).get(name),
                 features["frequent"],
                 clip=features.get("clipped"),
+                target_encoded=features.get("target_encoded"),
             )
         ),
         X_train,
@@ -2552,6 +2605,7 @@ def train_candidates(
             (model_params or {}).get(best["model"]),
             features["frequent"],
             clip=features.get("clipped"),
+            target_encoded=features.get("target_encoded"),
         )
 
     def build_best_with_seed(seed: int):
@@ -2562,6 +2616,7 @@ def train_candidates(
             {**((model_params or {}).get(best["model"]) or {}), "random_state": seed},
             features["frequent"],
             clip=features.get("clipped"),
+            target_encoded=features.get("target_encoded"),
         )
 
     # Whether the choice is the data's or the seed's: training folds only, the chosen model only.

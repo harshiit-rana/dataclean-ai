@@ -739,6 +739,18 @@ the exported script, shown on the model card under "Columns not used" with their
 and kept apart from the user's exclusions in the result. With fewer than four inputs there is nothing to rank. The round is
 skipped, and says so, when the time limit has passed.
 
+**Target encoding for columns with too many values (#58).** A postcode or product code has too many values to one-hot
+encode and was either dropped or reduced to its commonest values. A column that repeats (about two rows a value or more)
+and is not already offered as "keep the common values" can now be replaced by the average answer for each value, offered
+in the derived-inputs list with its reason and ticked like any other proposal. It is scikit-learn's `TargetEncoder` inside
+the pipeline, which encodes each training row from the other internal folds so a row's own answer is never in its own input,
+all within the training fold; validation and test rows are encoded with the full training fit, and a value never seen in
+training is encoded as the overall average. A column of random ids gains nothing from it (a test), where an encoding worked
+out over every row scores far above chance (so the test can tell). Its internal folds do not know about groups, so it is
+declined for a grouped split and for identical rows kept together, and the result and the cautions say so. The improvement
+loop's derived-inputs round tries it along with the other recipes under the gain rule, and the exported script builds the
+same encoder with the same folds (a test runs the script and compares its accuracy).
+
 **A record of what you tried.** Results used to overwrite a single file, so retraining
 discarded the previous run — which made the question people actually ask unanswerable: *did the
 thing I just changed help?* Every run is now kept with its settings, its headline number and

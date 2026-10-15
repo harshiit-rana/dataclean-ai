@@ -318,7 +318,7 @@ are both running locally, you're ready to make changes.
   noise. When a name *does* carry signal it is usually worse, because what it carries is what
   it stands in for. Suggested, never enforced.
 - **A derived input is a declared recipe, and the export rebuilds it.** `features.Recipe` is
-  a frozen dataclass with a closed set of four kinds; `apply` and `as_pandas` are two
+  a frozen dataclass with a closed set of five kinds; `apply` and `as_pandas` are two
   renderings of the same recipe and a test applies both to one frame and compares them. If
   they drift, `train_model.py` silently builds different inputs from the ones that were
   scored and every number in the app becomes unreproducible. To add a kind, add a branch to
@@ -339,7 +339,13 @@ are both running locally, you're ready to make changes.
   missingness flag depend on nothing but the row they are on, so computing them on the whole
   frame leaks nothing. Anything that learns from the column -- which values are common, a
   target encoding, a mean -- goes inside the pipeline where `fit` sees the training fold
-  only. `frequent_categories` is in the pipeline for exactly this reason.
+  only. `frequent_categories` and `target_encoding` are in the pipeline for exactly this reason. Target
+  encoding is scikit-learn's `TargetEncoder`, which fits each row's encoding on rows that do not include
+  it; its internal folds are ordinary ones that split a group, so it is declined for a grouped split and
+  for identical rows kept together (`features.without_target_encoding_where_it_leaks`), and the result
+  says so. Test a new learned encoding the way `test_target_encoding.py` does: a column of random ids
+  must gain no fold score, and an encoding computed over every row must be shown to score far above
+  chance, so the test can tell a leak from no leak.
 - **Recipe ids are re-proposed, never trusted.** `features.select` re-runs `propose` and keeps
   the ids that come back, so a stale id for a column that no longer supports the recipe is
   dropped quietly rather than failing a run, and a recipe naming an excluded column cannot be

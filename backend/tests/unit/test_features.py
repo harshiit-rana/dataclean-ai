@@ -38,6 +38,9 @@ def messy() -> pd.DataFrame:
                 p=np.r_[np.full(10, 0.06), np.full(50, 0.4 / 50)],
             ),
             "order_id": [f"O{i:05d}" for i in range(n)],
+            # 100 values of exactly three rows each, so none is common enough for the common-values recipe
+            # (the top twenty cover 20%): this is the shape target encoding exists for.
+            "zip": rng.permutation(np.repeat([f"z{i:02d}" for i in range(100)], 3)),
             "region": rng.choice(["north", "south"], n),
             "outcome": rng.choice(["yes", "no"], n),
         }
@@ -330,7 +333,8 @@ class TestTrainingWithThem:
         assert "signup_date__days" in numeric
         assert "notes__length" in numeric
         assert "spend__missing" in numeric
-        assert result["features"]["frequent"] == ["city"]
+        assert result["features"]["frequent"] == ["city", "zip"]
+        assert result["features"]["target_encoded"] == ["zip"]  # encoded by the answer, the rest by value
         assert {r["id"] for r in result["features"]["derived"]} == set(ids)
 
     def test_without_them_nothing_changes(self, messy):
