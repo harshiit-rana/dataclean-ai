@@ -945,6 +945,15 @@ written as text, a value that is not a number, a date that is not a date -- and 
 and through the exported `predict.py`. The outputs must agree row for row (or both refuse with the same message);
 any probe row where they differ fails the check and is named in `acceptance.json` and on the export page.
 
+**Replacing the model in use (#80).** The honest way to replace a model is to compare it (the champion) with a
+candidate (the challenger) on the same recent labelled rows, against criteria stated before the results are seen.
+A *comparison* names the two runs and carries its criteria (#81): a deciding metric with a minimum practical
+improvement, and mandatory constraints from a closed, typed set -- a metric at least or at most a value, no worse than
+the champion by more than a tolerance, no new required input columns. Criteria are data, never code (a constraint
+that is not one of those kinds is refused with a 422), and they can be changed only until the comparison is
+evaluated; after that an edit is refused with a 409, because criteria changed after seeing the results would be chosen
+to fit them.
+
 ### Where test information could reach a decision — an audit
 
 Prompted by a roadmap review that made the rule explicit: *the final test set must never be used

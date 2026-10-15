@@ -18,6 +18,7 @@ from app.api import (
     routes_model,
     routes_preview,
     routes_profile,
+    routes_promotion,
     routes_readiness,
     routes_rules,
     routes_resume,
@@ -135,6 +136,7 @@ def create_app() -> FastAPI:
         routes_rules.router,
         routes_model.router,
         routes_apply.router,
+        routes_promotion.router,
     ):
         app.include_router(router, dependencies=guarded)
 
