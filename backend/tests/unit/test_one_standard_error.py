@@ -35,6 +35,8 @@ def folds_scoring(table: dict[str, tuple[float, float]], folds: int = 5):
 
     def scoring(build, X_train, y_train, task, *, folds=folds, **_kwargs):
         name = type(build().named_steps["model"]).__name__
+        if name not in table:
+            return None  # a model the test did not price -- the loop's average of two families -- cannot be scored
         score, std = table[name]
         return tuning.SearchResult(params={}, score=score, std=std, metric="roc_auc", fits=folds)
 
