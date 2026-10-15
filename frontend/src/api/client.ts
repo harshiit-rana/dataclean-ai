@@ -11,6 +11,7 @@ import type {
   GoalContextResponse,
   ImproveRequest,
   ModelHistory,
+  RunPairComparison,
   VersionDiff,
   ModelPlan,
   ModelResult,
@@ -228,6 +229,15 @@ export async function restoreRun(sessionId: string, runId: string): Promise<Mode
     { method: "POST" }
   );
   return handleResponse<ModelResult>(response);
+}
+
+/** Run `a` against run `b`: what differed and whether the score moved beyond the noise. */
+export async function compareRuns(sessionId: string, a: string, b: string): Promise<RunPairComparison> {
+  const response = await sessionFetch(
+    sessionId,
+    `/api/model/${sessionId}/runs/compare?a=${encodeURIComponent(a)}&b=${encodeURIComponent(b)}`
+  );
+  return handleResponse<RunPairComparison>(response);
 }
 
 /** What changed between two versions of the session's data. */

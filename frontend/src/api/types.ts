@@ -545,6 +545,27 @@ export interface ModelRun {
   } | null;
 }
 
+/** Any two runs compared (GET /runs/compare). Differences are a minus b; a is the newer. */
+export interface RunPairComparison {
+  a: { run_id: string; at: string; model_label: string | null; best_model: string | null; primary_metric: string | null };
+  b: { run_id: string; at: string; model_label: string | null; best_model: string | null; primary_metric: string | null };
+  comparable: boolean;
+  reasons: string[];
+  same_rows: boolean;
+  settings: { field: string; label: string; a: unknown; b: unknown }[];
+  metrics: { metric: string; a: number; b: number; difference: number }[];
+  /** Null for runs that cannot be compared. */
+  primary: {
+    metric: string;
+    method: "paired" | "intervals" | null;
+    verdict: "better" | "worse" | "within_the_noise" | null;
+    difference?: number;
+    low?: number;
+    high?: number;
+  } | null;
+  summary: string;
+}
+
 /** What changed between two versions of a session's data. */
 export interface VersionDiff {
   from: { version: number; rows: number; columns: number; event: string; at: string };

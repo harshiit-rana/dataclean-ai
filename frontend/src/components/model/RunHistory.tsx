@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { RunComparisonPanel } from "@/components/model/RunComparison";
 import { ScoreLabel } from "@/components/model/ScoreLabel";
 import { cn } from "@/lib/utils";
-import type { ModelRun, RunComparison, VersionDiff } from "@/api/types";
+import type { ModelRun, RunComparison, RunPairComparison, VersionDiff } from "@/api/types";
 
 /** What has been tried in this session, and whether it helped.
  *
@@ -267,6 +268,7 @@ export function RunHistory({
   loadingOlder = false,
   currentDatasetVersion = null,
   fetchDiff,
+  fetchComparison,
 }: {
   runs: ModelRun[];
   currentFingerprint: string;
@@ -288,9 +290,36 @@ export function RunHistory({
   /** The data's version now; with `fetchDiff`, a run on an earlier one can show what changed. */
   currentDatasetVersion?: number | null;
   fetchDiff?: (from: number, to: number) => Promise<VersionDiff>;
+  /** Compares two runs (newer first); with it, any two rows can be picked and compared. */
+  fetchComparison?: (a: string, b: string) => Promise<RunPairComparison>;
 }) {
+  const [picked, setPicked] = useState<string[]>([]);
+  const [comparison, setComparison] = useState<RunPairComparison | null>(null);
+  const [comparing, setComparing] = useState(false);
+  const [compareError, setCompareError] = useState<string | null>(null);
   // One run is not a comparison, and a table of one row implies there is something to compare.
   if (runs.length < 2) return null;
+
+  const togglePick = async (runId: string) => {
+    const next = picked.includes(runId) ? picked.filter((id) => id !== runId) : [...picked, runId].slice(-2);
+    setPicked(next);
+    setComparison(null);
+    setCompareError(null);
+    if (next.length === 2 && fetchComparison) {
+      // The newer of the two is "a": the history is newest first.
+      const [newer, older] = [...next].sort(
+        (x, y) => runs.findIndex((r) => r.run_id === x) - runs.findIndex((r) => r.run_id === y)
+      );
+      setComparing(true);
+      try {
+        setComparison(await fetchComparison(newer, older));
+      } catch (err) {
+        setCompareError(err instanceof Error ? err.message : "The two runs could not be compared.");
+      } finally {
+        setComparing(false);
+      }
+    }
+  };
   // The model in use, as the server says. Without that, the newest run that produced one: a later
   // failed attempt did not replace it.
   const currentId = currentRunId !== undefined ? currentRunId : runs.find((r) => !isEvent(r))?.run_id;
@@ -350,6 +379,17 @@ export function RunHistory({
                         {run.run_id === currentId && " · current"}
                       </span>
                       <Provenance run={run} />
+                      {fetchComparison && (
+                        <label className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                          <input
+                            type="checkbox"
+                            checked={picked.includes(run.run_id)}
+                            onChange={() => void togglePick(run.run_id)}
+                            aria-label={`Compare the run from ${when(run.at)} (${run.model_label ?? run.best_model})`}
+                          />
+                          compare
+                        </label>
+                      )}
                       {/* Only a stored model trained on the data as it is now: an older one's scores
                           describe rows that are no longer the data. */}
                       {onRestore && stored.has(run.run_id) && run.run_id !== currentId && !stale && (
@@ -455,6 +495,20 @@ export function RunHistory({
             </tbody>
           </table>
         </div>
+        {fetchComparison && picked.length === 1 && (
+          <p className="mt-3 text-xs text-muted-foreground">Pick one more run to compare it with.</p>
+        )}
+        {comparing && <p className="mt-3 text-xs text-muted-foreground">Comparing the two runs…</p>}
+        {compareError && <p className="mt-3 text-xs text-destructive">{compareError}</p>}
+        {comparison && (
+          <RunComparisonPanel
+            comparison={comparison}
+            onClose={() => {
+              setComparison(null);
+              setPicked([]);
+            }}
+          />
+        )}
         {olderCount > 0 && (
           <p className="mt-3 text-xs text-muted-foreground">
             {olderCount} older {olderCount === 1 ? "entry" : "entries"} not shown.{" "}

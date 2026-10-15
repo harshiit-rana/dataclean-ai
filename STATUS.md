@@ -818,6 +818,11 @@ uncertainty: paired on the shared rows when it can be, from the two stored inter
 that cannot be compared. One sentence says what it means: *Leaving out 'region' did not change roc_auc beyond the
 noise.*
 
+The history table puts that comparison on the page (#69). Each run has a *compare* checkbox (labelled for screen
+readers and reachable by keyboard); picking two opens a panel with the sentence first, then what differed (older and
+newer side by side), the paired range when there is one, and the shared scores, with a note that only the headline
+metric is judged against the noise. Runs that cannot be compared say why and show no difference in score.
+
 Each run's model is kept too (#66). A run writes its result and fitted pipeline to its own folder, `runs/<run_id>/`,
 and `current.json` names the one in use; every route reads through that pointer, so nothing about the API changed. A
 cleaning change no longer deletes models: it unsets the pointer and marks each stored run as trained on data that has

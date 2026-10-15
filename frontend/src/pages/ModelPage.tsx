@@ -18,6 +18,7 @@ import {
   fetchModelPlan,
   fetchModelResult,
   finaliseModel,
+  compareRuns,
   fetchVersionDiff,
   restoreRun,
   trainModel,
@@ -551,6 +552,7 @@ export function ModelPage() {
           loadingOlder={loadingOlder}
           currentDatasetVersion={history.current_dataset_version ?? null}
           fetchDiff={sessionId ? (from, to) => fetchVersionDiff(sessionId, from, to) : undefined}
+          fetchComparison={sessionId ? (a, b) => compareRuns(sessionId, a, b) : undefined}
         />
       )}
 
