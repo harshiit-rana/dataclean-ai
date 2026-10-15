@@ -100,7 +100,9 @@ class TestEveryCandidateIsScoredOnTheSameFolds:
             two_class(), target_column="y", task="classification",
             model_names=[LOGISTIC, FOREST], include_deep_diagnostics=False,
         )
-        assert len(seen) == 2 and seen[0] == seen[1]
+        # Two candidates, then the best-single-column baseline's one fit per input column: every one
+        # of them is scored on the same folds, which is what makes the paired differences valid.
+        assert len(seen) >= 2 and all(splits == seen[0] for splits in seen)
 
     def test_score_config_returns_the_score_of_each_fold(self):
         df = two_class()
