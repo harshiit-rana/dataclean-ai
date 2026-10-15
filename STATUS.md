@@ -718,7 +718,13 @@ or model page — and does everything it can with it:
   reported as not judged, with the counts, and left out of the verdict (the headline names it). How
   often a column is blank is compared as well -- a column that stops being filled in has drifted as
   surely as one whose values moved -- and a derived input such as a text length, which is never blank,
-  is judged on its source column's blankness. A model scores whatever it is given and never notices
+  is judged on its source column's blankness. With thirty inputs a few cross the conventional PSI 0.1
+  by chance on a moderately sized file, so a fresh sample from the very same population came back
+  "shifted" in 15 of 20 tries; each column now also has to clear the PSI that chance reaches for
+  samples of its sizes (simulated from the training distribution, at a 5% error rate spread across all
+  the columns compared), and the same twenty samples now come back "similar" in 19, while a real shift
+  in one column is still caught. The convention stays as a floor on how much a column has to move, the
+  page shows both numbers, and the headline says how many inputs moved more than chance explains. A model scores whatever it is given and never notices
   when it is extrapolating; this is the app saying so for it.
 - **Checks itself when it can.** If the new file carries real answers, it reports how the model
   did on them against how it did when built — with the same too-few-rows rule as the verdict.

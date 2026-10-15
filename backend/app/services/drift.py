@@ -15,8 +15,13 @@ Per column:
   so for that row the column contributes nothing at all.
 
 PSI thresholds are the long-standing credit-scoring convention: under 0.1 stable, 0.1 to 0.25
-a shift worth knowing about, over 0.25 a different population. They are conventions, not
-statistics, and the report says so by showing the numbers behind every call.
+a shift worth knowing about, over 0.25 a different population. They are conventions, not statistics:
+on a small new file PSI crosses 0.1 by chance alone, and with thirty inputs a few will. So each column
+is also given the PSI that chance reaches for samples of its sizes -- simulated, by drawing a training-
+sized and a new-sized sample from the training distribution many times -- at a 5% error rate spread
+across every column compared. A column is called shifted only when its PSI is beyond that *and* past
+the convention, so the convention is a floor on how big a shift has to be to matter, and chance is a
+floor on how sure the call has to be.
 
 Like the model verdict, it declines to judge a sample too small to mean anything -- the file as a
 whole, and each column on its own filled-in values: a column that is 95% blank in a 500-row file
@@ -48,12 +53,34 @@ _BLANK_Z = 3.0
 _ORDER = {"not_judged": -1, "stable": 0, "shifted": 1, "different": 2}
 _BINS = 10
 _EPS = 1e-4  # floor for an empty bin, so the log term stays finite
+# Simulated sample pairs per column for the chance threshold. Multinomial draws over the bins, so
+# this costs milliseconds whatever the file size.
+NULL_DRAWS = 4000
+# The overall error rate the chance thresholds are set for, spread across the columns compared.
+FAMILY_ERROR = 0.05
 
 
 def _psi(expected: np.ndarray, actual: np.ndarray) -> float:
     expected = np.clip(expected, _EPS, None)
     actual = np.clip(actual, _EPS, None)
     return float(np.sum((actual - expected) * np.log(actual / expected)))
+
+
+def chance_threshold(expected: np.ndarray, reference_rows: int, new_rows: int, error: float, seed: int = 0) -> float:
+    """The PSI that two samples from the *same* population reach by chance, at this error rate.
+
+    The population is the training distribution over the bins. Each draw takes a training-sized and a
+    new-sized sample from it -- both, because the training proportions are themselves a sample -- and
+    measures PSI between them; the threshold is the (1 - error) quantile of those draws.
+    """
+    p = np.asarray(expected, dtype=float)
+    p = p / p.sum()
+    rng = np.random.default_rng(seed)
+    ref = rng.multinomial(max(int(reference_rows), 1), p, size=NULL_DRAWS) / max(int(reference_rows), 1)
+    new = rng.multinomial(max(int(new_rows), 1), p, size=NULL_DRAWS) / max(int(new_rows), 1)
+    ref, new = np.clip(ref, _EPS, None), np.clip(new, _EPS, None)
+    null = np.sum((new - ref) * np.log(new / ref), axis=1)
+    return float(np.quantile(null, 1 - error))
 
 
 def _blanks(ref_all: pd.Series, new_all: pd.Series) -> dict:
@@ -126,7 +153,9 @@ def _numeric(column: str, ref_all: pd.Series, new_all: pd.Series, blanks: dict) 
         "training_values": int(len(ref)),
         "new_values": int(len(new)),
         **blanks,
-        "status": _worse(_status(psi, outside, OUTSIDE_RANGE_MAJOR), blanks["blank_status"]),
+        "_expected": expected,
+        "_share": outside,
+        "_share_major": OUTSIDE_RANGE_MAJOR,
     }
 
 
@@ -152,7 +181,10 @@ def _categorical(column: str, ref_all: pd.Series, new_all: pd.Series, blanks: di
         "training_values": int(len(ref)),
         "new_values": int(len(new)),
         **blanks,
-        "status": _worse(_status(psi, unseen_share, UNSEEN_MAJOR), blanks["blank_status"]),
+        # The unseen bin has no weight in the training distribution, so chance never fills it.
+        "_expected": np.append(expected, 0.0),
+        "_share": unseen_share,
+        "_share_major": UNSEEN_MAJOR,
     }
 
 
@@ -160,12 +192,31 @@ def _worse(a: str, b: str) -> str:
     return a if _ORDER[a] >= _ORDER[b] else b
 
 
-def _status(psi: float, share: float, share_major: float) -> str:
-    if psi > PSI_MAJOR or share > share_major:
+def _status(psi: float, share: float, share_major: float, threshold: float = 0.0) -> str:
+    """Past the convention *and* past chance for the PSI; the shares of unseen or out-of-range
+    values keep their own bars."""
+    beyond = psi > threshold
+    if (beyond and psi > PSI_MAJOR) or share > share_major:
         return "different"
-    if psi > PSI_MODERATE or share > SHIFT_SHARE:
+    if (beyond and psi > PSI_MODERATE) or share > SHIFT_SHARE:
         return "shifted"
     return "stable"
+
+
+def _judge(columns: list[dict]) -> None:
+    """Set each compared column's chance threshold and status, now that the number of columns --
+    which the error rate is spread across -- is known."""
+    compared = [c for c in columns if "_expected" in c]
+    error = FAMILY_ERROR / max(len(compared), 1)
+    for index, c in enumerate(compared):
+        threshold = chance_threshold(c["_expected"], c["training_values"], c["new_values"], error, seed=index)
+        c["chance_threshold"] = round(threshold, 4)
+        c["beyond_chance"] = bool(c["psi"] > threshold)
+        value_status = _status(c["psi"], c["_share"], c["_share_major"], threshold)
+        c["status"] = _worse(value_status, c["blank_status"])
+    for c in compared:
+        for key in ("_expected", "_share", "_share_major"):
+            c.pop(key, None)
 
 
 def compare(
@@ -205,9 +256,12 @@ def compare(
     ] + [
         _categorical(c, reference[c], new[c], blanks(c)) for c in categorical if c in reference and c in new
     ]
+    _judge(columns)
     different = [c["column"] for c in columns if c["status"] == "different"]
     shifted = [c["column"] for c in columns if c["status"] == "shifted"]
     unjudged = [c["column"] for c in columns if c["status"] == "not_judged"]
+    compared = [c for c in columns if "chance_threshold" in c]
+    beyond = [c for c in compared if c["beyond_chance"]]
 
     if different:
         verdict = "different"
@@ -230,6 +284,11 @@ def compare(
             "Every input that could be compared looks like the data the model learned from."
             if unjudged
             else "Every input looks like the data the model learned from."
+        )
+    if compared and verdict != "similar":
+        headline += (
+            f" {len(beyond)} of the {len(compared)} inputs compared moved more than chance explains on "
+            f"files of these sizes."
         )
     if unjudged:
         headline += (

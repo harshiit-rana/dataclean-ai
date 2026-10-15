@@ -198,6 +198,7 @@ export function ApplyPage() {
                         <th className="py-2 pr-3 font-medium">Input</th>
                         <th className="py-2 pr-3 font-medium">Compared with training</th>
                         <th className="py-2 pr-3 text-right font-medium">Shift (PSI)</th>
+                        <th className="py-2 pr-3 text-right font-medium">Chance reaches</th>
                         <th className="py-2 pr-3 text-right font-medium">Values (training / here)</th>
                         <th className="py-2 font-medium">What changed</th>
                       </tr>
@@ -223,6 +224,9 @@ export function ApplyPage() {
                             {column.psi != null ? column.psi.toFixed(3) : "—"}
                           </td>
                           <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">
+                            {column.chance_threshold != null ? column.chance_threshold.toFixed(3) : "—"}
+                          </td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">
                             {counts(column)}
                           </td>
                           <td className="py-1.5 text-xs text-muted-foreground">{driftDetail(column)}</td>
@@ -232,7 +236,9 @@ export function ApplyPage() {
                   </table>
                   <p className="mt-2 text-xs text-muted-foreground">
                     PSI under 0.1 is usually read as stable and over 0.25 as a different
-                    population. Those are conventions, not statistics — the numbers are here so
+                    population. Those are conventions, not statistics, so a column is only called
+                    moved when its PSI is also above what chance reaches for samples of these sizes
+                    (with every column checked at once, not one at a time). The numbers are here so
                     you can judge.
                   </p>
                 </CardContent>

@@ -210,3 +210,25 @@ describe("ApplyPage — each column judged on its own values (#46)", () => {
     expect(await screen.findByText(/blank in 2% of training rows, 40% here/)).toBeInTheDocument();
   });
 });
+
+describe("ApplyPage — what chance reaches (#45)", () => {
+  beforeEach(() => applyToNewFile.mockReset());
+
+  it("shows each column's PSI beside the PSI chance reaches for files of these sizes", async () => {
+    await runWith({
+      ...RESULT,
+      drift: {
+        verdict: "different",
+        headline: "'n3' no longer looks like the data the model learned from. 1 of the 30 inputs compared moved more than chance explains on files of these sizes.",
+        columns: [
+          { column: "n3", kind: "numeric", status: "different", psi: 0.607, chance_threshold: 0.153, beyond_chance: true },
+          { column: "n13", kind: "numeric", status: "stable", psi: 0.104, chance_threshold: 0.163, beyond_chance: false },
+        ],
+      },
+    });
+    expect(await screen.findByText("Chance reaches")).toBeInTheDocument();
+    expect(screen.getByText("0.153")).toBeInTheDocument();
+    expect(screen.getByText(/1 of the 30 inputs compared moved more than chance explains/)).toBeInTheDocument();
+    expect(screen.getByText(/only called moved when its PSI is also above what chance reaches/)).toBeInTheDocument();
+  });
+});

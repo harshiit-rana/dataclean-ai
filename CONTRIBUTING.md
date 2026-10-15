@@ -392,7 +392,10 @@ are both running locally, you're ready to make changes.
   its own filled-in counts and refuses to judge one below `MIN_VALUES_TO_JUDGE`; it compares blank
   shares (a change beyond chance is a finding in itself); and a derived input is passed its source
   column through `blanks_from`, because its own values are never blank. A new derived kind needs its
-  source wired the same way in `routes_apply`.
+  source wired the same way in `routes_apply`. A column is called moved only when its PSI clears both
+  the convention (0.1 / 0.25) and `chance_threshold`, which is set in `_judge` once the number of
+  compared columns is known; do not decide a column's status before that, or the correction for
+  testing many columns at once is lost.
 - **A model with a random fit is marked `seeded`.** `ModelSpec.seeded` (set through `_SEEDED_MODELS`)
   is what makes `modeling.seed_stability` refit the chosen model with `SEEDS_TO_CHECK`; a model that
   takes a `random_state` but fits deterministically must not be marked, or the check reports a spread of

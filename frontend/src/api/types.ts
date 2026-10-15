@@ -993,6 +993,10 @@ export interface DriftColumn {
   training_blank_share?: number;
   new_blank_share?: number;
   blank_status?: "stable" | "shifted" | "different";
+  /** The PSI two samples of these sizes from the training population reach by chance, at a 5% error
+   * rate spread across every column compared; a column is only called moved above it. */
+  chance_threshold?: number;
+  beyond_chance?: boolean;
 }
 
 export interface DriftReport {
