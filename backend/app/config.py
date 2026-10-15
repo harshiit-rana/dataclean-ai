@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     upload_dir: str = "./uploads"
     max_file_size_mb: int = 50
 
+    # The most work one training request may be estimated to do, in "row-fits": one row fitted by the
+    # cheapest model counts as one, and the forests and boosted trees count as many (see
+    # modeling.ModelSpec.cost_weight). Past it the request is reduced rather than left to run for as long
+    # as it takes -- model choice is made on a sample of the training rows, then the most expensive
+    # families are skipped, then the request is refused with a message saying what would fit. Every
+    # reduction is stated in the result. 0 turns the limit off. The default lets a file of about a
+    # hundred thousand rows through unreduced.
+    training_cost_limit: int = 30_000_000
+
     # Uploaded CSVs, cleaned copies and audit reports are deleted this long after a session
     # was last touched. Matches redis_ttl_seconds by default so the files and the checkpoint
     # that refers to them expire together -- a session whose state has already gone can't be

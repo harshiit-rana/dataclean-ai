@@ -120,6 +120,9 @@ class ModelSpec:
     # a `random_state` but their fits are deterministic, so checking them against other seeds would
     # only report a spread of zero and imply it had been worth looking.
     seeded: bool = False
+    # How many times dearer than the cheapest model it is to fit one row, roughly: what the processing
+    # limit is estimated in. A linear model is 1; a forest of 200 trees is far more, and so is boosting.
+    cost_weight: int = 1
 
     def settings(self, overrides: dict | None = None) -> dict:
         """Defaults, with anything the tuner found layered on top.
@@ -1642,6 +1645,177 @@ for _name in _SEEDED_MODELS:
     if _name in MODELS:
         MODELS[_name] = dataclasses_replace(MODELS[_name], seeded=True)
 
+# Rough fit cost per row relative to a linear model (see ModelSpec.cost_weight), measured loosely on this
+# app's own fits rather than derived: a 200-tree forest and a boosted model take tens of times longer to fit
+# a row than logistic or ridge regression. The limit is a guard against a request that would run for
+# minutes, not a prediction of how many seconds one will take, so it only has to be the right order.
+_COST_WEIGHTS = {
+    "random_forest_classifier": 40,
+    "random_forest_regressor": 40,
+    "gradient_boosting_classifier": 25,
+    "gradient_boosting_regressor": 25,
+}
+for _name, _weight in _COST_WEIGHTS.items():
+    if _name in MODELS:
+        MODELS[_name] = dataclasses_replace(MODELS[_name], cost_weight=_weight)
+
+# Model choice is never made on fewer rows than this when the file is sampled for it: below it the folds
+# are too small to tell candidates apart, and the file is not big enough to need sampling anyway.
+MIN_SELECTION_ROWS = 5_000
+
+
+def _selection_folds(rows: int) -> tuple[int, int]:
+    """Folds and repeats model choice uses for a training set this big (see choose_on_training_folds)."""
+    from app.services import tuning
+
+    folds = SELECTION_FOLDS_LARGE if rows > ROWS_FOR_FEWER_SELECTION_FOLDS else tuning.CV_FOLDS
+    return folds, (tuning.CV_REPEATS if rows < tuning.REPEATED_CV_BELOW_ROWS else 1)
+
+
+def estimate_cost(rows: int, models: list[str], selection_rows: int | None = None) -> int:
+    """About how much work comparing and fitting these models on this many training rows is, in row-fits.
+
+    Each model is fitted once on every training row for the final result, and cross-validated for the choice
+    between them (`folds x repeats` fits of `selection_rows`, which is every row unless the choice is made on
+    a sample). Weighted by how dear a row is to fit for each family.
+    """
+    folds, repeats = _selection_folds(rows)
+    used = rows if selection_rows is None else min(int(selection_rows), rows)
+    total = 0
+    for name in models:
+        spec = MODELS.get(name)
+        if spec is not None:
+            total += spec.cost_weight * (rows + used * folds * repeats)
+    return int(total)
+
+
+def plan_within_limit(
+    models: list[str], rows: int, *, limit: int | None, can_sample: bool
+) -> dict:
+    """What to do so that comparing these models on this many rows stays within the processing limit.
+
+    Returns `{"models", "selection_rows", "reductions", "estimated_before", "estimated", "limit"}`. Within
+    the limit, or with no limit (None or 0), nothing changes and `reductions` is empty. Over it, in order:
+
+    1. Model choice is made on a sample of the training rows (`selection_rows`) -- cheap to say and only
+       the comparison is affected, never the final fit or the test set. Not possible when `can_sample` is
+       false (a date split, whose folds are cut by timestamps that belong to every row).
+    2. The most expensive family is skipped, repeatedly, keeping at least the cheapest.
+    3. Still over: refuse (`ModelingError`, code `too_large`) with what would fit.
+    """
+    kept = [m for m in models if m in MODELS]
+    before = estimate_cost(rows, kept)
+    plan = {"models": kept, "selection_rows": None, "reductions": [], "estimated_before": before,
+            "estimated": before, "limit": limit or 0}
+    if not limit or before <= limit:
+        return plan
+
+    folds, repeats = _selection_folds(rows)
+
+    def fitted(names: list[str], sample: int | None) -> int:
+        return estimate_cost(rows, names, sample)
+
+    def sample_for(names: list[str]) -> int | None:
+        """The most rows model choice can use and still fit, or None if even the minimum cannot."""
+        weights = sum(MODELS[m].cost_weight for m in names)
+        room = limit - rows * weights
+        if room <= 0:
+            return None
+        return min(rows, max(MIN_SELECTION_ROWS, int(room // (folds * repeats * weights))))
+
+    sample: int | None = None
+    while True:
+        sample = sample_for(kept) if can_sample else None
+        if sample is not None and sample < rows:
+            plan["selection_rows"] = sample
+        else:
+            sample = None
+            plan["selection_rows"] = None
+        if fitted(kept, sample) <= limit or len(kept) == 1:
+            break
+        dearest = max(kept, key=lambda m: (MODELS[m].cost_weight, MODELS[m].complexity_rank))
+        kept = [m for m in kept if m != dearest]
+        plan["reductions"].append({
+            "kind": "skipped_model", "model": dearest, "label": MODELS[dearest].label,
+            "reason": f"{MODELS[dearest].label} is about {MODELS[dearest].cost_weight} times dearer to fit than "
+            f"the cheapest model, and {rows:,} training rows is too many to also compare it within the "
+            f"processing limit.",
+        })
+
+    plan["models"] = kept
+    if fitted(kept, sample) > limit:
+        cheapest = min(kept, key=lambda m: MODELS[m].cost_weight)
+        per_row = MODELS[cheapest].cost_weight * (1 + folds * repeats)
+        fits = max(int(limit // per_row), 0)
+        raise ModelingError(
+            f"{rows:,} training rows is more than can be trained on within the processing limit even with the "
+            f"simplest model; about {fits:,} rows would fit. Use a smaller sample of the file, or ask whoever runs "
+            f"this server to raise TRAINING_COST_LIMIT.",
+            code="too_large",
+        )
+    if plan["selection_rows"] is not None:
+        plan["reductions"].insert(0, {
+            "kind": "selection_rows", "from": rows, "to": plan["selection_rows"],
+            "reason": f"Models were compared on a sample of {plan['selection_rows']:,} of the {rows:,} training "
+            f"rows to stay within the processing limit. The chosen model was then fitted on every training row, "
+            f"and the test rows took no part.",
+        })
+    plan["estimated"] = fitted(kept, sample)
+    return plan
+
+
+def resource_report(plan: dict) -> dict | None:
+    """What was reduced to fit the limit, for the result, or None when nothing was."""
+    if not plan["reductions"]:
+        return None
+    return {
+        "limit": plan["limit"],
+        "estimated_before": plan["estimated_before"],
+        "estimated": plan["estimated"],
+        "reductions": plan["reductions"],
+    }
+
+
+def selection_sample(X_train, y_train, groups, task: str, max_rows: int | None):
+    """The rows model choice is made on when the file is too big to cross-validate every model on all of
+    them: `(X, y, groups, rows_used)`.
+
+    Taken from the training rows only, with a fixed seed. A grouped split keeps whole groups, so a sample
+    never splits an entity across folds; a classification sample keeps every answer in its proportion and
+    enough of each rare one to fold. A date split is never sampled (the caller does not ask), because its
+    folds are cut by timestamps that belong to every row.
+    """
+    from app.services import tuning
+
+    n = len(X_train)
+    if max_rows is None or n <= max_rows:
+        return X_train, y_train, groups, n
+    rng = np.random.default_rng(RANDOM_STATE)
+    mask = np.zeros(n, dtype=bool)
+    if groups is not None:
+        labels = pd.Series(np.asarray(groups))
+        sizes = labels.value_counts()
+        taken = 0
+        for key in rng.permutation(labels.unique()):
+            mask |= (labels == key).to_numpy()
+            taken += int(sizes[key])
+            if taken >= max_rows:
+                break
+    elif task == "classification":
+        answers = pd.Series(np.asarray(y_train)).astype(str)
+        floor = tuning.CV_FOLDS * tuning.CV_REPEATS * 2
+        for _, positions in answers.groupby(answers).indices.items():
+            take = min(len(positions), max(floor, int(round(len(positions) * max_rows / n))))
+            mask[rng.choice(positions, size=take, replace=False)] = True
+    else:
+        mask[rng.choice(n, size=max_rows, replace=False)] = True
+    return (
+        X_train.iloc[mask],
+        y_train.iloc[mask] if hasattr(y_train, "iloc") else np.asarray(y_train)[mask],
+        None if groups is None else (groups.iloc[mask] if hasattr(groups, "iloc") else np.asarray(groups)[mask]),
+        int(mask.sum()),
+    )
+
 # Seeds a chosen model is refitted with to see whether its result is the seed's or the data's. The
 # app's own seed first, so its score is the one already measured.
 SEEDS_TO_CHECK = (RANDOM_STATE, 1, 2, 3, 4)
@@ -1955,7 +2129,8 @@ def runner_up_comparison(scores: dict[str, dict], chosen: str, highest_scorer: s
 
 
 def choose_on_training_folds(
-    trained, build_for, X_train, y_train, task: str, *, groups=None, ordered: bool = False
+    trained, build_for, X_train, y_train, task: str, *, groups=None, ordered: bool = False,
+    max_rows: int | None = None,
 ) -> dict:
     """Which of the trained candidates to keep, decided without the test set.
 
@@ -1990,6 +2165,13 @@ def choose_on_training_folds(
         }
 
     folds = SELECTION_FOLDS_LARGE if len(X_train) > ROWS_FOR_FEWER_SELECTION_FOLDS else tuning.CV_FOLDS
+    available = len(X_train)
+    # On a big file the comparison may be made on a sample (`max_rows`, set by the processing limit); the
+    # folds, and so the number of fits, still follow the size of the whole file.
+    if not ordered:
+        X_train, y_train, groups, used_rows = selection_sample(X_train, y_train, groups, task, max_rows)
+    else:
+        used_rows = available
     scores: dict[str, dict] = {}
     for entry in ranked:
         found = tuning.score_config(
@@ -2075,9 +2257,12 @@ def choose_on_training_folds(
         "paired_difference": comparison["paired_difference"] if comparison else None,
         "distinguishable_note": distinguishable_note,
         "chosen_on": (
-            f"cross-validated {metric} over {scores[chosen]['folds']} folds of the training rows"
-            f"{_repeated_text(scores[chosen].get('repeats', 1))}; the test set was not consulted"
+            f"cross-validated {metric} over {scores[chosen]['folds']} folds of "
+            f"{'a sample of ' + format(used_rows, ',') + ' of the ' + format(available, ',') if used_rows < available else 'the'}"
+            f" training rows{_repeated_text(scores[chosen].get('repeats', 1))}; the test set was not consulted"
         ),
+        "rows_used": used_rows,
+        "rows_available": available,
     }
 
 
@@ -2126,9 +2311,15 @@ def train_candidates(
     test_size: float | None = None,
     time_gap_days: int | None = None,
     group_columns: list[str] | None = None,
+    cost_limit: int | None = None,
 ) -> dict:
     """Trains each requested model on the same split and returns everything needed to compare
     them. A model that fails to fit is reported rather than aborting the others.
+
+    `cost_limit` is the processing limit (`Settings.training_cost_limit`; None or 0 for none): when the
+    models and rows would cost more than it, model choice is made on a sample of the training rows, then the
+    dearest families are skipped, then the request is refused -- see `plan_within_limit`. What was reduced is
+    in the result's `resource_limits`; within the limit nothing changes.
 
     `test_size` is the fraction of the labelled rows held back for testing (the plan recommends
     one from the file's size and class balance; None means `DEFAULT_TEST_SIZE`). It is ignored
@@ -2261,8 +2452,15 @@ def train_candidates(
         fold_groups = None
     X_train, X_test = X_train[used], X_test[used]
 
+    # Within the processing limit, or reduced to fit it. A date split is not sampled: its folds are cut by
+    # timestamps that belong to every row.
+    plan = plan_within_limit(
+        [m for m in model_names if m in MODELS and MODELS[m].task == task], len(X_train),
+        limit=cost_limit, can_sample=split_strategy != "time",
+    )
+
     results = []
-    for name in model_names:
+    for name in plan["models"]:
         spec = MODELS.get(name)
         if spec is None or spec.task != task:
             continue
@@ -2340,6 +2538,7 @@ def train_candidates(
         task,
         groups=selection_groups,
         ordered=fold_order,
+        max_rows=plan["selection_rows"],
     )
     best = next(r for r in trained if r["model"] == selection["chosen"])
     if features.get("clipped"):
@@ -2589,6 +2788,8 @@ def train_candidates(
         # How the winner was chosen. The test set is not part of it -- see
         # choose_on_training_folds.
         "selection": {k: v for k, v in selection.items() if k != "scores"},
+        # What was reduced to stay within the processing limit; None when nothing was.
+        "resource_limits": resource_report(plan),
         "deep_diagnostics": deep,
         # Correlated features split the credit between them in any importance ranking, so
         # both look unimportant and neither gets investigated. Worth showing next to it.

@@ -11,7 +11,8 @@ export type TrainingErrorCode =
   | "too_few_labelled_rows"
   | "no_usable_columns"
   | "no_model_trained"
-  | "split_unusable";
+  | "split_unusable"
+  | "too_large";
 
 const TITLES: Record<TrainingErrorCode, string> = {
   data_blocked: "This data can't support a model yet",
@@ -21,6 +22,7 @@ const TITLES: Record<TrainingErrorCode, string> = {
   no_usable_columns: "No columns are left to learn from",
   no_model_trained: "No model could be trained on these columns",
   split_unusable: "The rows can't be divided as asked",
+  too_large: "This file is too big to train on here",
 };
 
 const MAX_DROPPED_SHOWN = 8;
@@ -111,6 +113,13 @@ export function TrainingProblem({ code, detail, plan, sessionId, onOpenSetup }: 
         <Button variant="outline" size="sm" className="mt-3" onClick={onOpenSetup}>
           Change the split
         </Button>
+      )}
+
+      {known === "too_large" && (
+        <p className="mt-2">
+          Training is limited so that one request cannot run for as long as it likes. Train on a
+          smaller sample of the file, or ask whoever runs this server to raise the limit.
+        </p>
       )}
 
       {known === "no_model_trained" && (

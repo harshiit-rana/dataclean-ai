@@ -463,6 +463,11 @@ are both running locally, you're ready to make changes.
 - **The automatic strategy choice is a pure function with documented thresholds.** Change `HALVING_MIN_*` in
   `tuning.py` and the boundary cases in `tests/unit/test_choose_strategy.py` together, and say in the commit what
   data justified it: a threshold moved without a benchmark is a guess, and the tests exist to make that visible.
+- **A new model family gets a `cost_weight`.** Set it on its `ModelSpec` (see `_COST_WEIGHTS` in `modeling.py`) from
+  a rough timing against logistic regression, or the processing limit will treat it as cheap. A new step that scales
+  with rows times candidates times folds belongs in `estimate_cost`, and anything that reduces a request to fit
+  (`plan_within_limit`) must say so in `resource_limits` rather than do it silently, and never touch the test set.
+  Tests that take minutes go in `tests/slow`, marked `slow`; the default run leaves them out.
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,

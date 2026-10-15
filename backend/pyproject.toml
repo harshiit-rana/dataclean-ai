@@ -1,6 +1,10 @@
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+# Tests that take minutes (a real run on a very big file) are marked `slow` and left out of the default run,
+# so CI stays about as long as it was. Run them on purpose: `pytest -m slow`.
+markers = ["slow: takes minutes; excluded by default, run with -m slow"]
+addopts = "-m 'not slow'"
 
 [tool.coverage.run]
 source = ["app"]

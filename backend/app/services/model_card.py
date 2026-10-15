@@ -835,6 +835,13 @@ def caution_items(result: dict, best: dict) -> list[dict]:
     test_rows = split.get("test_rows", 0)
     diagnostics = best.get("diagnostics", {})
 
+    # What was left undone to stay within the processing limit -- by the plain train or the improvement
+    # loop. Said in full, because a model chosen on a sample or from fewer families is not the same
+    # claim as one chosen from everything.
+    reduced = result.get("resource_limits") or (result.get("improvement") or {}).get("resource_limits")
+    for index, reduction in enumerate((reduced or {}).get("reductions") or []):
+        add(f"resource_limit_{reduction.get('kind')}_{index}", "medium", reduction["reason"])
+
     evaluation = result.get("evaluation") or {}
     if evaluation.get("message"):
         add(

@@ -81,7 +81,8 @@ class TrainingFailedError(AppError):
     The codes are part of the API and must not change meaning: `data_blocked` (the readiness checks
     refuse this data), `target_missing` (the column to predict is gone), `target_unusable` (it has no
     usable values), `too_few_labelled_rows`, `no_usable_columns`, `no_model_trained`, `split_unusable`
-    (the date or grouping column cannot be used as asked) and `training_error` (an unexpected failure).
+    (the date or grouping column cannot be used as asked), `too_large` (more rows than the processing limit
+    allows even for the simplest model) and `training_error` (an unexpected failure).
     A response without a `code` is one the page can only show as a message.
     """
 
@@ -865,6 +866,7 @@ async def train_model(
             calibration=request.calibration,
             test_size=request.test_size,
             time_gap_days=request.time_gap_days,
+            cost_limit=settings.training_cost_limit,
         )
 
     try:
@@ -898,6 +900,7 @@ def _improve_and_save(
     on_progress=None,
     on_stage=None,
     goal_text: str = "",
+    cost_limit: int | None = None,
 ) -> dict:
     """Search, rebuild the winner the normal way, and save it. Runs in a worker thread.
 
@@ -930,6 +933,7 @@ def _improve_and_save(
         budget=request.budget,
         time_limit_seconds=request.time_limit_seconds,
         search_strategy=request.search_strategy,
+        cost_limit=cost_limit,
         feature_recipes_wanted=request.feature_recipes,
         on_progress=on_progress,
         on_stage=on_stage,
@@ -987,6 +991,7 @@ def _improve_and_save(
         "skipped_for_time": found.get("skipped_for_time", []),
         "search_strategy": found.get("search_strategy"),
         "search_strategies": found.get("search_strategies", []),
+        "resource_limits": found.get("resource_limits"),
         "cv_score": best["cv_score"],
         "cv_std": best["cv_std"],
         "settings": best["params"],
@@ -1028,6 +1033,7 @@ async def improve_model(
             directory=directory,
             action_log=log,
             goal_text=_goal_text(goal_context),
+            cost_limit=settings.training_cost_limit,
         )
     except modeling.ModelingError as exc:
         raise TrainingFailedError(str(exc), code=exc.code) from exc
@@ -1106,6 +1112,7 @@ async def improve_model_stream(
                 on_progress=on_progress,
                 on_stage=on_stage,
                 goal_text=_goal_text(goal_context),
+                cost_limit=settings.training_cost_limit,
             )
             await queue.put({"type": "result", "result": result})
         except modeling.ModelingError as exc:

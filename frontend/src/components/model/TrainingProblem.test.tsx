@@ -64,6 +64,13 @@ describe("TrainingProblem", () => {
     expect(onOpenSetup).toHaveBeenCalledTimes(1);
   });
 
+  it("explains a file that is too big for the processing limit and offers no button (#62)", () => {
+    show("too_large", "200,000 training rows is more than can be trained on within the processing limit.");
+    expect(screen.getByText("This file is too big to train on here")).toBeInTheDocument();
+    expect(screen.getByText(/Train on a smaller sample of the file, or ask whoever runs this server/)).toBeInTheDocument();
+    expect(screen.queryByRole("button")).not.toBeInTheDocument();
+  });
+
   it("offers to change the columns or models when none trained", () => {
     const onOpenSetup = show("no_model_trained");
     fireEvent.click(screen.getByRole("button", { name: "Change the columns or models" }));

@@ -711,6 +711,22 @@ default, which overfits the noise, scores 0.29 to 0.49, so replacing it is a gen
 refused the one case that was luck. Stopping a loop from "improving" a worse-than-chance default to chance would need a
 rule about chance, not about fold luck; that is a separate decision and is not made here.
 
+**A processing limit on one request (#62).** Deep diagnostics were already skipped above 20,000 rows, but plain
+training, model choice and the improvement loop had no limit on rows times candidates times folds, so a large upload
+could keep the single API process busy for as long as it took. `modeling.estimate_cost` puts a number on a request in
+"row-fits", with each family weighted by how dear a row is to fit (linear 1, boosting 25, forest 40), and
+`Settings.training_cost_limit` (`TRAINING_COST_LIMIT`, default 30 million, 0 for none) is the most a request may be
+estimated to cost; a file of about a hundred thousand rows passes unreduced. Over it, in order: model choice is made on
+a sample of the training rows (whole groups for a grouped split, answers in proportion for a classification; never
+for a date split, whose folds are cut by timestamps), then the dearest family is skipped, repeatedly, then the request
+is refused with `too_large` and how many rows would fit. The final fit is still on every training row, the test set
+takes no part, and whatever was reduced is stated in the result's `resource_limits`, in the model card and in the
+cautions box. The improvement loop never samples, so it skips families and trims the search budget instead. Within the
+limit nothing changes. A real 200,000-row run lives in `tests/slow` (`pytest -m slow`), left out of the default run: with all three
+families it was estimated at 42 million, compared on 98,181 of the 160,000 training rows to come to 30 million, and took
+46 seconds on a multi-core laptop. The weights err towards caution (a forest fits in parallel), and the limit is one
+setting if a deployment wants it looser.
+
 **A record of what you tried.** Results used to overwrite a single file, so retraining
 discarded the previous run — which made the question people actually ask unanswerable: *did the
 thing I just changed help?* Every run is now kept with its settings, its headline number and

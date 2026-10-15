@@ -135,8 +135,14 @@ def improve(
     group_columns: list[str] | None = None,
     time_limit_seconds: float | None = None,
     search_strategy: str = "auto",
+    cost_limit: int | None = None,
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
+
+    `cost_limit` is the processing limit (see `modeling.plan_within_limit`): over it, the most expensive
+    families are not tried and the settings searches get a smaller budget, and what was reduced is in the
+    result's `resource_limits`. The loop always scores on every training row, so it never samples; a file
+    too big even for the simplest model is refused.
 
     `search_strategy` is "random", "halving" or "auto" (the default), which picks one for each settings
     search from the model, the training rows and the budget (`tuning.choose_strategy`) and records why.
@@ -276,6 +282,29 @@ def improve(
     ]
     if not candidates:
         raise modeling.ModelingError("No models are available for this kind of prediction.")
+
+    # Within the processing limit, or reduced to fit it: dearest families first, then the search budget.
+    resource_plan = modeling.plan_within_limit(candidates, len(X_train), limit=cost_limit, can_sample=False)
+    candidates = resource_plan["models"]
+    reductions = list(resource_plan["reductions"])
+    if cost_limit:
+        folds_now, repeats_now = modeling._selection_folds(len(X_train))
+        dearest = max(modeling.MODELS[m].cost_weight for m in candidates)
+        affordable = max(2, int(cost_limit // (len(X_train) * folds_now * repeats_now * dearest)))
+        if affordable < budget:
+            reductions.append({
+                "kind": "search_budget", "from": budget, "to": affordable,
+                "reason": f"Each setting searched costs about {len(X_train) * folds_now * repeats_now * dearest:,} "
+                f"row-fits on {len(X_train):,} rows, so the search tried {affordable} settings instead of {budget} "
+                f"to stay within the processing limit.",
+            })
+            budget = affordable
+    resource_limits = (
+        {"limit": cost_limit, "estimated_before": resource_plan["estimated_before"],
+         "estimated": resource_plan["estimated"], "reductions": reductions}
+        if reductions
+        else None
+    )
 
     rounds: list[Round] = []
     metric = tuning.scoring_for(task, y_train)
@@ -800,6 +829,7 @@ def improve(
         "skipped_for_time": skipped_for_time,
         "search_strategy": search_strategy,
         "search_strategies": sorted(strategies_used),
+        "resource_limits": resource_limits,
         "best": {
             "model": best_name,
             "label": modeling.MODELS[best_name].label,

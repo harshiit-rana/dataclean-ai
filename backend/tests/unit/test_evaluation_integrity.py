@@ -127,6 +127,21 @@ class TestChoosingTheModel:
         assert _chosen(rigged)["metrics"]["roc_auc"] != _chosen(honest)["metrics"]["roc_auc"]
         assert _chosen(rigged)["metrics"]["roc_auc"] < 0.5 < _chosen(honest)["metrics"]["roc_auc"]
 
+    def test_a_comparison_made_on_a_sample_is_unmoved_too(self, learnable, flipped_test_answers, monkeypatch):
+        """Over the processing limit the models are compared on a sample of the training rows. The sample is
+        drawn from the training rows only, so flipping every held-out answer moves neither it nor the choice."""
+        monkeypatch.setattr(modeling, "MIN_SELECTION_ROWS", 100)
+        honest = self._train(learnable, cost_limit=80_000)
+        flipped_test_answers()
+        rigged = self._train(learnable, cost_limit=80_000)
+
+        assert honest["resource_limits"]["reductions"][0]["kind"] == "selection_rows"
+        assert honest["selection"]["rows_used"] < honest["selection"]["rows_available"]
+        assert rigged["selection"] == honest["selection"]
+        assert rigged["best_model"] == honest["best_model"]
+        assert rigged["resource_limits"] == honest["resource_limits"]
+        assert _chosen(rigged)["metrics"]["roc_auc"] != _chosen(honest)["metrics"]["roc_auc"]
+
     def test_the_same_for_a_regression_target(self, flipped_test_answers):
         rng = np.random.default_rng(3)
         n = 400

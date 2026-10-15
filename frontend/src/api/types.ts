@@ -824,6 +824,14 @@ export interface ModelCaution {
   text: string;
 }
 
+/** What a request was reduced by to stay within the processing limit, and how much it would have cost. */
+export interface ResourceLimits {
+  limit: number;
+  estimated_before: number;
+  estimated: number;
+  reductions: { kind: "selection_rows" | "skipped_model" | "search_budget"; reason: string }[];
+}
+
 /** One sentence of the "Why this model?" panel, with the result fields it rests on. */
 export interface ExplanationStatement {
   id: string;
@@ -883,6 +891,9 @@ export interface ModelResult {
   baseline: Baseline;
   /** What to know before relying on this, most severe first. Absent on older results. */
   cautions?: ModelCaution[] | null;
+  /** What was reduced so one request stayed within the server's processing limit (model choice on a sample,
+   * families skipped), or null when nothing was. The same text is in `cautions`. */
+  resource_limits?: ResourceLimits | null;
   /** Why this model, assembled on the server from the fields above. Absent on older results. */
   why_this_model?: ModelExplanation | null;
   primary_metric: string;
