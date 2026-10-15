@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { downloadSessionFile, fetchPreview, uploadCsv } from "./client";
+import { ApiError, downloadSessionFile, fetchModelPlan, fetchPreview, uploadCsv } from "./client";
 import { getSessionToken, storeSessionToken } from "@/lib/sessionToken";
 
 /** The guarantee under test is narrow but easy to break: every call scoped to a session has
@@ -98,5 +98,32 @@ describe("session-scoped requests", () => {
 
     await fetchPreview("s1");
     expect(headerFrom(lastCall()[1])).toBeUndefined();
+  });
+});
+
+
+describe("an error response", () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.stubGlobal("fetch", vi.fn());
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const refuse = (body: unknown) =>
+    new Response(JSON.stringify(body), { status: 422, headers: { "Content-Type": "application/json" } });
+
+  it("keeps the reason code the server gave", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(
+      refuse({ error: "Model could not be trained", detail: "Blocked.", code: "data_blocked" })
+    );
+    const thrown = await fetchModelPlan("s1").catch((err: unknown) => err);
+    expect(thrown).toBeInstanceOf(ApiError);
+    expect((thrown as ApiError).code).toBe("data_blocked");
+  });
+
+  it("has no code when the server gave none", async () => {
+    vi.mocked(globalThis.fetch).mockResolvedValueOnce(refuse({ error: "Nope", detail: "Because." }));
+    const thrown = await fetchModelPlan("s1").catch((err: unknown) => err);
+    expect((thrown as ApiError).code).toBeUndefined();
   });
 });

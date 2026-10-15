@@ -428,6 +428,11 @@ are both running locally, you're ready to make changes.
   or a `because` when the obstacle is not a count; do not write a one-off sentence or colour it as a failure.
   Add the block beside the existing headline rather than replacing it, and a case in
   `tests/unit/test_not_judged.py`.
+- **A refusal a page can offer a way out of gets a `code`.** Raise `TrainingFailedError(detail, code=...)` or
+  `ModelingError(message, code=...)`, add the code to the list in `TrainingFailedError`'s docstring and to
+  `TrainingProblem` with the action it leads to, and a case in `tests/unit/test_training_error_codes.py`. Codes are
+  part of the API: never reuse one for a different meaning. A refusal with no useful action stays code-less and
+  shows as a message.
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,

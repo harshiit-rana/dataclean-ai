@@ -75,10 +75,19 @@ class NoTargetColumnError(AppError):
 
 
 class TrainingFailedError(AppError):
+    """A model could not be trained, with a stable `code` for the reasons a page can act on.
+
+    The codes are part of the API and must not change meaning: `data_blocked` (the readiness checks
+    refuse this data), `target_missing` (the column to predict is gone), `target_unusable` (it has no
+    usable values), `too_few_labelled_rows`, `no_usable_columns`, `no_model_trained`, `split_unusable`
+    (the date or grouping column cannot be used as asked) and `training_error` (an unexpected failure).
+    A response without a `code` is one the page can only show as a message.
+    """
+
     status_code = 422  # the request was well-formed; the data can't support it
 
-    def __init__(self, detail: str):
-        super().__init__("Model could not be trained", detail)
+    def __init__(self, detail: str, code: str | None = None):
+        super().__init__("Model could not be trained", detail, code)
 
 
 class NoTrainedModelError(AppError):
@@ -459,7 +468,8 @@ async def get_model_plan(
     task = ml_readiness.infer_task_type(df[target], goal.task_type) if target in df.columns else None
     if task is None:
         raise TrainingFailedError(
-            f"'{target}' has no usable values left, so there is nothing to predict."
+            f"'{target}' has no usable values left, so there is nothing to predict.",
+            code="target_unusable",
         )
 
     readiness = ml_readiness.assess_readiness(df, goal, rules=rules)
@@ -669,19 +679,21 @@ def _refuse_if_the_data_cannot_support_a_model(df, goal, rules=None) -> str:
 
     if target not in df.columns:
         raise TrainingFailedError(
-            f"'{target}' is no longer in the data -- it was renamed or removed during cleaning."
+            f"'{target}' is no longer in the data -- it was renamed or removed during cleaning.",
+            code="target_missing",
         )
 
     task = ml_readiness.infer_task_type(df[target], goal.task_type)
     if task is None:
-        raise TrainingFailedError(f"'{target}' has no usable values to learn from.")
+        raise TrainingFailedError(f"'{target}' has no usable values to learn from.", code="target_unusable")
 
     readiness = ml_readiness.assess_readiness(df, goal, rules=rules)
     if readiness.get("verdict") == "blocked":
         blockers = readiness.get("blockers") or ["This data cannot support a model."]
         raise TrainingFailedError(
             "This data cannot support a model that would mean anything, so nothing was "
-            "trained. " + " ".join(blockers)
+            "trained. " + " ".join(blockers),
+            code="data_blocked",
         )
     return task
 
@@ -860,10 +872,10 @@ async def train_model(
         # request in this process, including in-flight SSE streams.
         result = await asyncio.to_thread(run)
     except modeling.ModelingError as exc:
-        raise TrainingFailedError(str(exc)) from exc
+        raise TrainingFailedError(str(exc), code=exc.code) from exc
     except Exception as exc:  # noqa: BLE001 -- surface the reason rather than a bare 500
         logger.exception("Training failed for session %s", session_id)
-        raise TrainingFailedError(f"Training stopped unexpectedly: {exc}") from exc
+        raise TrainingFailedError(f"Training stopped unexpectedly: {exc}", code="training_error") from exc
 
     # Recorded so the plan can show what was excluded last time and the model card can say
     # which columns were deliberately withheld.
@@ -1012,10 +1024,10 @@ async def improve_model(
             goal_text=_goal_text(goal_context),
         )
     except modeling.ModelingError as exc:
-        raise TrainingFailedError(str(exc)) from exc
+        raise TrainingFailedError(str(exc), code=exc.code) from exc
     except Exception as exc:  # noqa: BLE001 -- surface the reason rather than a bare 500
         logger.exception("Improvement failed for session %s", session_id)
-        raise TrainingFailedError(f"Improving stopped unexpectedly: {exc}") from exc
+        raise TrainingFailedError(f"Improving stopped unexpectedly: {exc}", code="training_error") from exc
 
 
 # Seconds of silence before the stream sends a comment line. A settings search can run for
@@ -1091,11 +1103,15 @@ async def improve_model_stream(
             )
             await queue.put({"type": "result", "result": result})
         except modeling.ModelingError as exc:
-            await queue.put({"type": "error", "detail": str(exc)})
+            await queue.put({"type": "error", "detail": str(exc), "code": exc.code})
         except Exception as exc:  # noqa: BLE001 -- the reason goes to the page, not a 500
             logger.exception("Streamed improvement failed for session %s", session_id)
             await queue.put(
-                {"type": "error", "detail": f"Improving stopped unexpectedly: {exc}"}
+                {
+                    "type": "error",
+                    "detail": f"Improving stopped unexpectedly: {exc}",
+                    "code": "training_error",
+                }
             )
 
     async def events() -> AsyncIterator[str]:

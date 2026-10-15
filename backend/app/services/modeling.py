@@ -16,6 +16,7 @@ DATASET_STATISTIC_OPERATIONS) rather than baking them into cleaned.csv.
 
 from __future__ import annotations
 
+import functools
 import logging
 import math
 from dataclasses import dataclass, replace as dataclasses_replace
@@ -61,7 +62,31 @@ def category_limit(rows: int) -> int:
 
 
 class ModelingError(Exception):
-    """Raised when the data can't support training. Carries a message written for the user."""
+    """Raised when the data can't support training. Carries a message written for the user.
+
+    `code` is a stable reason a page can offer a next step for -- `too_few_labelled_rows`,
+    `no_usable_columns`, `no_model_trained`, `split_unusable` -- or None for one it cannot.
+    """
+
+    def __init__(self, message: str, code: str | None = None):
+        super().__init__(message)
+        self.code = code
+
+
+def _split_problems(function):
+    """Marks a ModelingError that has no code of its own, raised while dividing the rows, as a
+    split problem: the column chosen for a date or grouped split cannot be used as asked."""
+
+    @functools.wraps(function)
+    def wrapper(*args, **kwargs):
+        try:
+            return function(*args, **kwargs)
+        except ModelingError as exc:
+            if exc.code is None:
+                exc.code = "split_unusable"
+            raise
+
+    return wrapper
 
 
 @dataclass(frozen=True)
@@ -357,6 +382,7 @@ def resolve_group_columns(group_column: str | None, group_columns: list[str] | N
     return list(dict.fromkeys(wanted))
 
 
+@_split_problems
 def with_group_key(df: pd.DataFrame, columns: list[str], target_column: str) -> tuple[pd.DataFrame, str, list[str]]:
     """The frame to split on, the name of the column that holds the groups, and the columns the
     model must not use as inputs.
@@ -544,6 +570,7 @@ def sealed_rows_hash(index) -> str:
     return hashlib.sha256(",".join(str(i) for i in sorted(index)).encode("utf-8")).hexdigest()[:16]
 
 
+@_split_problems
 def split_with_sealed_holdout(
     df: pd.DataFrame,
     target_column: str,
@@ -575,7 +602,8 @@ def split_with_sealed_holdout(
     if len(labelled) < MIN_ROWS_TO_TRAIN:
         raise ModelingError(
             f"Only {len(labelled)} rows have a value for '{target_column}'. That is too few "
-            f"to train a model and still hold back a test set worth trusting."
+            f"to train a model and still hold back a test set worth trusting.",
+            code="too_few_labelled_rows",
         )
     if strategy == "time" and (not time_column or time_column not in labelled.columns):
         raise ModelingError("A time-based split needs a date column to order the rows by.")
@@ -647,6 +675,7 @@ def identical_row_ids(df: pd.DataFrame, columns: list[str], target_column: str) 
     return pd.Series(hashed.to_numpy(), index=labelled.index)
 
 
+@_split_problems
 def split_data(
     df: pd.DataFrame,
     target_column: str,
@@ -695,7 +724,8 @@ def split_data(
     if len(labelled) < MIN_ROWS_TO_TRAIN:
         raise ModelingError(
             f"Only {len(labelled)} rows have a value for '{target_column}'. That is too few "
-            f"to train a model and still hold back a test set worth trusting."
+            f"to train a model and still hold back a test set worth trusting.",
+            code="too_few_labelled_rows",
         )
 
     features = labelled.drop(columns=[target_column])
@@ -903,7 +933,7 @@ def build_pipeline(
         )
 
     if not transformers:
-        raise ModelingError("There are no usable columns left to predict from.")
+        raise ModelingError("There are no usable columns left to predict from.", code="no_usable_columns")
 
     return Pipeline(
         [("prepare", ColumnTransformer(transformers)), ("model", spec.build(model_params))]
@@ -2161,7 +2191,8 @@ def train_candidates(
     if not features["numeric"] and not features["categorical"] and not features["frequent"]:
         raise ModelingError(
             "There are no usable columns left to predict from. Every other column was "
-            "excluded, empty, constant, or too unique to learn from."
+            "excluded, empty, constant, or too unique to learn from.",
+            code="no_usable_columns",
         )
 
     used = features["numeric"] + features["categorical"] + features["frequent"]
@@ -2286,7 +2317,8 @@ def train_candidates(
     if not trained:
         raise ModelingError(
             "None of the models could be trained on this data. "
-            + (results[0]["failed"] if results else "")
+            + (results[0]["failed"] if results else ""),
+            code="no_model_trained",
         )
 
     key = "r2" if task == "regression" else ("roc_auc" if "roc_auc" in trained[0]["metrics"] else "f1")

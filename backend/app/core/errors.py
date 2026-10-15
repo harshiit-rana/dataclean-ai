@@ -19,9 +19,12 @@ class AppError(Exception):
 
     status_code = 400
 
-    def __init__(self, error: str, detail: str):
+    def __init__(self, error: str, detail: str, code: str | None = None):
         self.error = error
         self.detail = detail
+        # A stable, machine-readable reason, for the few errors a page can offer a next step for.
+        # Absent from the response when None, so every other error is exactly what it was.
+        self.code = code
         super().__init__(detail)
 
 
@@ -120,7 +123,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
-            content=ErrorResponse(error=exc.error, detail=exc.detail).model_dump(),
+            content=ErrorResponse(error=exc.error, detail=exc.detail, code=exc.code).model_dump(
+                exclude_none=True
+            ),
         )
 
     @app.exception_handler(Exception)

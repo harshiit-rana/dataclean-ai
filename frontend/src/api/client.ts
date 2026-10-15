@@ -27,7 +27,8 @@ export class ApiError extends Error {
   constructor(
     public error: string,
     public detail: string,
-    public status: number
+    public status: number,
+    public code?: string
   ) {
     super(detail);
   }
@@ -36,7 +37,7 @@ export class ApiError extends Error {
 async function handleResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
     const body = (await response.json()) as ErrorResponse;
-    throw new ApiError(body.error, body.detail, response.status);
+    throw new ApiError(body.error, body.detail, response.status, body.code);
   }
   return response.json() as Promise<T>;
 }

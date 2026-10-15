@@ -149,6 +149,8 @@ export interface ReadinessCheckCounts {
 export interface ErrorResponse {
   error: string;
   detail: string;
+  /** A stable reason for the few errors a page can offer a next step for; absent otherwise. */
+  code?: string;
 }
 
 export interface PreviewColumn {
@@ -948,7 +950,7 @@ export type ImproveStreamEvent =
   | { type: "round"; round: ImprovementRound }
   /** Done: the same payload POST /improve returns, already saved server-side. */
   | { type: "result"; result: ModelResult }
-  | { type: "error"; detail: string };
+  | { type: "error"; detail: string; code?: string };
 
 // --- SSE event payloads, PRD §10.2 -------------------------------------------------------
 

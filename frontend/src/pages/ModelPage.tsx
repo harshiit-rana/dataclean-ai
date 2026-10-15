@@ -10,6 +10,7 @@ import { LiveImprovement } from "@/components/model/LiveImprovement";
 import { ModelPlanForm } from "@/components/model/ModelPlanForm";
 import { ModelResults } from "@/components/model/ModelResults";
 import { RunHistory } from "@/components/model/RunHistory";
+import { TrainingProblem } from "@/components/model/TrainingProblem";
 import {
   ApiError,
   fetchModelCard,
@@ -19,7 +20,7 @@ import {
   finaliseModel,
   trainModel,
 } from "@/api/client";
-import { streamImprove } from "@/api/sse";
+import { StreamRequestError, streamImprove } from "@/api/sse";
 import type {
   ImprovementRound,
   CalibrationMethod,
@@ -84,7 +85,14 @@ export function ModelPage() {
   const [goal, setGoal] = useState("");
   const [lastRequest, setLastRequest] = useState<TrainRequest | null>(null);
   const [loadingCard, setLoadingCard] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setErrorMessage] = useState<string | null>(null);
+  // The server's reason code for a refused or failed training, when it gave one. Set together with the
+  // message so a later error from somewhere else cannot inherit an earlier one's way out.
+  const [errorCode, setErrorCode] = useState<string | null>(null);
+  const setError = useCallback((message: string | null, code: string | null = null) => {
+    setErrorMessage(message);
+    setErrorCode(code);
+  }, []);
   const [planError, setPlanError] = useState<string | null>(null);
   const [showPlan, setShowPlan] = useState(true);
   const [history, setHistory] = useState<ModelHistory | null>(null);
@@ -156,7 +164,10 @@ export function ModelPage() {
       setShowPlan(false);
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch (err) {
-      setError(err instanceof ApiError ? err.detail : String((err as Error)?.message ?? err));
+      setError(
+        err instanceof ApiError ? err.detail : String((err as Error)?.message ?? err),
+        err instanceof ApiError ? (err.code ?? null) : null
+      );
     } finally {
       setTraining(false);
     }
@@ -226,13 +237,13 @@ export function ModelPage() {
           window.scrollTo({ top: 0, behavior: "smooth" });
         } else if (event.type === "error") {
           finish();
-          setError(event.detail);
+          setError(event.detail, event.code ?? null);
         }
       },
       onError: (err) => {
         if (finished) return;
         finish();
-        setError(err.message);
+        setError(err.message, err instanceof StreamRequestError ? (err.code ?? null) : null);
       },
       onClose: () => {
         if (finished) return;
@@ -331,10 +342,16 @@ export function ModelPage() {
       )}
 
       {error && (
-        <div className="rounded-md border border-destructive/50 p-3 text-sm">
-          <p className="font-medium text-destructive">Training didn&apos;t run</p>
-          <p className="mt-1 text-muted-foreground">{error}</p>
-        </div>
+        <TrainingProblem
+          code={errorCode}
+          detail={error}
+          plan={plan}
+          sessionId={sessionId!}
+          onOpenSetup={() => {
+            setShowPlan(true);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+        />
       )}
 
       {result && (

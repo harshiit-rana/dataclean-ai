@@ -14,6 +14,8 @@ class ErrorResponse(BaseModel):
 
     error: str
     detail: str
+    # Present only on the errors a page can offer a next step for (see routes_model's docstring).
+    code: Optional[str] = None
 
 
 class UploadResponse(BaseModel):

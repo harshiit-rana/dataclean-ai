@@ -19,7 +19,8 @@ export type ProfileStreamHandlers = StreamHandlers<ProfileStreamEvent>;
 export class StreamRequestError extends Error {
   constructor(
     message: string,
-    readonly status: number
+    readonly status: number,
+    readonly code?: string
   ) {
     super(message);
     this.name = "StreamRequestError";
@@ -80,13 +81,15 @@ export function streamPost<T>(
       if (!response.ok) {
         // Surface the server's plain-English {error, detail} rather than a bare status code.
         let detail = `HTTP ${response.status}`;
+        let code: string | undefined;
         try {
           const body = await response.json();
           if (body?.detail) detail = body.detail;
+          if (typeof body?.code === "string") code = body.code;
         } catch {
           // non-JSON error body -- keep the status code
         }
-        throw new StreamRequestError(detail, response.status);
+        throw new StreamRequestError(detail, response.status, code);
       }
     },
     onmessage(msg) {

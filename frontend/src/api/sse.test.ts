@@ -98,4 +98,26 @@ describe("a stream the server refuses", () => {
     expect((thrown as InstanceType<typeof StreamRequestError>).status).toBe(409);
     expect((thrown as Error).message).toBe("Go to the cleaning page.");
   });
+
+  /* The page offers a way out for a refused training by the server's reason code, so the stream's
+     refusal has to carry it, not just the message. */
+  it("keeps the server's reason code when there is one, and none when there is not", async () => {
+    streamImprove(
+      "s1",
+      { excluded_columns: [], model_names: [], split_strategy: "random", time_column: null, include_deep_diagnostics: true },
+      handlers
+    );
+    const refuse = (body: unknown) =>
+      ({ ok: false, status: 422, json: async () => body }) as unknown as Response;
+
+    const coded = await lastOptions()
+      .onopen(refuse({ error: "Model could not be trained", detail: "Blocked.", code: "data_blocked" }))
+      .catch((err: unknown) => err);
+    expect((coded as InstanceType<typeof StreamRequestError>).code).toBe("data_blocked");
+
+    const plain = await lastOptions()
+      .onopen(refuse({ error: "Model could not be trained", detail: "Something." }))
+      .catch((err: unknown) => err);
+    expect((plain as InstanceType<typeof StreamRequestError>).code).toBeUndefined();
+  });
 });

@@ -551,6 +551,16 @@ too few of the rarer answer or too few groups to make two folds, too few rows to
 `operating_point_not_judged` on the result; `operating_point` itself stays empty so nothing that reads the
 threshold changes. The existing headline still follows the sentence as the explanation.
 
+**A refused or failed training offers a next step.** The model page used to show the server's message in a box
+and nothing else. The errors a page can act on now carry a stable `code` (in the `{error, detail}` body, in the
+streamed error event, and on `ModelingError`): `data_blocked` links to the failing readiness checks,
+`too_few_labelled_rows` explains and links to the readiness checks, `no_usable_columns` lists why each column was
+left out and opens the column chooser, `target_missing` / `target_unusable` send the user back to choose a
+column to predict, `split_unusable` (a date or grouping column that cannot be used as asked) opens the split
+chooser, and `no_model_trained` opens the column and model chooser. A code the page does not know, or none, shows
+the same message box as before, and an error without a code has exactly the body it always had. The codes are
+listed in the `TrainingFailedError` docstring and must not change meaning.
+
 **Repeated folds when a small file is compared.** With a few hundred training rows one 5-fold
 partition can rank two close candidates one way and another partition the other way round. Below
 2,000 training rows, choosing the model, tuning it and the fold spread shown beside the score now
