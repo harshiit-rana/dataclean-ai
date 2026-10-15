@@ -132,7 +132,7 @@ class TestWhatItProposes:
     def test_every_proposal_carries_its_evidence(self, messy):
         for recipe in features.propose(messy, "outcome"):
             assert recipe.reason and recipe.column in recipe.reason
-            assert recipe.kind in features.KINDS
+            assert recipe.kind in features.PROPOSED_KINDS
             assert recipe.id.endswith(recipe.column)
 
 
@@ -177,7 +177,7 @@ class TestProposalsNeverReadTheTarget:
 
     def test_the_proposals_exist_to_be_compared(self, messy):
         """A property over an empty list holds for any implementation."""
-        assert {r["kind"] for r in _proposals(messy)} == set(features.KINDS)
+        assert {r["kind"] for r in _proposals(messy)} == set(features.PROPOSED_KINDS)
 
     def test_the_selection_the_server_makes_is_independent_of_it_too(self, messy):
         ids = [r["id"] for r in _proposals(messy)]

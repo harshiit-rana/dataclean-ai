@@ -53,6 +53,10 @@ logger = logging.getLogger(__name__)
 KINDS = (
     "date_parts", "text_length", "missing_flag", "frequent_categories", "target_encoding", "interaction",
 )
+# Made by the improvement loop from columns it has ranked, never offered in the plan before a run.
+LOOP_KINDS = ("interaction",)
+# What `propose` can offer: every kind the plan shows before anything is trained.
+PROPOSED_KINDS = tuple(k for k in KINDS if k not in LOOP_KINDS)
 
 # What stands between the two columns of an interaction in its id, and the name of its output.
 INTERACTION_SEPARATORS = {"product": " x ", "ratio": " / "}
