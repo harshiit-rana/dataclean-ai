@@ -61,6 +61,9 @@ are both running locally, you're ready to make changes.
   models — nested models get serialized into checkpoint envelopes that don't reliably
   reconstruct, which breaks resuming a session. Validate into the real models at node
   boundaries instead. The docstring on `GraphState` explains this.
+- **Security: a CSV for download goes through `spreadsheet_safe`.** `csv_download` (or `csv_bytes` for an archive)
+  escapes formula-leading text cells; a test fails on any other `text/csv` response. Escape only on the way out --
+  never the files the app itself reads, which must stay exactly the data.
 - **Degrade, don't crash.** A failed LLM call, an operation that can't run, a PDF that won't
   render — none of these should end a session that already touched the user's data. Look at
   `audit_agent.py` and `cleaning_agent.py` for the pattern.

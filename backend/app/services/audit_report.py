@@ -216,6 +216,7 @@ def build_markdown_report(
     dispositions: dict[str, str],
     readiness: dict | None = None,
     model: dict | None = None,
+    formula_cells: int = 0,
 ) -> str:
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     applied = [a for a in action_log if a["status"] == "applied"]
@@ -254,6 +255,11 @@ def build_markdown_report(
         lines.append(f"| Fixes that were no longer needed | {len(superseded)} |")
     if undone:
         lines.append(f"| Changes applied then undone | {len(undone)} |")
+    if formula_cells:
+        lines.append(
+            f"| Cells a spreadsheet would read as formulas | {formula_cells:,} -- the CSV download writes them with a "
+            f"leading ' so they open as text; the data itself is unchanged |"
+        )
 
     if goal_context:
         lines += [

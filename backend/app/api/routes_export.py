@@ -26,7 +26,7 @@ from app.dependencies import get_graph
 from app.graph.checkpointer import thread_config
 from app.graph.nodes.audit_agent import generate_audit_artifacts, is_report_stale
 from app.models.graph_state import GraphState
-from app.services import cleaning_export, model_export, model_store
+from app.services import cleaning_export, model_export, model_store, spreadsheet_safe
 from app.services.session_store import read_session_meta, session_dir
 
 logger = logging.getLogger(__name__)
@@ -174,14 +174,15 @@ def _stem(meta: dict) -> str:
 async def export_cleaned_csv(
     session_id: str,
     settings: Settings = Depends(get_settings),
-) -> FileResponse:
+):
     meta, directory = _session_files(settings, session_id)
     cleaned = directory / "cleaned.csv"
     if not cleaned.exists():
         raise NothingToExportError(
             "No cleaned file exists for this session. Approve some fixes first."
         )
-    return FileResponse(cleaned, media_type="text/csv", filename=f"{_stem(meta)}_cleaned.csv")
+    # Escaped for a spreadsheet on the way out; the file the models read stays exact.
+    return spreadsheet_safe.csv_download(cleaned, f"{_stem(meta)}_cleaned.csv")
 
 
 @router.get("/api/export/{session_id}/pdf")
@@ -279,7 +280,11 @@ async def export_bundle(
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
         for path, name in present:
-            archive.write(path, arcname=name)
+            if path.suffix.lower() == ".csv":
+                # A CSV in the bundle is opened in a spreadsheet as often as a downloaded one.
+                archive.writestr(name, spreadsheet_safe.csv_bytes(path))
+            else:
+                archive.write(path, arcname=name)
         if clean_script is not None:
             archive.writestr(CLEAN_SCRIPT_NAME, clean_script)
     buffer.seek(0)

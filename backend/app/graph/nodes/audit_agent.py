@@ -140,6 +140,22 @@ def _model_for_report(directory: Path) -> dict | None:
         return None
 
 
+def _formula_cells(directory: Path) -> int:
+    """How many cells of the cleaned file the CSV download escapes for a spreadsheet. Never sinks the report."""
+    try:
+        import pandas as pd
+
+        from app.services import spreadsheet_safe
+
+        cleaned = directory / "cleaned.csv"
+        if not cleaned.exists():
+            return 0
+        return spreadsheet_safe.count_risky(pd.read_csv(cleaned, dtype=str, keep_default_na=False))
+    except Exception:  # noqa: BLE001
+        logger.warning("Formula-leading cells could not be counted for the report", exc_info=True)
+        return 0
+
+
 async def generate_audit_artifacts(state: GraphState, emit=_no_op) -> dict:
     """Writes audit_report.md (and audit_report.pdf when WeasyPrint can run) for this
     session, returning the paths.
@@ -164,6 +180,7 @@ async def generate_audit_artifacts(state: GraphState, emit=_no_op) -> dict:
         dispositions=dispositions,
         readiness=_readiness_for_report(state),
         model=_model_for_report(Path(state.file_path).parent),
+        formula_cells=_formula_cells(Path(state.file_path).parent),
     )
 
     session_dir = Path(state.file_path).parent

@@ -88,6 +88,11 @@ export function ExportPage() {
           Clean another file
         </Link>
       </div>
+      <p className="text-xs text-muted-foreground">
+        In the CSV downloads, a text cell that begins with =, +, -, @ or a tab is written with a
+        leading &apos; so a spreadsheet opens it as text instead of running it as a formula. The
+        data itself is unchanged; a text editor will show the extra &apos;.
+      </p>
 
       {sessionId && <ReadinessPanel sessionId={sessionId} />}
 

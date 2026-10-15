@@ -22,7 +22,6 @@ import uuid
 
 import pandas as pd
 from fastapi import APIRouter, Depends, UploadFile
-from fastapi.responses import FileResponse
 
 from app.config import Settings, get_settings
 from app.core.errors import (
@@ -35,7 +34,7 @@ from app.core.errors import (
 )
 from app.dependencies import get_graph
 from app.graph.nodes.audit_agent import mark_report_stale_if_written
-from app.services import action_log, drift, evaluation_ledger, model_store, replay, scoring
+from app.services import action_log, drift, evaluation_ledger, model_store, replay, scoring, spreadsheet_safe
 from app.services.encoding import read_csv_bytes
 from app.services.session_store import (
     current_dataset_version_in,
@@ -334,7 +333,7 @@ async def download_applied(
     apply_id: str,
     kind: str,
     settings: Settings = Depends(get_settings),
-) -> FileResponse:
+):
     # Both path parts come from the URL, so both are checked against a closed set before
     # either touches the filesystem -- no `..`, no separators, nothing but what this module
     # wrote.
@@ -345,4 +344,5 @@ async def download_applied(
     path = session_dir(settings.upload_dir, session_id) / APPLIED_DIR / apply_id / _FILES[kind]
     if not path.exists():
         raise AppliedFileNotFoundError()
-    return FileResponse(path, media_type="text/csv", filename=f"{kind}_{apply_id}.csv")
+    # Every uploaded column comes back in these files as uploaded: escaped for a spreadsheet on the way out.
+    return spreadsheet_safe.csv_download(path, f"{kind}_{apply_id}.csv")

@@ -1085,6 +1085,12 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
 - **Session access tokens.** Knowing a session id isn't enough to read its data. Issued at
   upload, only the hash stored, required on every session-scoped request. Off in development.
 - **Retention.** Files deleted 24 hours after last use, swept hourly in-process.
+- **CSV downloads a spreadsheet cannot run (#112).** A text cell from the uploaded data that begins with `=`, `+`,
+  `-`, `@`, a tab or a carriage return is read by Excel or Sheets as a formula (CSV injection). Every CSV download --
+  the cleaned file, the bundle's copy, an application's cleaned and predictions files -- writes such cells with a
+  leading `'`, the OWASP guidance; a plain number, negative or not, is never touched. Only on the way out: the files
+  the app reads itself stay exact. The audit report says how many cells the download escapes, the export page says
+  why, and `clean.py` explains why its own output (a model's input) is written as the data is.
 - **Light and dark**, following your OS until you use the toggle.
 - **A reload doesn't redo work.** Reloading the Review page used to re-profile the file and
   rewrite every suggestion card; it now replays the saved cards, and a session that has

@@ -197,6 +197,10 @@ script says so when the installed versions differ; it runs either way.
 
     {run_metadata.install_line(env, ("pandas", "numpy"))}
     python clean.py {file_name} cleaned.csv
+
+The output is written exactly as the data is, because it is the input a model is trained on. A
+cell that begins with =, +, -, @ or a tab is read by a spreadsheet as a formula: before opening
+the output in one, prefix such cells with a ' (the app's own CSV downloads already do).
 """
 
 import sys
