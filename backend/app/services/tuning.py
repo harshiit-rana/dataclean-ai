@@ -82,6 +82,14 @@ SEARCH_SPACES: dict[str, dict[str, list[Any]]] = {
 }
 
 
+# Below this many training rows, comparing models on one 5-fold partition is a coin that can
+# land either way: another partition can rank two candidates the other way round. So comparisons
+# there repeat the folds with different shuffles and average. Above it one partition is stable
+# enough, and repeats would multiply the cost on the files where it is largest.
+REPEATED_CV_BELOW_ROWS = 2_000
+CV_REPEATS = 3
+
+
 @dataclass(frozen=True)
 class SearchResult:
     """What a search found, and how much to believe it.
@@ -99,6 +107,9 @@ class SearchResult:
     # same rows are scored on the same folds, so these can be compared fold by fold: how often
     # and by how much one beat the other is far more telling than two means and two spreads.
     fold_scores: tuple[float, ...] = ()
+    # How many times the folds were repeated with a different shuffle: `fits` is folds x repeats.
+    # One for anything but a small file split at random.
+    repeats: int = 1
 
     @property
     def readable_params(self) -> dict:
@@ -119,7 +130,9 @@ def scoring_for(task: str, y) -> str:
     return "roc_auc" if pd.Series(y).nunique() == 2 else "accuracy"
 
 
-def cv_splitter(task: str, y, folds: int = CV_FOLDS, groups=None, ordered: bool = False):
+def cv_splitter(
+    task: str, y, folds: int = CV_FOLDS, groups=None, ordered: bool = False, repeated: bool = False
+):
     """Stratified for classification, so every fold keeps the class balance -- without it a
     rare class can be missing from a fold entirely and the score for that fold is undefined.
 
@@ -141,6 +154,8 @@ def cv_splitter(task: str, y, folds: int = CV_FOLDS, groups=None, ordered: bool 
     from sklearn.model_selection import (
         GroupKFold,
         KFold,
+        RepeatedKFold,
+        RepeatedStratifiedKFold,
         StratifiedGroupKFold,
         StratifiedKFold,
         TimeSeriesSplit,
@@ -172,7 +187,16 @@ def cv_splitter(task: str, y, folds: int = CV_FOLDS, groups=None, ordered: bool 
             return StratifiedGroupKFold(n_splits=usable, shuffle=True, random_state=42)
         return GroupKFold(n_splits=usable)
 
+    # `repeated` is asked for by the calls that *compare* models (choosing one, tuning it, the
+    # fold spread shown beside the score). On a small file split at random they repeat the folds;
+    # grouped and date splits are left alone (repeats need group-aware reshuffling, and time order
+    # has only one honest partition). The cut-off and calibration never ask: they need every row
+    # validated exactly once.
+    repeat = repeated and len(y) < REPEATED_CV_BELOW_ROWS
+
     if task != "classification":
+        if repeat:
+            return RepeatedKFold(n_splits=folds, n_repeats=CV_REPEATS, random_state=42)
         return KFold(n_splits=folds, shuffle=True, random_state=42)
 
     counts = pd.Series(y).value_counts()
@@ -185,6 +209,8 @@ def cv_splitter(task: str, y, folds: int = CV_FOLDS, groups=None, ordered: bool 
     usable = min(folds, int(counts.min()))
     if usable < 2:
         return None
+    if repeat:
+        return RepeatedStratifiedKFold(n_splits=usable, n_repeats=CV_REPEATS, random_state=42)
     return StratifiedKFold(n_splits=usable, shuffle=True, random_state=42)
 
 
@@ -206,7 +232,7 @@ def score_config(
     """
     from sklearn.model_selection import cross_val_score
 
-    splitter = cv_splitter(task, y_train, folds, groups, ordered)
+    splitter = cv_splitter(task, y_train, folds, groups, ordered, repeated=True)
     if splitter is None:
         return None
 
@@ -227,6 +253,7 @@ def score_config(
         metric=metric,
         fits=len(scores),
         fold_scores=tuple(round(float(s), 6) for s in scores),
+        repeats=int(getattr(splitter, "n_repeats", 1)),
     )
 
 
@@ -253,7 +280,7 @@ def search(
     if not space:
         return None
 
-    splitter = cv_splitter(task, y_train, folds, groups, ordered)
+    splitter = cv_splitter(task, y_train, folds, groups, ordered, repeated=True)
     if splitter is None:
         return None
 
@@ -297,4 +324,5 @@ def search(
         std=round(std, 4),
         metric=metric,
         fits=iterations * splitter.get_n_splits(),
+        repeats=int(getattr(splitter, "n_repeats", 1)),
     )

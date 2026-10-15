@@ -476,6 +476,18 @@ script now prints the Brier score of every two-class model, and the prediction s
 probabilities are calibrated and what that does to the default line. Tests run the generated file
 in a subprocess for a plain, a grouped, a dated, a copy-keeping and a sealed run, for both methods.
 
+**Repeated folds when a small file is compared.** With a few hundred training rows one 5-fold
+partition can rank two close candidates one way and another partition the other way round. Below
+2,000 training rows, choosing the model, tuning it and the fold spread shown beside the score now
+repeat the folds three times with different shuffles (15 fits a candidate instead of 5). Measured on
+two logistic regressions that each see one of two equally informative columns -- so only the partition
+decides the winner -- the share of partitions agreeing on the winner rose from 0.905 to 0.96 over ten
+files, and on the close calls from about 0.76 to 0.90; with candidates further apart every partition
+agreed either way. The one-standard-error rule still takes its error over the folds of one partition,
+and the paired comparison uses the correction for repeated folds, so repeats are not counted as more
+independent evidence than they are. Grouped and date splits, the cut-off and calibration are unchanged:
+the last two need every row validated exactly once. The price is three times the fits on small files.
+
 **The simplest model the folds cannot separate from the best.** The winner used to be the raw
 highest cross-validated score, so a forest that beat logistic regression by 0.002, with the folds
 disagreeing by 0.03, "won" although the evidence does not tell them apart. It is now the

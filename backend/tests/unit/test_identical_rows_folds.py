@@ -11,7 +11,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
+from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedGroupKFold, StratifiedKFold
+
+# What an ungrouped random split uses: repeated on a small file when models are compared.
+ORDINARY = (StratifiedKFold, RepeatedStratifiedKFold)
 
 from app.services import diagnostics, improvement, modeling, operating_point, tuning
 from app.services.operating_point import OperatingPoint
@@ -33,8 +36,8 @@ def folds(monkeypatch):
     made: list[dict] = []
     real = tuning.cv_splitter
 
-    def spy(task, y, folds=tuning.CV_FOLDS, groups=None, ordered=False):
-        splitter = real(task, y, folds, groups=groups, ordered=ordered)
+    def spy(task, y, folds=tuning.CV_FOLDS, groups=None, ordered=False, repeated=False):
+        splitter = real(task, y, folds, groups=groups, ordered=ordered, repeated=repeated)
         made.append({"splitter": splitter, "groups": groups, "y": y})
         return splitter
 
@@ -74,7 +77,7 @@ class TestChoosingTheModel:
 
     def test_without_the_option_the_folds_are_the_ordinary_ones(self, copies, folds):
         train(copies)
-        assert folds and all(isinstance(f["splitter"], StratifiedKFold) for f in folds)
+        assert folds and all(isinstance(f["splitter"], ORDINARY) for f in folds)
 
     def test_the_groups_are_the_training_rows_copy_ids(self, copies, folds):
         train(copies, keep_identical_rows_together=True)
@@ -87,7 +90,7 @@ class TestChoosingTheModel:
 
     def test_asking_on_a_file_with_no_copies_leaves_the_folds_alone(self, copies, folds):
         train(copies.drop_duplicates(ignore_index=True), keep_identical_rows_together=True)
-        assert folds and all(isinstance(f["splitter"], StratifiedKFold) for f in folds)
+        assert folds and all(isinstance(f["splitter"], ORDINARY) for f in folds)
 
     def test_an_entity_grouping_wins_over_copies(self, folds):
         """A grouped split keeps copies together already, since they share an entity; the
@@ -149,4 +152,4 @@ class TestTheOtherFoldProducers:
             copies, target_column="y", task="classification",
             model_names=["logistic_regression"], budget=4,
         )
-        assert folds and all(isinstance(f["splitter"], StratifiedKFold) for f in folds)
+        assert folds and all(isinstance(f["splitter"], ORDINARY) for f in folds)

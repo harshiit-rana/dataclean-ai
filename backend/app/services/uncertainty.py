@@ -256,7 +256,7 @@ def paired_difference(
     }
 
 
-def fold_difference(first, second, level: float = LEVEL) -> dict | None:
+def fold_difference(first, second, level: float = LEVEL, test_train_ratio: float | None = None) -> dict | None:
     """Whether one model beat another across the *same* cross-validation folds.
 
     `first` and `second` are the per-fold scores of two models scored on identical folds. The
@@ -269,6 +269,10 @@ def fold_difference(first, second, level: float = LEVEL) -> dict | None:
     ratio of test to training rows, 1/(k-1) for k-fold, which is used here for every splitter.
     With only a few folds the t quantile is large, and the interval is wide: that is the
     correct message about how little a handful of folds can establish.
+
+    For repeated k-fold the scores are all k x r of them and `test_train_ratio` is 1/(k-1) for the
+    k of one repeat (Bouckaert and Frank's correction for repeated cross-validation); left out, it is
+    worked out as if the scores were one plain k-fold.
 
     Returns `{"difference", "low", "high"}` (first minus second), or None when the folds do not
     line up, there are fewer than two, or any score is not a number.
@@ -285,7 +289,8 @@ def fold_difference(first, second, level: float = LEVEL) -> dict | None:
     deltas = a - b
     mean = float(deltas.mean())
     spread = float(deltas.std(ddof=1))
-    standard_error = spread * float(np.sqrt(1 / folds + 1 / (folds - 1)))
+    ratio = test_train_ratio if test_train_ratio is not None else 1 / (folds - 1)
+    standard_error = spread * float(np.sqrt(1 / folds + ratio))
     half = float(stats.t.ppf((1 + level) / 2, folds - 1)) * standard_error
     return {
         "difference": round(mean, 4),

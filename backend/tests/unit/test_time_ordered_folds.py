@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 import pytest
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import RepeatedStratifiedKFold, StratifiedKFold
 
 from app.services import improvement, modeling, operating_point, tuning
 from app.services.time_folds import ForwardInTimeFolds
@@ -104,7 +104,7 @@ def test_a_random_split_still_uses_ordinary_folds(dated, splitters):
         model_names=["logistic_regression", "random_forest_classifier"],
         include_deep_diagnostics=False, point=OperatingPoint("f1"),
     )
-    assert splitters and all(isinstance(s, StratifiedKFold) for s in splitters)
+    assert splitters and all(isinstance(s, (StratifiedKFold, RepeatedStratifiedKFold)) for s in splitters)
 
 
 class TestTheNewSplitterIsUsedEverywhereTheOldOneWas:

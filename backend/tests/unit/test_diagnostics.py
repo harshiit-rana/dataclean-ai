@@ -241,7 +241,7 @@ class TestDeepDiagnostics:
             lambda: modeling.build_pipeline("logistic_regression", ["signal", "noise"], []),
             X, y, "classification",
         )
-        assert len(result["folds"]) == diagnostics.CV_FOLDS
+        assert len(result["folds"]) == diagnostics.CV_FOLDS * result["repeats"]
         assert "std" in result and "spread" in result
         assert result["mean"] > 0.7  # signal is genuinely there
 
@@ -252,7 +252,7 @@ class TestDeepDiagnostics:
             lambda: modeling.build_pipeline("logistic_regression", ["a"], []),
             df[["a"]], df["target"], "classification",
         )
-        assert result == {} or len(result["folds"]) <= 3
+        assert result == {} or len(result["folds"]) // result.get("repeats", 1) <= 3
 
     def test_learning_curve_grows_the_training_set(self, learnable_df):
         points = diagnostics.learning_curve_points(

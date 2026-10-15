@@ -108,7 +108,8 @@ class TestEveryCandidateIsScoredOnTheSameFolds:
             lambda: modeling.build_pipeline(LOGISTIC, ["x", "z"], []),
             df[["x", "z"]], df["y"], "classification",
         )
-        assert len(found.fold_scores) == found.fits == 5
+        # 400 rows is a small file, so the five folds are repeated three times.
+        assert len(found.fold_scores) == found.fits == 5 * found.repeats and found.repeats == 3
         assert np.mean(found.fold_scores) == pytest.approx(found.score, abs=1e-4)
         assert np.std(found.fold_scores) == pytest.approx(found.std, abs=1e-4)
 

@@ -481,17 +481,14 @@ def cross_validate_pipeline(
             "grouped": True,
         }
 
-    if task == "classification":
-        counts = pd.Series(y).value_counts()
-        usable_folds = int(min(folds, counts.min()))
-        if usable_folds < 2:
-            return {}
-        splitter = StratifiedKFold(n_splits=usable_folds, shuffle=True, random_state=42)
-        y_input = pd.Series(y).astype(str)
-    else:
-        usable_folds = folds
-        splitter = KFold(n_splits=folds, shuffle=True, random_state=42)
-        y_input = y
+    # The same splitter model comparison uses, so a small file's spread is over repeated folds
+    # too and matches the fold scores the model was chosen on.
+    from app.services.tuning import cv_splitter
+
+    splitter = cv_splitter(task, pd.Series(y), folds, repeated=True)
+    if splitter is None:
+        return {}
+    y_input = pd.Series(y).astype(str) if task == "classification" else y
 
     scores = cross_val_score(build(), X, y_input, cv=splitter, scoring=scoring, n_jobs=1)
     values = [round(float(s), 4) for s in scores]
@@ -501,6 +498,7 @@ def cross_validate_pipeline(
         "mean": round(float(np.mean(values)), 4),
         "std": round(float(np.std(values)), 4),
         "spread": round(float(max(values) - min(values)), 4),
+        "repeats": int(getattr(splitter, "n_repeats", 1)),
     }
 
 

@@ -1663,6 +1663,10 @@ def _signed(value: float) -> str:
     return f"{'+' if value >= 0 else '-'}{abs(value):.3f}"
 
 
+def _repeated_text(repeats: int) -> str:
+    return f", repeated {repeats} times with different shuffles" if repeats and repeats > 1 else ""
+
+
 def runner_up_comparison(scores: dict[str, dict], chosen: str, highest_scorer: str) -> dict | None:
     """Whether the folds can tell the chosen model from the one it is being weighed against.
 
@@ -1683,7 +1687,12 @@ def runner_up_comparison(scores: dict[str, dict], chosen: str, highest_scorer: s
         rival = max(others, key=lambda name: (scores[name]["score"], -order.get(name, len(order))))
 
     leader, other = highest_scorer, (chosen if highest_scorer != chosen else rival)
-    gap = uncertainty.fold_difference(scores[leader].get("fold_scores"), scores[other].get("fold_scores"))
+    per_repeat = int(scores[leader].get("folds") or 0)
+    gap = uncertainty.fold_difference(
+        scores[leader].get("fold_scores"),
+        scores[other].get("fold_scores"),
+        test_train_ratio=1 / (per_repeat - 1) if per_repeat > 1 else None,
+    )
     if gap is None:
         return None
     return {
@@ -1741,7 +1750,11 @@ def choose_on_training_folds(
             scores[entry["model"]] = {
                 "score": found.score,
                 "std": found.std,
-                "folds": found.fits,
+                # Folds in one partition. With repeats the scores number folds x repeats, but they
+                # are not that many independent measurements, so the standard error of the
+                # one-standard-error rule is still taken over the folds of one partition.
+                "folds": found.fits // max(found.repeats, 1),
+                "repeats": found.repeats,
                 "fold_scores": list(found.fold_scores),
             }
 
@@ -1798,6 +1811,8 @@ def choose_on_training_folds(
         "method": "cross_validation",
         "metric": metric,
         "folds": scores[chosen]["folds"],
+        # How many times those folds were repeated with a different shuffle (small files only).
+        "repeats": scores[chosen].get("repeats", 1),
         "scores": scores,
         "rule": pick["rule"],
         "highest_scorer": top,
@@ -1810,8 +1825,8 @@ def choose_on_training_folds(
         "paired_difference": comparison["paired_difference"] if comparison else None,
         "distinguishable_note": distinguishable_note,
         "chosen_on": (
-            f"cross-validated {metric} over {scores[chosen]['folds']} folds of the training "
-            f"rows; the test set was not consulted"
+            f"cross-validated {metric} over {scores[chosen]['folds']} folds of the training rows"
+            f"{_repeated_text(scores[chosen].get('repeats', 1))}; the test set was not consulted"
         ),
     }
 

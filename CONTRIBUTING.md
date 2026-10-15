@@ -388,6 +388,13 @@ are both running locally, you're ready to make changes.
   place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
   does not need this application's class to load. Nothing may build a fold splitter without the groups -- not even to ask whether folds are possible -- or `test_identical_rows_folds.py` rightly flags it. `TestCalibratingTheProbabilities` in
   `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
+- **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
+  splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
+  fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,
+  calibration (`cross_val_predict` refuses anything else) -- must not. `SearchResult.repeats` says how
+  many there were: divide `fits` by it before using a fold count as a sample size, as the
+  one-standard-error rule does, and give `uncertainty.fold_difference` the per-repeat
+  `test_train_ratio`.
 - **The multi-class verdict's noise floor comes from shuffling, not a formula.** `ovr_noise_floor`
   shuffles the test answers against the model's own probabilities and reads the tail
   (`1 - 0.05 / model_count`), bounded by `_FLOOR_WORK`; it must stay free of refits and must only ever

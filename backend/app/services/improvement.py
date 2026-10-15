@@ -293,7 +293,12 @@ def improve(
         if result is None:
             continue
         family_scores[name] = result.score
-        scored[name] = {"score": result.score, "std": result.std, "folds": result.fits}
+        scored[name] = {
+            "score": result.score,
+            "std": result.std,
+            # Folds of one partition, as in train_candidates: repeats are not more independent folds.
+            "folds": result.fits // max(result.repeats, 1),
+        }
 
     if not scored:
         raise modeling.ModelingError("None of the models could be scored on this data.")

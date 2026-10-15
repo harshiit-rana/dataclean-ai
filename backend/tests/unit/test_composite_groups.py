@@ -182,8 +182,8 @@ class TestEveryFoldKeepsThePairWhole:
         seen = []
         real = tuning.cv_splitter
         monkeypatch.setattr(
-            tuning, "cv_splitter", lambda task, y, folds=tuning.CV_FOLDS, groups=None, ordered=False:
-            (seen.append(groups), real(task, y, folds, groups, ordered))[1],
+            tuning, "cv_splitter", lambda task, y, folds=tuning.CV_FOLDS, groups=None, ordered=False, repeated=False:
+            (seen.append(groups), real(task, y, folds, groups, ordered, repeated))[1],
         )
         modeling.train_candidates(
             shops(), target_column="y", task="classification",
