@@ -506,6 +506,18 @@ a U-shape under-scores here; the sentence says "on its own", not "is all the mod
 integrity suite flips every held-out answer to show it does not move. The price is one cross-validation per
 input column of a fast model.
 
+**Why this model?** The model page and the model card now answer, in order: how the model was chosen (the
+metric, the folds, repeats, and the one-standard-error rule when it applied), why each alternative was not
+(its fold score against the chosen model's, whether it was within one standard error, and for the closest
+rival whether the folds can tell the two apart), what constrained the choice (the split and whether the folds
+respected it, copies kept together, a sealed holdout, withheld columns, a cut-off, calibration, and whether
+the app's recommended split was overridden) and what the improvement search tried and rejected. It is
+`why_this_model.explain(result)`, a pure function of the stored result, attached whenever a result is served
+and called again by the card, so the two cannot differ. No sentence comes from a language model, and each
+carries the result fields it rests on with their values. A choice that is not clearly better than its rival
+(or a model picked by default order, or on the test set in an old result) is a warning and leads the panel.
+Results saved before it existed get one computed on read.
+
 **Repeated folds when a small file is compared.** With a few hundred training rows one 5-fold
 partition can rank two close candidates one way and another partition the other way round. Below
 2,000 training rows, choosing the model, tuning it and the fold spread shown beside the score now

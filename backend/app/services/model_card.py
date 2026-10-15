@@ -14,7 +14,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 
-from app.services import model_export
+from app.services import model_export, why_this_model
 from app.services.ml_readiness import MIN_ROWS_PER_CLASS
 
 logger = logging.getLogger(__name__)
@@ -788,6 +788,10 @@ def build_model_card(
     lines += _clipping_section(result)
     lines += _excluded_section(result)
     lines += _trust_section(result)
+    try:
+        lines += why_this_model.as_markdown(why_this_model.explain(result))
+    except Exception:  # noqa: BLE001 -- the card is still worth producing
+        logger.warning("Could not explain the choice of model", exc_info=True)
 
     all_cautions = _deterministic_cautions(result, best) + list(cautions or [])
     if all_cautions:

@@ -790,6 +790,24 @@ export interface ModelSelection {
   seed_stability?: SeedStability | null;
 }
 
+/** One sentence of the "Why this model?" panel, with the result fields it rests on. */
+export interface ExplanationStatement {
+  id: string;
+  section: "how_chosen" | "alternatives" | "constraints" | "improvement";
+  tone: "plain" | "notable" | "warning";
+  text: string;
+  /** The fields behind the sentence, with their values: field is a dotted path into the result. */
+  evidence: { field: string; label: string; value: number | string | boolean }[];
+}
+
+/** Why the model was chosen, built on the server from the result's own fields. */
+export interface ModelExplanation {
+  sections: Record<ExplanationStatement["section"], string>;
+  statements: ExplanationStatement[];
+  /** The first warning, which leads the panel. Null when nothing needs flagging. */
+  lead_id: string | null;
+}
+
 export interface ModelResult {
   task: "classification" | "regression";
   target_column: string;
@@ -829,6 +847,8 @@ export interface ModelResult {
     sealed_unavailable_reason?: string;
   };
   baseline: Baseline;
+  /** Why this model, assembled on the server from the fields above. Absent on older results. */
+  why_this_model?: ModelExplanation | null;
   primary_metric: string;
   results: CandidateResult[];
   best_model: string;

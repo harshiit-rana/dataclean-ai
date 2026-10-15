@@ -47,6 +47,7 @@ from app.services import (
     model_store,
     modeling,
     operating_point,
+    why_this_model,
 )
 from app.api.routes_rules import stored_rules
 from app.dependencies import get_graph_if_any
@@ -757,6 +758,12 @@ def _with_later_evidence(directory, result: dict) -> dict:
         run_id = result.get("run_id")
         result["evaluation"]["new_data"] = evaluation_ledger.new_data_summary(directory, run_id)
         result["evaluation"]["final"] = evaluation_ledger.final_summary(directory, run_id)
+    # Worked out from the result itself each time it is served, so it cannot go stale beside it and
+    # the card (which calls the same function) says the same words.
+    try:
+        result["why_this_model"] = why_this_model.explain(result)
+    except Exception:  # noqa: BLE001 -- an explanation is never a reason to lose a result
+        logger.warning("Could not explain the choice of model", exc_info=True)
     return result
 
 

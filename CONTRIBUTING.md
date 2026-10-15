@@ -411,6 +411,12 @@ are both running locally, you're ready to make changes.
   after measuring the cost. It must be scored on the same folds as the candidates (same `folds`, same
   splitter) or the paired difference is meaningless. It is covered by
   `TestComparingWithTheBestSingleColumn` in the integrity suite.
+- **A new thing that shapes which model is chosen gets a statement in `why_this_model`.** Each statement is
+  built from fields of the result and lists them as `evidence` (a dotted path and its value);
+  `assert_every_statement_is_backed` in `tests/unit/test_why_this_model.py` checks every path resolves to the
+  value shown. Never put text from a language model in
+  it, and never claim more than the fields support: say "too close to call" when the folds cannot separate two
+  models.
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,

@@ -27,6 +27,7 @@ import {
 import { CalibrationCard } from "@/components/model/CalibrationCard";
 import { OperatingPointCard } from "@/components/model/OperatingPointCard";
 import { HeldOutUse, ScoreLabel } from "@/components/model/ScoreLabel";
+import { WhyThisModel } from "@/components/model/WhyThisModel";
 import type {
   Baseline,
   CalibrationMethod,
@@ -701,6 +702,8 @@ export function ModelResults({
       </Card>
 
       <ModelComparison result={result} keys={presentKeys} />
+
+      <WhyThisModel explanation={result.why_this_model} />
 
       <SealedHoldout
         result={result}
