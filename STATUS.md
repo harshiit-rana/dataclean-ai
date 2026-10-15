@@ -673,6 +673,18 @@ result (`SearchResult.strategy`), into each settings round of the trail, the tra
 second strategy can be told apart from the first. It was kept to what random search and successive halving both
 need, with no hooks for strategies that do not exist.
 
+**Successive halving (#49).** A second way to search settings, `search_strategy: "halving"` on the improve request
+(random stays the default; choosing automatically is #50). It scores many settings on a few folds, the best third on
+more, and the best third of those on all of them, and spends about a third of random search's fits for the same
+budget while looking at twice as many settings. The resource is cross-validation *folds*, not training rows (the
+issue suggested rows): the folds are cut once by the same splitter random search uses, so grouped and forward-in-time
+folds hold at every rung without cutting the data a second time, and the survivor ends with a score on every fold,
+which is the only score the improvement loop compares with the incumbent. The trail lists each rung (settings, folds,
+best score, how many went on). The trade-off, stated on the class: early rungs rank on a few noisy folds, so a setting
+that only shows its worth across all of them can be dropped before it gets there. With fewer than six settings or three
+folds there is nothing to halve over, and it searches at random and says so. It checks the deadline between settings;
+if the time limit hits, the leader is finished on the remaining folds so what is reported is still a full score.
+
 **A record of what you tried.** Results used to overwrite a single file, so retraining
 discarded the previous run — which made the question people actually ask unanswerable: *did the
 thing I just changed help?* Every run is now kept with its settings, its headline number and

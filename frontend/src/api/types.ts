@@ -955,6 +955,8 @@ export interface ImprovementTrail {
 export interface ImproveRequest extends TrainRequest {
   goal?: number | null;
   budget?: number;
+  /** How model settings are searched: at random, or by halving (many settings on a few folds, the best on more). */
+  search_strategy?: "random" | "halving";
   /** The most wall-clock time the search may take, in seconds (1 to 3600). Absent means no limit. */
   time_limit_seconds?: number | null;
 }

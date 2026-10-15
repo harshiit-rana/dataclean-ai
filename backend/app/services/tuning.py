@@ -119,6 +119,11 @@ class SearchResult:
     stopped_for_time: bool = False
     # Which search strategy found it (see `SearchStrategy`), so the trail and the run history can say.
     strategy: str = "random"
+    # What each rung of a halving search did: `{"rung", "settings", "folds", "best_score", "kept"}`.
+    # Empty for a search that has no rungs.
+    rungs: tuple[dict, ...] = ()
+    # Why this is not the strategy that was asked for, when it is not (halving with too little to halve).
+    note: str = ""
 
     @property
     def readable_params(self) -> dict:
@@ -325,8 +330,158 @@ class RandomSearch:
         return _random_search(build, space, X, y, splitter, metric, budget, deadline, groups, self.name)
 
 
-# The strategies a search can be asked for by name. Successive halving joins this when it is built.
-STRATEGIES: dict[str, SearchStrategy] = {RandomSearch.name: RandomSearch()}
+class SuccessiveHalvingSearch:
+    """Many settings scored cheaply, the promising ones scored more, the best scored fully.
+
+    Random search spends the same on every setting, including ones that are plainly poor after one
+    fold. Here a wide set of settings is scored on the first few folds, the best third go on to more
+    folds, and the best third of those to all of them. The resource is cross-validation folds, not
+    training rows: the folds are cut once, by the same splitter random search uses (grouped, forward in
+    time, stratified), and each rung simply scores more of them, so a grouped or date split is respected
+    at every rung without cutting the data a second time. The survivor ends with a score on *every*
+    fold, which is what the improvement loop compares with the incumbent; a score on a few folds is
+    never compared with anything.
+
+    The trade-off: the early rungs rank settings on a few folds, which are noisy, and a setting that
+    only shows its worth across all of them can be dropped before it gets there. That is the price of
+    scoring many settings for little; with a small space or few folds the strategy says so and searches
+    at random instead.
+
+    Cost is in fold fits. With five folds, twice the budget in settings and three rungs (1, 2 and 5 folds)
+    it spends about two thirds of what random search does for the same budget while looking at twice as
+    many settings.
+    """
+
+    name = "halving"
+    FACTOR = 3
+    RUNGS = 3
+    # Fewer folds than this leave no cheap rung to start on; fewer settings leave nothing to discard.
+    MIN_FOLDS = 3
+    MIN_SETTINGS = 6
+    # Settings tried for each unit of budget. Halving looks at more because most are scored cheaply.
+    SETTINGS_PER_BUDGET = 2
+
+    def run(
+        self,
+        build: Callable[[], Any],
+        space: dict[str, list[Any]],
+        X: pd.DataFrame,
+        y,
+        *,
+        splitter,
+        metric: str,
+        budget: int,
+        deadline: float | None = None,
+        groups=None,
+    ) -> SearchResult | None:
+        from sklearn.base import clone
+        from sklearn.model_selection import ParameterSampler, cross_val_score
+
+        splits = list(splitter.split(X, y, groups))
+        combinations = 1
+        for values in space.values():
+            combinations *= len(values)
+        wanted = min(combinations, self.SETTINGS_PER_BUDGET * max(int(budget), 1))
+        if len(splits) < self.MIN_FOLDS or wanted < self.MIN_SETTINGS:
+            fallback = _random_search(build, space, X, y, splitter, metric, budget, deadline, groups, RandomSearch.name)
+            if fallback is None:
+                return None
+            reason = (
+                f"only {len(splits)} folds" if len(splits) < self.MIN_FOLDS else f"only {wanted} settings to try"
+            )
+            return _with(fallback, note=f"Searched at random: {reason} is too few to halve over.")
+
+        schedule = self.fold_schedule(len(splits))
+        settings = list(ParameterSampler(space, n_iter=wanted, random_state=42))
+        template = build()
+        folds_scored: dict[int, list[float]] = {i: [] for i in range(len(settings))}
+        alive = list(range(len(settings)))
+        fits = 0
+        stopped_for_time = False
+        rungs: list[dict] = []
+
+        def mean_of(i: int) -> float:
+            mean = float(np.mean(folds_scored[i])) if folds_scored[i] else float("nan")
+            return mean if np.isfinite(mean) else float("-inf")
+
+        def score(i: int, start: int, stop: int) -> None:
+            nonlocal fits
+            try:
+                out = cross_val_score(
+                    clone(template).set_params(**settings[i]), X, y, cv=splits[start:stop], scoring=metric,
+                    n_jobs=1, error_score=np.nan,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Halving search failed: %s", exc, exc_info=True)
+                out = np.full(stop - start, np.nan)
+            folds_scored[i].extend(float(v) for v in out)
+            fits += stop - start
+
+        for rung, folds_now in enumerate(schedule):
+            already = len(folds_scored[alive[0]])
+            for i in alive:
+                # After the first fit of all, so a search that was started has something to report.
+                if deadline is not None and fits > 0 and time.monotonic() >= deadline:
+                    stopped_for_time = True
+                    break
+                score(i, already, folds_now)
+            if stopped_for_time:
+                break
+            ranked = sorted(alive, key=lambda i: (-mean_of(i), i))
+            keep = 1 if rung == len(schedule) - 1 else max(1, -(-len(alive) // self.FACTOR))
+            rungs.append({
+                "rung": rung + 1, "settings": len(alive), "folds": folds_now,
+                "best_score": round(mean_of(ranked[0]), 4) if np.isfinite(mean_of(ranked[0])) else None,
+                "kept": keep,
+            })
+            alive = ranked[:keep]
+
+        if stopped_for_time:
+            # Settings scored on the same number of folds are the only ones that can be compared.
+            deepest = max(len(folds_scored[i]) for i in alive)
+            pool = [i for i in alive if len(folds_scored[i]) == deepest]
+            winner = max(pool, key=lambda i: (mean_of(i), -i))
+            # The leader is finished on the remaining folds, so what is reported is a full score.
+            if len(folds_scored[winner]) < len(splits):
+                score(winner, len(folds_scored[winner]), len(splits))
+        else:
+            winner = alive[0]
+
+        values = folds_scored[winner]
+        mean = float(np.mean(values)) if values else float("nan")
+        if len(values) != len(splits) or not np.isfinite(mean):
+            return None
+        return SearchResult(
+            params=dict(settings[winner]),
+            score=round(mean, 4),
+            std=round(float(np.std(values)), 4),
+            metric=metric,
+            fits=fits,
+            repeats=int(getattr(splitter, "n_repeats", 1)),
+            tried=sum(1 for i in folds_scored if folds_scored[i]),
+            planned=len(settings),
+            stopped_for_time=stopped_for_time,
+            strategy=self.name,
+            rungs=tuple(rungs),
+        )
+
+    @classmethod
+    def fold_schedule(cls, total: int) -> list[int]:
+        """How many folds each rung has scored by its end: the last rung is all of them."""
+        return sorted({max(1, round(total / cls.FACTOR**j)) for j in range(cls.RUNGS - 1, -1, -1)})
+
+
+def _with(result: SearchResult, **changes) -> SearchResult:
+    from dataclasses import replace
+
+    return replace(result, **changes)
+
+
+# The strategies a search can be asked for by name.
+STRATEGIES: dict[str, SearchStrategy] = {
+    RandomSearch.name: RandomSearch(),
+    SuccessiveHalvingSearch.name: SuccessiveHalvingSearch(),
+}
 DEFAULT_STRATEGY = RandomSearch.name
 
 

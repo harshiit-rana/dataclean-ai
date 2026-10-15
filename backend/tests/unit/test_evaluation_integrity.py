@@ -439,6 +439,20 @@ class TestTheImprovementLoop:
         assert rigged["skipped_for_time"] == honest["skipped_for_time"] != []
         assert rigged["test_metrics"] != honest["test_metrics"]
 
+    def test_successive_halving_chooses_the_same_settings_whatever_the_test_answers_are(
+        self, learnable, flipped_test_answers
+    ):
+        """Halving ranks settings on the first folds of the training rows and nothing else: flip every
+        held-out answer and the rungs, the survivor and every round must be identical."""
+        honest = self._improve(learnable, search_strategy="halving")
+        flipped_test_answers()
+        rigged = self._improve(learnable, search_strategy="halving")
+
+        assert self._decisions(rigged) == self._decisions(honest)
+        assert rigged["test_metrics"] != honest["test_metrics"]
+        searched = [r for r in honest["rounds"] if r["detail"].get("rungs")]
+        assert searched  # the strategy ran, so there were rungs to protect
+
     def test_the_test_set_is_scored_exactly_once_whether_or_not_the_clock_runs_out(self, learnable, monkeypatch):
         calls = []
         real = modeling.evaluate

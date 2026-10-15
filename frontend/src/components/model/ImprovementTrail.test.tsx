@@ -74,12 +74,47 @@ describe("ImprovementTrail — the search strategy (#48)", () => {
   });
 
   it("shows an unfamiliar strategy by its own name rather than hiding it", () => {
-    render(<ImprovementTrail trail={trail({ search_strategy: "halving" })} />);
-    expect(screen.getByText(/settings searched by halving/)).toBeInTheDocument();
+    render(<ImprovementTrail trail={trail({ search_strategy: "bayesian" })} />);
+    expect(screen.getByText(/settings searched by bayesian/)).toBeInTheDocument();
   });
 
   it("says nothing for a run from before it was recorded", () => {
     render(<ImprovementTrail trail={trail()} />);
     expect(screen.queryByText(/settings searched by/)).not.toBeInTheDocument();
+  });
+});
+
+describe("ImprovementTrail — the rungs of a halving search (#49)", () => {
+  const halvingRound = {
+    name: "hyperparameters", label: "Model settings", what_it_tried: "Tried 63 fits.",
+    score: 0.81, std: 0.02, gain: 0.02, accepted: true, outcome: "Better settings found: AUC up +0.020.",
+    detail: {
+      strategy: "halving",
+      rungs: [
+        { rung: 1, settings: 14, folds: 2, best_score: 0.79, kept: 5 },
+        { rung: 2, settings: 5, folds: 5, best_score: 0.8, kept: 2 },
+        { rung: 3, settings: 2, folds: 15, best_score: 0.81, kept: 1 },
+      ],
+    },
+  };
+
+  it("lists each rung: how many settings, on how many folds, and how many went on", () => {
+    render(<ImprovementTrail trail={trail({ rounds: [halvingRound], search_strategy: "halving" })} />);
+    const rungs = screen.getByRole("list", { name: "Rungs" });
+    expect(rungs).toHaveTextContent("Rung 1: 14 settings on 2 folds, best 0.790 → 5 went on");
+    expect(rungs).toHaveTextContent("Rung 3: 2 settings on 15 folds, best 0.810 → 1 went on");
+    expect(screen.getByText(/settings searched by successive halving/)).toBeInTheDocument();
+  });
+
+  it("says why a halving search became a random one", () => {
+    const fell = { ...halvingRound, detail: { strategy: "random", note: "Searched at random: only 5 settings to try is too few to halve over." } };
+    render(<ImprovementTrail trail={trail({ rounds: [fell] })} />);
+    expect(screen.getByText(/only 5 settings to try is too few to halve over/)).toBeInTheDocument();
+    expect(screen.queryByRole("list", { name: "Rungs" })).not.toBeInTheDocument();
+  });
+
+  it("shows no rungs for a round that has none", () => {
+    render(<ImprovementTrail trail={trail()} />);
+    expect(screen.queryByRole("list", { name: "Rungs" })).not.toBeInTheDocument();
   });
 });

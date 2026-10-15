@@ -929,6 +929,7 @@ def _improve_and_save(
         goal=request.goal,
         budget=request.budget,
         time_limit_seconds=request.time_limit_seconds,
+        search_strategy=request.search_strategy,
         feature_recipes_wanted=request.feature_recipes,
         on_progress=on_progress,
         on_stage=on_stage,

@@ -269,6 +269,9 @@ class ImproveRequest(TrainRequest):
     # The most wall-clock time the search may take, in seconds, counted from when it starts. None means
     # no limit beyond the budget. The final refit and the report on the held-out rows come after it.
     time_limit_seconds: Optional[float] = Field(default=None, ge=1.0, le=3600.0)
+    # How the model settings are searched: "random" draws settings at random and scores each on every
+    # fold; "halving" scores many on a few folds and gives the promising ones more.
+    search_strategy: Literal["random", "halving"] = "random"
 
 
 class SessionStatusResponse(BaseModel):

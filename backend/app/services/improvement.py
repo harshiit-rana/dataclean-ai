@@ -85,7 +85,11 @@ class Round:
 def _reached(found: tuning.SearchResult) -> dict:
     """What a settings search was and how far it got, for the trail: always the strategy, and the
     settings it reached only when the time limit cut it short."""
-    reached = {"strategy": found.strategy}
+    reached: dict = {"strategy": found.strategy}
+    if found.rungs:
+        reached["rungs"] = list(found.rungs)
+    if found.note:
+        reached["note"] = found.note
     if found.stopped_for_time:
         reached |= {"tried": found.tried, "planned": found.planned, "stopped_for_time": True}
     return reached

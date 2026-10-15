@@ -5,7 +5,23 @@ import type { ImprovementTrail as Trail } from "@/api/types";
 
 const STRATEGY_LABELS: Record<string, string> = {
   random: "random search",
+  halving: "successive halving",
 };
+
+interface Rung {
+  rung: number;
+  settings: number;
+  folds: number;
+  best_score: number | null;
+  kept: number;
+}
+
+/** The rungs of a halving search, when the round has them: how many settings were scored on how many
+ * folds, and how many went on. Read defensively because the detail is free-form. */
+function rungsOf(detail: Record<string, unknown> | undefined): Rung[] {
+  const rungs = detail?.rungs;
+  return Array.isArray(rungs) ? (rungs as Rung[]) : [];
+}
 
 const METRIC_LABELS: Record<string, string> = {
   roc_auc: "AUC",
@@ -109,6 +125,21 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
               </div>
               <p className="mt-1 text-xs text-muted-foreground">{round.what_it_tried}</p>
               <p className="mt-1">{round.outcome}</p>
+              {rungsOf(round.detail).length > 0 && (
+                <ol className="mt-2 flex flex-col gap-0.5 text-xs text-muted-foreground" aria-label="Rungs">
+                  {rungsOf(round.detail).map((rung) => (
+                    <li key={rung.rung} className="tabular-nums">
+                      Rung {rung.rung}: {rung.settings} setting{rung.settings === 1 ? "" : "s"} on{" "}
+                      {rung.folds} fold{rung.folds === 1 ? "" : "s"}
+                      {rung.best_score !== null && `, best ${rung.best_score.toFixed(3)}`}
+                      {rung.kept > 0 && ` → ${rung.kept} went on`}
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {typeof round.detail?.note === "string" && (
+                <p className="mt-1 text-xs text-muted-foreground">{round.detail.note}</p>
+              )}
             </li>
             );
           })}

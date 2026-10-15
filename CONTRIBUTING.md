@@ -451,6 +451,10 @@ are both running locally, you're ready to make changes.
   metric, budget and deadline already decided; it must check the deadline between pieces of work, report
   `stopped_for_time`, and put its own `name` in `SearchResult.strategy`. Keep the interface to what the strategies
   that exist need: add a parameter when a second strategy needs it, not before.
+- **A search never reports, or lets the loop compare, a score on fewer folds than the incumbent had.** Halving ranks on
+  partial folds inside a rung, but what it returns is the survivor's mean over every fold of the same splitter. A new
+  strategy that uses a cheaper resource must end the same way, and must reuse the splitter it is handed (spy tests in
+  `test_successive_halving.py` show how to check group-aware and forward folds at every rung).
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,
