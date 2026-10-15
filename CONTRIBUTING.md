@@ -420,6 +420,9 @@ are both running locally, you're ready to make changes.
 - **A fact that changes how a score should be read belongs in the card's `_protocol_section`.** It is written in
   code from the result (never by the language model), its optional parts appear only when they apply, and each
   needs a case in `tests/unit/test_card_evaluation_protocol.py`.
+- **A new caution is added through `caution_items` with an id and a severity.** Decide its severity against the
+  definitions beside `SEVERITY_ORDER`, and add a case in `tests/unit/test_cautions_ranking.py`; do not append
+  text to the card's cautions list separately, or the results page (which shows the top three) will not have it.
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,

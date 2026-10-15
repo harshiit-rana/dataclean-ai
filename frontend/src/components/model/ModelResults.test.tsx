@@ -802,3 +802,25 @@ describe("ModelResults — what the model adds over its best single input (#40)"
     expect(screen.queryByText(/Best single input/)).not.toBeInTheDocument();
   });
 });
+
+describe("ModelResults — the cautions under the verdict (#98)", () => {
+  it("shows the ranked cautions in the box and drops the duplicate inline notes", () => {
+    const r = result({
+      evaluation: { ...EVAL(1, "independent"), whole_file_statistics: [{ operation: "fill_median", column: "spend" }] },
+    });
+    r.cautions = [{ id: "whole_file_statistics", severity: "medium", text: "Fixes were worked out over every row, the held-out rows included." }];
+    render(<ModelResults result={r} />);
+    expect(screen.getByRole("region", { name: "Before you rely on this" })).toBeInTheDocument();
+    // Once, in the box, not again in the verdict card.
+    expect(screen.getAllByText(/worked out over every row/)).toHaveLength(1);
+  });
+
+  it("falls back to the inline notes for a result served without cautions", () => {
+    const r = result({
+      evaluation: { ...EVAL(1, "independent"), whole_file_statistics: [{ operation: "fill_median", column: "spend" }] },
+    });
+    render(<ModelResults result={r} />);
+    expect(screen.queryByRole("region", { name: "Before you rely on this" })).not.toBeInTheDocument();
+    expect(screen.getByText(/worked out over every row/)).toBeInTheDocument();
+  });
+});

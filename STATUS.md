@@ -529,6 +529,17 @@ and its evaluation record, so no figure in it passes through the language model,
 the result with its later evidence so the new-data and final-holdout lines are present. A card is written once
 and kept, so those lines are as of the day it was first requested.
 
+**Before you rely on this, under the verdict.** The cautions the model card computes (a reused or exhausted
+holdout, fixes worked out over every row, test rows that are copies of training rows, a small test set, thin
+classes, a random split, withheld or derived columns, an unreachable cut-off, a searched model) are now
+`model_card.caution_items`, each with an id and a severity, ranked most severe first. The model page shows the
+top three in a box right under the verdict headline with a count of the rest and "Show all", in the card's own
+words, and the card prints the same list in the same order. The order is a judgement, written down beside
+`SEVERITY_ORDER`: *high* means the headline number is wrong in a known direction (copies in the test set, an
+exhausted holdout), *medium* that the scores are thin or the model is not what was asked for, *low* is context
+every reader should have. No caution in the box comes from the language model. The two notes the verdict card
+used to print itself (copies, whole-file statistics) are now shown only for a result served without the list.
+
 **Repeated folds when a small file is compared.** With a few hundred training rows one 5-fold
 partition can rank two close candidates one way and another partition the other way round. Below
 2,000 training rows, choosing the model, tuning it and the fold spread shown beside the score now

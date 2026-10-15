@@ -27,6 +27,7 @@ import {
 import { CalibrationCard } from "@/components/model/CalibrationCard";
 import { OperatingPointCard } from "@/components/model/OperatingPointCard";
 import { HeldOutUse, ScoreLabel } from "@/components/model/ScoreLabel";
+import { BeforeYouRely } from "@/components/model/BeforeYouRely";
 import { WhyThisModel } from "@/components/model/WhyThisModel";
 import type {
   Baseline,
@@ -644,6 +645,7 @@ export function ModelResults({
         </CardHeader>
         <CardContent className="text-sm">
           <p>{result.assessment.headline}</p>
+          <BeforeYouRely cautions={result.cautions} />
           <p className="mt-3 text-muted-foreground">
             Trained on {result.split.train_rows.toLocaleString()} rows and scored on{" "}
             {result.split.test_rows.toLocaleString()} it had never seen
@@ -661,7 +663,9 @@ export function ModelResults({
           </p>
           {/* The entity counts, not just the rows. 800 training rows drawn from 4 customers
               is not 800 independent observations, and the row count alone hides that. */}
-          {(result.split.test_rows_seen_in_training ?? 0) > 0 && (
+          {/* A result served with its ranked cautions shows them in the box above; the notes below
+              are for payloads that predate it. */}
+          {result.cautions == null && (result.split.test_rows_seen_in_training ?? 0) > 0 && (
             <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2">
               {result.split.test_rows_seen_in_training!.toLocaleString()} of those{" "}
               {result.split.test_rows.toLocaleString()} test rows are exact copies of training
@@ -672,7 +676,7 @@ export function ModelResults({
           )}
           <HeldOutUse evaluation={result.evaluation} split={result.split} />
           <NewDataCheck evaluation={result.evaluation} />
-          {(result.evaluation?.whole_file_statistics?.length ?? 0) > 0 && (
+          {result.cautions == null && (result.evaluation?.whole_file_statistics?.length ?? 0) > 0 && (
             <p className="mt-2 rounded-md border border-amber-500/40 bg-amber-500/5 p-2 text-xs">
               Trained on data where{" "}
               {result.evaluation!.whole_file_statistics!

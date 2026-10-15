@@ -790,6 +790,14 @@ export interface ModelSelection {
   seed_stability?: SeedStability | null;
 }
 
+/** One thing to know before relying on a result, written on the server (the same words the model card
+ * prints) and ranked by how much it should weigh. */
+export interface ModelCaution {
+  id: string;
+  severity: "high" | "medium" | "low";
+  text: string;
+}
+
 /** One sentence of the "Why this model?" panel, with the result fields it rests on. */
 export interface ExplanationStatement {
   id: string;
@@ -847,6 +855,8 @@ export interface ModelResult {
     sealed_unavailable_reason?: string;
   };
   baseline: Baseline;
+  /** What to know before relying on this, most severe first. Absent on older results. */
+  cautions?: ModelCaution[] | null;
   /** Why this model, assembled on the server from the fields above. Absent on older results. */
   why_this_model?: ModelExplanation | null;
   primary_metric: string;

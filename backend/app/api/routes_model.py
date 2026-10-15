@@ -761,6 +761,14 @@ def _with_later_evidence(directory, result: dict) -> dict:
     # Worked out from the result itself each time it is served, so it cannot go stale beside it and
     # the card (which calls the same function) says the same words.
     try:
+        best = next(
+            (r for r in result.get("results", []) if r.get("model") == result.get("best_model")), {}
+        )
+        # The cautions the card prints, ranked, for the box under the verdict.
+        result["cautions"] = model_card.caution_items(result, best)
+    except Exception:  # noqa: BLE001 -- a list of cautions is never a reason to lose a result
+        logger.warning("Could not list the cautions", exc_info=True)
+    try:
         result["why_this_model"] = why_this_model.explain(result)
     except Exception:  # noqa: BLE001 -- an explanation is never a reason to lose a result
         logger.warning("Could not explain the choice of model", exc_info=True)

@@ -789,22 +789,43 @@ def _looks_cell(result: dict) -> str:
     return f"{count} ({status})"
 
 
-def _deterministic_cautions(result: dict, best: dict) -> list[str]:
-    """Warnings derived from the evaluation rather than written by the model, so they appear
-    whether or not the LLM call succeeded."""
-    cautions: list[str] = []
+# How much a caution should weigh on whether to rely on the model, most severe first. The order is a
+# judgement and is written down here so it can be argued with: a *high* caution says the scores above are
+# flattered or not independent (so the headline number is wrong in a known direction); a *medium* one says
+# the scores are thin or the model is not what was asked for; a *low* one is context that every reader of
+# this kind of result should have but that rarely changes the decision.
+SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2}
+
+
+def caution_items(result: dict, best: dict) -> list[dict]:
+    """The cautions as `{"id", "severity", "text"}`, most severe first (ties keep the order they were found).
+
+    Derived from the evaluation rather than written by the model, so they appear whether or not the LLM
+    call succeeded. The model card and the results page both read this list, which is how they come to say
+    the same words.
+    """
+    items: list[dict] = []
+
+    def add(id_: str, severity: str, text: str) -> None:
+        items.append({"id": id_, "severity": severity, "text": text})
+
     split = result.get("split", {})
     test_rows = split.get("test_rows", 0)
     diagnostics = best.get("diagnostics", {})
 
     evaluation = result.get("evaluation") or {}
     if evaluation.get("message"):
-        cautions.append(evaluation["message"])
+        add(
+            "holdout_reuse",
+            "high" if evaluation.get("status") == "exhausted" else "medium",
+            evaluation["message"],
+        )
 
     whole_file = evaluation.get("whole_file_statistics") or []
     if whole_file:
         listed = ", ".join(f"`{w['operation']}` on `{w['column']}`" for w in whole_file)
-        cautions.append(
+        add(
+            "whole_file_statistics", "medium",
             f"These fixes were approved while cleaning and their values were worked out over "
             f"every row -- the held-out rows included -- before the data was split: {listed}. "
             f"The effect of a median is usually small, but it is a leak: the scores above are "
@@ -814,14 +835,16 @@ def _deterministic_cautions(result: dict, best: dict) -> list[str]:
         )
 
     if test_rows and test_rows < 100:
-        cautions.append(
+        add(
+            "small_test_set", "medium",
             f"Every score here rests on {test_rows} held-out rows. That is a small sample, "
             f"and the figures would move noticeably on a different split."
         )
 
     seen = split.get("test_rows_seen_in_training") or 0
     if seen and test_rows:
-        cautions.append(
+        add(
+            "test_rows_are_copies", "high",
             f"{seen} of the {test_rows} test rows ({seen / test_rows:.0%}) are exact copies of "
             f"training rows, answer included -- the model had already been shown those answers, "
             f"so the scores above are flattered by them. If they are duplicated records rather "
@@ -830,13 +853,15 @@ def _deterministic_cautions(result: dict, best: dict) -> list[str]:
 
     for row in diagnostics.get("per_class") or []:
         if row["support"] < MIN_ROWS_PER_CLASS:
-            cautions.append(
+            add(
+                f"thin_class_{row['label']}", "medium",
                 f"Only {row['support']} test rows have the answer {row['label']!r}, so its "
                 f"precision and recall above are barely more than anecdote."
             )
 
     if split.get("strategy") == "random" and result.get("task") == "classification":
-        cautions.append(
+        add(
+            "random_split", "low",
             "The data was split at random. If these rows have a time order and predictions "
             "will be made about the future, retrain with a date-based split -- otherwise the "
             "model is being tested on rows from the same period it learned from."
@@ -844,7 +869,8 @@ def _deterministic_cautions(result: dict, best: dict) -> list[str]:
 
     excluded = result.get("features", {}).get("excluded") or []
     if excluded:
-        cautions.append(
+        add(
+            "withheld_columns", "low",
             f"{', '.join(excluded)} were deliberately withheld from the model. If any of "
             f"them will genuinely be available when a prediction is needed, the scores here "
             f"understate what is achievable."
@@ -853,7 +879,8 @@ def _deterministic_cautions(result: dict, best: dict) -> list[str]:
     derived = (result.get("features") or {}).get("derived") or []
     if derived:
         sources = ", ".join(str(r.get("column")) for r in derived)
-        cautions.append(
+        add(
+            "derived_inputs", "low",
             f"Some inputs were derived rather than read from the file ({sources}). Whatever "
             f"scores this model, it can only be used on rows where those source columns are "
             f"present and mean the same thing -- a date parsed in a different format, or a "
@@ -862,7 +889,8 @@ def _deterministic_cautions(result: dict, best: dict) -> list[str]:
 
     point = result.get("operating_point") or {}
     if point.get("objective") not in (None, "default") and not point.get("reachable", True):
-        cautions.append(
+        add(
+            "cutoff_unreachable", "medium",
             f"A cut-off was asked for so that {point.get('description')}, and no cut-off "
             f"achieves that on the training folds. The nearest one was set instead; the "
             f"table under 'Where the cut-off sits' shows what it actually delivers."
@@ -875,7 +903,8 @@ def _deterministic_cautions(result: dict, best: dict) -> list[str]:
     if trail:
         rounds = trail.get("rounds") or []
         accepted = [r for r in rounds if r.get("accepted")]
-        cautions.append(
+        add(
+            "searched_model", "low",
             f"This model was arrived at by searching, not by a single fit: {len(rounds)} "
             f"rounds were tried and {len(accepted)} were kept. Every round was judged on "
             f"cross-validated folds of the training rows and the held-out set was scored "
@@ -885,13 +914,19 @@ def _deterministic_cautions(result: dict, best: dict) -> list[str]:
             f"({trail.get('cv_score')}) and the headline score is normal and expected."
         )
         if trail.get("stopped_because") == "goal_out_of_reach":
-            cautions.append(
+            add(
+                "goal_out_of_reach", "medium",
                 f"A target of {trail.get('goal')} was asked for and not reached. The search "
                 f"ran out of things worth trying first, which points at the columns rather "
                 f"than the model: better inputs would help, more searching would not."
             )
 
-    return cautions
+    return sorted(items, key=lambda item: SEVERITY_ORDER[item["severity"]])
+
+
+def _deterministic_cautions(result: dict, best: dict) -> list[str]:
+    """The same cautions as plain text, most severe first."""
+    return [item["text"] for item in caution_items(result, best)]
 
 
 def build_model_card(
