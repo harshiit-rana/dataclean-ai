@@ -178,6 +178,18 @@ if __name__ == "__main__":
 '''
 
 
+def predict_in_app(new: pd.DataFrame, steps: list[dict], result: dict, reference: pd.DataFrame, pipeline, schema: dict):
+    """What the app writes for `new`, step for step as predict.py does it, in this process with the app's own model.
+    Returns the output frame, or the refusal message when the file cannot be scored."""
+    applied = replay.apply(new, [replay.Step(**step) for step in steps], target_column=result.get("target_column"))
+    report, row_notes = validation.validate(schema, applied.frame, result.get("target_column"))
+    if report["blocking"]:
+        return validation.describe_blocking(report)
+    X, _ = scoring.prepare_inputs(applied.frame, result, reference=reference)
+    predicted = scoring.predict(pipeline, X, result) if len(X) else pd.DataFrame(index=X.index)
+    return scoring.assemble_output(new, applied.dropped, predicted, row_notes)
+
+
 def build_predict_script(result: dict, steps: list[dict], reference: list[str], *, file_name: str) -> str:
     """predict.py for this model."""
     return (

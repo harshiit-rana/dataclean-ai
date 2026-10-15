@@ -98,3 +98,47 @@ class TestTheCheck:
         monkeypatch.setattr(export_acceptance.subprocess, "run", explode)
         assert client.post(f"/api/export/{sid}/verify").json()["status"] == "error"
         assert client.get(f"/api/export/{sid}/zip").status_code == 200
+
+
+class TestTheProbes:
+    SCHEMA = {"columns": [
+        {"name": "amount", "kind": "numeric", "quantiles": {"0.5": 12.5}, "range": {"min": 0, "max": 50}},
+        {"name": "plan", "kind": "categorical", "categories": {"basic": 9, "pro": 3}},
+        {"name": "joined", "kind": "date", "range": {"min": "2022-01-01T00:00:00"}},
+    ]}
+
+    def test_every_input_column_gets_its_probe_rows(self):
+        probes, labels = export_acceptance.probe_frame(self.SCHEMA)
+        assert labels[0] == "a typical row" and probes.iloc[0].to_dict() == {
+            "amount": 12.5, "plan": "basic", "joined": "2022-01-01T00:00:00"}
+        assert labels[1:] == [
+            "amount blank", "amount written as text", "amount not a number",
+            "plan blank", "plan a value never seen in training",
+            "joined blank", "joined not a date",
+        ]
+        assert probes.loc[labels.index("plan a value never seen in training"), "plan"] == export_acceptance.NEVER_SEEN
+        assert probes.loc[labels.index("amount not a number"), "amount"] == "n/a"
+
+    def test_the_app_and_predict_py_agree_on_every_probe_row(self, session):
+        sid, _ = session
+        body = client.post(f"/api/export/{sid}/verify").json()
+        assert body["status"] == "passed", body
+        assert body["probes"]["rows"] > 5 and body["probes"]["agreed"] == body["probes"]["rows"]
+        assert "predict.py and the app agree" in body["message"]
+
+    def test_a_disagreement_on_a_probe_row_fails_the_check_and_is_listed(self, session, monkeypatch):
+        from app.services import predict_export
+
+        sid, _ = session
+        real = predict_export.build_predict_script
+
+        def drifted(*args, **kwargs):
+            return real(*args, **kwargs).replace(
+                "    output.to_csv(destination, index=False)",
+                "    output.iloc[1, -1] = 'drifted'\n    output.to_csv(destination, index=False)",
+            )
+
+        monkeypatch.setattr(predict_export, "build_predict_script", drifted)
+        body = client.post(f"/api/export/{sid}/verify").json()
+        assert body["status"] == "failed"
+        assert body["probes"]["disagreements"][0]["probe"] == "signal blank"

@@ -32,6 +32,17 @@ describe("ExportCheck (#78)", () => {
     expect(screen.getByText(/row 12: answered 'yes'/)).toBeInTheDocument();
   });
 
+  it("names the probe rows the app and predict.py disagree on", async () => {
+    vi.spyOn(client, "verifyExport").mockResolvedValue({
+      status: "failed",
+      message: "On 1 of 9 probe rows the exported predict.py and the app disagree.",
+      probes: { rows: 9, agreed: 8, disagreements: [{ probe: "plan a value never seen in training" }] },
+    });
+    render(<ExportCheck sessionId="s" />);
+    fireEvent.click(screen.getByRole("button", { name: /Check the export/ }));
+    await waitFor(() => expect(screen.getByText(/Probe rows where they disagree: plan a value never seen/)).toBeInTheDocument());
+  });
+
   it("shows the last check when the page opens", async () => {
     vi.spyOn(client, "fetchExportVerification").mockResolvedValue({ status: "passed", message: "Checked earlier." });
     render(<ExportCheck sessionId="s" />);

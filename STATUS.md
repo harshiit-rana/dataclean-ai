@@ -939,6 +939,12 @@ what the app's model said: the same answers and probabilities within 1e-9. (`tra
 error such as the time limit -- is saved as `acceptance.json` beside the model and carried in the bundle. It is run on
 request, because it retrains the model, and never blocks or fails a download.
 
+The same check scores the inputs that break real deployments (#79). From the schema it builds probe rows -- a typical
+row, then for each input column the same row with that column blank, a category never seen in training, a number
+written as text, a value that is not a number, a date that is not a date -- and scores them through the app's own path
+and through the exported `predict.py`. The outputs must agree row for row (or both refuse with the same message);
+any probe row where they differ fails the check and is named in `acceptance.json` and on the export page.
+
 ### Where test information could reach a decision — an audit
 
 Prompted by a roadmap review that made the rule explicit: *the final test set must never be used

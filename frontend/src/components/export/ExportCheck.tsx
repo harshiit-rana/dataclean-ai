@@ -59,6 +59,11 @@ export function ExportCheck({ sessionId }: { sessionId: string }) {
           ))}
         </ul>
       )}
+      {checked && check.probes && check.probes.disagreements.length > 0 && (
+        <p className="text-xs text-muted-foreground">
+          Probe rows where they disagree: {check.probes.disagreements.map((d) => d.probe).join("; ")}.
+        </p>
+      )}
       {error && <p className="text-xs text-destructive">{error}</p>}
     </div>
   );

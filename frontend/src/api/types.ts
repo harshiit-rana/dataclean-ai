@@ -1310,6 +1310,8 @@ export interface ExportAcceptance {
   rows_differing?: number;
   max_probability_difference?: number | null;
   first_differences?: { row: number; difference: string }[];
+  /** Rows built to break a deployment (blanks, unseen values, wrong types), through the app and predict.py. */
+  probes?: { rows: number; agreed: number; disagreements: { probe: string }[] };
   at?: string;
   error?: string;
 }

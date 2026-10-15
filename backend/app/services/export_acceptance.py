@@ -12,6 +12,7 @@ It never raises and never blocks a download: a failure to run is reported as a r
 
 from __future__ import annotations
 
+import io
 import json
 import shutil
 import subprocess
@@ -23,7 +24,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from app.services import cleaning_export, model_export, model_store
+from app.services import cleaning_export, model_export, model_store, predict_export
 
 TOLERANCE = 1e-9
 TIMEOUT_SECONDS = 600
@@ -79,6 +80,92 @@ def _compare(app: dict, exported: pd.DataFrame) -> dict:
     }
 
 
+NEVER_SEEN = "__a value never seen in training__"
+
+
+def probe_frame(schema: dict) -> tuple[pd.DataFrame, list[str]]:
+    """Rows built to break a deployment, from the schema: a typical row, then for each input column the same row
+    with that column blank, with a category never seen in training, with a number written as text or not a number,
+    with a date that is not a date. Returns the rows and what each one probes."""
+    columns = schema.get("columns") or []
+    typical: dict = {}
+    for column in columns:
+        if column["kind"] == "numeric":
+            typical[column["name"]] = ((column.get("quantiles") or {}).get("0.5")
+                                       if column.get("quantiles") else (column.get("range") or {}).get("min", 0))
+        elif column["kind"] == "date":
+            typical[column["name"]] = (column.get("range") or {}).get("min", "2020-01-01")
+        elif column["kind"] == "text":
+            typical[column["name"]] = "some text"
+        else:
+            typical[column["name"]] = next(iter(column.get("categories") or {"": 0}))
+    rows, labels = [dict(typical)], ["a typical row"]
+
+    def variant(name: str, value, label: str) -> None:
+        rows.append({**typical, name: value})
+        labels.append(label)
+
+    for column in columns:
+        name = column["name"]
+        variant(name, None, f"{name} blank")
+        if column["kind"] == "numeric":
+            variant(name, f" {typical[name]} ", f"{name} written as text")
+            variant(name, "n/a", f"{name} not a number")
+        elif column["kind"] == "date":
+            variant(name, "not a date", f"{name} not a date")
+        elif column["kind"] == "categorical":
+            variant(name, NEVER_SEEN, f"{name} a value never seen in training")
+    return pd.DataFrame(rows), labels
+
+
+def _probe(directory: Path, result: dict, actions: list[dict], folder: Path, timeout: int) -> dict | None:
+    """The probe rows through the app's path and the exported predict.py: the outputs must agree row for row."""
+    schema = result.get("input_schema")
+    model_file = model_store.pipeline_path(directory)
+    if not schema or model_file is None:
+        return None
+    original = pd.read_csv(directory / "original.csv")
+    cleaned = directory / "cleaned.csv"
+    reference = pd.read_csv(cleaned) if cleaned.exists() else original
+    steps = predict_export.frozen_steps(original, actions)
+    numeric = predict_export.reference_numeric(reference, result)
+    bundle = folder / "bundle"
+    for name, text in predict_export.runtime_files().items():
+        (bundle / name).parent.mkdir(parents=True, exist_ok=True)
+        (bundle / name).write_text(text, encoding="utf-8")
+    (bundle / "predict.py").write_text(
+        predict_export.build_predict_script(result, steps, numeric, file_name="probes.csv"), encoding="utf-8"
+    )
+    shutil.copy(model_file, bundle / model_store.PIPELINE_FILENAME)
+    sidecar = model_file.parent / model_store.MODEL_SIDECAR_FILENAME
+    if sidecar.exists():
+        shutil.copy(sidecar, bundle / model_store.MODEL_SIDECAR_FILENAME)
+    (bundle / model_store.SCHEMA_FILENAME).write_text(json.dumps(schema), encoding="utf-8")
+
+    probes, labels = probe_frame(schema)
+    probes.to_csv(bundle / "probes.csv", index=False)
+    new = pd.read_csv(bundle / "probes.csv")
+    pipeline, _ = model_store.load_pipeline(directory)
+    app_out = predict_export.predict_in_app(new, steps, result, reference, pipeline, schema)
+    done = _run(["predict.py", "probes.csv", "out.csv"], bundle, timeout)
+    if isinstance(app_out, str) or done.returncode != 0:
+        same = isinstance(app_out, str) and done.returncode != 0 and app_out in done.stderr
+        return {"rows": len(labels), "agreed": len(labels) if same else 0,
+                "disagreements": [] if same else [{"probe": "the whole file", "app": str(app_out)[:300],
+                                                   "export": done.stderr[-300:]}]}
+    buffer = io.StringIO()
+    app_out.to_csv(buffer, index=False)
+    ours = pd.read_csv(io.StringIO(buffer.getvalue()), dtype=str, keep_default_na=False)
+    theirs = pd.read_csv(bundle / "out.csv", dtype=str, keep_default_na=False)
+    disagreements = []
+    for i, label in enumerate(labels):
+        if i >= len(theirs) or ours.iloc[i].to_dict() != theirs.iloc[i].to_dict():
+            disagreements.append({"probe": label, "app": ours.iloc[i].to_dict(),
+                                  "export": theirs.iloc[i].to_dict() if i < len(theirs) else None})
+    return {"rows": len(labels), "agreed": len(labels) - len(disagreements),
+            "disagreements": disagreements[:FIRST_DIFFERENCES]}
+
+
 def verify(directory: Path, result: dict, actions: list[dict] | None, *, timeout: int = TIMEOUT_SECONDS) -> dict:
     """Rebuild the model from the export and compare it with the app's; save and return the outcome."""
     outcome: dict = {"run_id": result.get("run_id"), "tolerance": TOLERANCE, "timeout_seconds": timeout}
@@ -111,6 +198,21 @@ def verify(directory: Path, result: dict, actions: list[dict] | None, *, timeout
             outcome.update(status="failed", message="train_model.py did not run.", error=trained.stderr[-2000:])
             return outcome
         outcome.update(_compare(app_predictions, pd.read_csv(folder / "held_out.csv")))
+        # Then the inputs that break real deployments, through the app and through predict.py.
+        probes = _probe(directory, result, actions or [], folder, timeout)
+        if probes is not None:
+            outcome["probes"] = probes
+            if probes["disagreements"]:
+                outcome["status"] = "failed"
+                outcome["message"] += (
+                    f" On {len(probes['disagreements'])} of {probes['rows']} probe rows (blanks, unseen values, "
+                    f"wrong types) the exported predict.py and the app disagree."
+                )
+            else:
+                outcome["message"] += (
+                    f" On all {probes['rows']} probe rows -- blanks, values never seen in training, wrong types -- "
+                    f"predict.py and the app agree."
+                )
         return outcome
     except subprocess.TimeoutExpired:
         outcome.update(status="error", message=f"The export took longer than {timeout} seconds to rebuild, so it "
