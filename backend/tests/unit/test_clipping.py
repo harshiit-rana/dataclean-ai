@@ -315,7 +315,9 @@ class TestTheExportRebuildsIt:
         result["features"]["excluded"] = []
         script = model_export.build_training_script(result)
         assert "IQRClipper" not in script
-        assert "numpy" not in script
+        # No numpy import: the clipping step is what needs it. (The versions header names numpy among the
+        # libraries that produced the numbers, which is not using it.)
+        assert "import numpy" not in script
         assert "CLIPPED_FEATURES = []" in script
 
     def test_the_prediction_snippet_warns_about_the_extra_step(self):
