@@ -184,6 +184,9 @@ export function RunHistory({
   onRestore,
   restoring = null,
   restoreError = null,
+  olderCount = 0,
+  onLoadOlder,
+  loadingOlder = false,
 }: {
   runs: ModelRun[];
   currentFingerprint: string;
@@ -198,6 +201,10 @@ export function RunHistory({
   /** The run being brought back, while the request is in flight. */
   restoring?: string | null;
   restoreError?: string | null;
+  /** Entries older than the ones shown. Said, never cut silently. */
+  olderCount?: number;
+  onLoadOlder?: () => void;
+  loadingOlder?: boolean;
 }) {
   // One run is not a comparison, and a table of one row implies there is something to compare.
   if (runs.length < 2) return null;
@@ -293,7 +300,7 @@ export function RunHistory({
                     <td className="py-2 pr-3 tabular-nums">
                       {delta == null ? (
                         <span className="text-xs text-muted-foreground">
-                          {previous ? "not comparable" : "first run"}
+                          {previous ? "not comparable" : olderCount > 0 ? "earlier runs not shown" : "first run"}
                         </span>
                       ) : (
                         <>
@@ -337,6 +344,21 @@ export function RunHistory({
             </tbody>
           </table>
         </div>
+        {olderCount > 0 && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            {olderCount} older {olderCount === 1 ? "entry" : "entries"} not shown.{" "}
+            {onLoadOlder && (
+              <button
+                type="button"
+                className="text-primary underline underline-offset-2 disabled:opacity-50"
+                disabled={loadingOlder}
+                onClick={onLoadOlder}
+              >
+                {loadingOlder ? "Loading…" : "Show older runs"}
+              </button>
+            )}
+          </p>
+        )}
         {restoreError && <p className="mt-3 text-xs text-destructive">{restoreError}</p>}
         <p className="mt-3 text-xs text-muted-foreground">
           The models of recent runs are kept. One trained on the data as it is now can be made the

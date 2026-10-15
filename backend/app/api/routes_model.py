@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from collections.abc import AsyncIterator
 
 import pandas as pd
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse, PlainTextResponse
 
 from app.config import Settings, get_settings
@@ -1529,8 +1529,13 @@ async def finalise_model(
 async def get_model_history(
     session_id: str,
     settings: Settings = Depends(get_settings),
+    limit: int = Query(model_store.HISTORY_PAGE_SIZE, ge=1, le=200),
+    before: str | None = None,
 ) -> dict:
-    """Every run in this session, newest first.
+    """Every run in this session, newest first, a page at a time (`limit` entries older than the run `before`).
+
+    `older_count` says how many entries come after the page and `next_before` asks for them. The comparisons
+    are worked out on the whole history, so a run on the edge of a page is still compared with the run before it.
 
     `save_result` used to overwrite a single file, so retraining silently discarded the
     previous run -- which made the one question people actually ask unanswerable: did the
@@ -1556,12 +1561,14 @@ async def get_model_history(
         logger.warning("Could not fingerprint the current data for session %s", session_id)
 
     _record_interrupted_searches(directory)
-    runs = model_store.load_history(directory)
+    everything = model_store.load_history(directory)
+    page = model_store.history_page(everything, limit=limit, before=before)
+    shown = {r.get("run_id") for r in page["runs"]}
     return {
         "session_id": session_id,
-        "runs": runs,
+        **page,
         "current_fingerprint": current,
-        "comparisons": _history_comparisons(directory, runs),
+        "comparisons": _history_comparisons(directory, everything, only=shown),
         # The model in use (None when nothing is, after a cleaning change) and the runs whose model is still
         # stored, so the page can offer to bring one back.
         "current_run_id": model_store.current_run_id(directory),
@@ -1666,7 +1673,7 @@ def _record_interrupted_searches(directory) -> None:
         logger.warning("Interrupted searches could not be recorded", exc_info=True)
 
 
-def _history_comparisons(directory, runs: list[dict]) -> dict[str, dict]:
+def _history_comparisons(directory, runs: list[dict], only: set | None = None) -> dict[str, dict]:
     """For each run, whether the change from the run before it is real, by run id.
 
     Only between runs that can be compared at all -- the same data and the same metric; a run
@@ -1679,6 +1686,8 @@ def _history_comparisons(directory, runs: list[dict]) -> dict[str, dict]:
     # it that has one.
     runs = [run for run in runs if model_store.succeeded(run)]
     for index, run in enumerate(runs[:-1]):
+        if only is not None and run.get("run_id") not in only:
+            continue  # each comparison reads stored predictions: only the runs on the page are worked out
         previous = runs[index + 1]
         if (
             run.get("primary_metric") != previous.get("primary_metric")

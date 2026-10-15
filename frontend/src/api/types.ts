@@ -575,6 +575,11 @@ export interface ModelHistory {
   current_run_id?: string | null;
   /** Runs whose model is still stored and so can be brought back. */
   stored_run_ids?: string[];
+  /** Every entry in the history, and how many are older than this page. */
+  total?: number;
+  older_count?: number;
+  /** Pass as `before` to fetch the next, older page; null when there is none. */
+  next_before?: string | null;
 }
 
 /** Where the cut-off should sit, stated as a trade-off rather than a number.

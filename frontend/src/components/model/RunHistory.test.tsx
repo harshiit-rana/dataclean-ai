@@ -409,3 +409,24 @@ describe("RunHistory — a search the server never finished (#65)", () => {
     expect(screen.getByText("+0.0500")).toBeInTheDocument();
   });
 });
+
+describe("RunHistory — older runs are said, never cut silently (#70)", () => {
+  it("states how many older entries exist and offers them", () => {
+    const onLoadOlder = vi.fn();
+    render(<RunHistory runs={[run(), run()]} currentFingerprint="aaa" olderCount={7} onLoadOlder={onLoadOlder} />);
+    expect(screen.getByText(/7 older entries not shown/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show older runs" }));
+    expect(onLoadOlder).toHaveBeenCalled();
+  });
+
+  it("does not call the last run on the page the first run when older ones exist", () => {
+    render(<RunHistory runs={[run(), run()]} currentFingerprint="aaa" olderCount={1} />);
+    expect(screen.getByText("earlier runs not shown")).toBeInTheDocument();
+    expect(screen.queryByText("first run")).not.toBeInTheDocument();
+  });
+
+  it("says nothing when the whole history is shown", () => {
+    renderHistory([run(), run()]);
+    expect(screen.queryByText(/older entr/)).not.toBeInTheDocument();
+  });
+});

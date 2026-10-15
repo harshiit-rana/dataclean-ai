@@ -185,6 +185,28 @@ export function ModelPage() {
     }
   };
 
+  // Older pages of the history, appended below the newest. The server works out the comparisons on
+  // the whole history, so a page's edge does not cut a run off from the one before it.
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const handleLoadOlder = async () => {
+    if (!sessionId || !history?.next_before) return;
+    setLoadingOlder(true);
+    try {
+      const older = await fetchModelHistory(sessionId, { before: history.next_before });
+      setHistory({
+        ...history,
+        runs: [...history.runs, ...older.runs],
+        comparisons: { ...(history.comparisons ?? {}), ...(older.comparisons ?? {}) },
+        older_count: older.older_count,
+        next_before: older.next_before,
+      });
+    } catch {
+      // The newest page is still shown; the button stays for another try.
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
   const handleTrain = async (request: TrainRequest) => {
     if (!sessionId) return;
     setTraining(true);
@@ -523,6 +545,9 @@ export function ModelPage() {
           onRestore={handleRestore}
           restoring={restoring}
           restoreError={restoreError}
+          olderCount={history.older_count ?? 0}
+          onLoadOlder={handleLoadOlder}
+          loadingOlder={loadingOlder}
         />
       )}
 

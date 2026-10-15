@@ -60,9 +60,11 @@ RUN_RESULT_FILENAME = "result.json"
 SUPERSEDED_FILENAME = "superseded.json"
 DEFAULT_MAX_STORED_RUNS = 10
 
-# Runs kept per session. Long enough that a working session of "try it, change something, try
-# again" stays entirely visible; short enough that the file remains small and readable.
-MAX_HISTORY_ENTRIES = 20
+# History entries kept per session. It used to be 20, cut silently, and with failed attempts and restores in the
+# record the useful runs dropped off sooner still. An entry is a few hundred bytes, so this is far past any working
+# session; the history route pages through it (`history_page`) and says how many older entries there are.
+MAX_HISTORY_ENTRIES = 500
+HISTORY_PAGE_SIZE = 20
 
 
 def _jsonable(value: Any) -> Any:
@@ -378,6 +380,24 @@ def prune_runs(directory: Path, keep: int) -> list[str]:
     for run_id in removed:
         shutil.rmtree(run_dir(directory, run_id), ignore_errors=True)
     return removed
+
+
+def history_page(entries: list[dict], *, limit: int = HISTORY_PAGE_SIZE, before: str | None = None) -> dict:
+    """One page of the history, newest first: up to `limit` entries older than the run `before` (from the
+    start when it is None or not in the history). `older_count` is how many entries come after the page, and
+    `next_before` is what to pass for the next one."""
+    start = 0
+    if before:
+        ids = [e.get("run_id") for e in entries]
+        start = ids.index(before) + 1 if before in ids else 0
+    page = entries[start : start + max(1, int(limit))]
+    older = max(0, len(entries) - start - len(page))
+    return {
+        "runs": page,
+        "total": len(entries),
+        "older_count": older,
+        "next_before": page[-1].get("run_id") if page and older else None,
+    }
 
 
 def save_result(

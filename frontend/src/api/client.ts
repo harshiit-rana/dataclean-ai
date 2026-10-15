@@ -201,8 +201,20 @@ export async function fetchModelResult(sessionId: string): Promise<ModelResult |
   return handleResponse<ModelResult>(response);
 }
 
-export async function fetchModelHistory(sessionId: string): Promise<ModelHistory> {
-  const response = await sessionFetch(sessionId, `/api/model/${sessionId}/history`);
+/** The run history, newest first, a page at a time: `before` asks for the entries older than
+ * that run. */
+export async function fetchModelHistory(
+  sessionId: string,
+  page: { before?: string; limit?: number } = {}
+): Promise<ModelHistory> {
+  const params = new URLSearchParams();
+  if (page.before) params.set("before", page.before);
+  if (page.limit) params.set("limit", String(page.limit));
+  const query = params.toString();
+  const response = await sessionFetch(
+    sessionId,
+    `/api/model/${sessionId}/history${query ? `?${query}` : ""}`
+  );
   return handleResponse<ModelHistory>(response);
 }
 

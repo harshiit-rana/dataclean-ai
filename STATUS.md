@@ -837,6 +837,12 @@ minutes can only belong to a search whose process died (a restart, a deploy, a c
 turns it into an `interrupted` entry listing the rounds that had finished. Markers are per search, so two searches in
 one session never share one.
 
+The history is no longer cut to 20 entries without a word (#70). It keeps up to 500 (an entry is a few hundred bytes),
+and `GET /history` returns a page at a time (`?limit=&before=`) with `older_count` and `next_before`. The comparisons
+are worked out on the whole history, so a run on the edge of a page is still compared with the run before it, and
+only for the runs on the page, since each one reads stored predictions. The table says how many older entries exist
+and loads them on request.
+
 **Artifacts you can leave with.** `train_model.py` that rebuilds the model from scratch
 (tuned settings included), the fitted `model.joblib`, and a written model card that says what
 not to trust. A test runs the generated script in a subprocess and checks it reproduces the

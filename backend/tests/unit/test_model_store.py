@@ -64,7 +64,8 @@ class TestEveryRunIsKept:
         model_store.save_result(tmp_path, result(auc=0.86), fingerprint="aaa")
         assert model_store.load_result(tmp_path)["results"][0]["metrics"]["roc_auc"] == 0.86
 
-    def test_history_is_capped(self, tmp_path):
+    def test_history_is_capped(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(model_store, "MAX_HISTORY_ENTRIES", 20)  # the real cap is far past any session
         for i in range(model_store.MAX_HISTORY_ENTRIES + 5):
             model_store.save_result(tmp_path, result(auc=0.5 + i / 100), fingerprint="aaa")
         assert len(model_store.load_history(tmp_path)) == model_store.MAX_HISTORY_ENTRIES
