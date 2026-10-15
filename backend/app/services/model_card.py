@@ -172,6 +172,12 @@ def _selection_tables(result: dict) -> list[str]:
                f"seed's doing." if stability.get("gap") is not None else "."),
         ]
 
+    single = (result.get("baseline") or {}).get("best_single_column") or {}
+    if single.get("applicable"):
+        lines += ["", f"**Against its best single input.** {single['note']}"]
+    elif single.get("reason"):
+        lines += ["", f"_Best single input not compared: {single['reason']}_"]
+
     lines += ["", "### Held-out evaluation", ""]
     lines.append(
         "Scored once, on rows the model never saw and nothing was chosen against, for the "

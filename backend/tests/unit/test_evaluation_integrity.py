@@ -351,6 +351,29 @@ class TestCheckingTheChoiceAgainstOtherSeeds:
         assert _chosen(rigged)["metrics"] != _chosen(honest)["metrics"]  # the report moved
 
 
+# ------------------------------------------------------------------ the best single column
+
+
+class TestComparingWithTheBestSingleColumn:
+    """Which column stands alone best, and how it scores, are worked out on the training folds.
+    Flip every held-out answer and the column, its fold score and the verdict must not move."""
+
+    def test_the_single_column_comparison_is_unmoved(self, learnable, flipped_test_answers):
+        def check():
+            return modeling.train_candidates(
+                learnable, target_column="outcome", task="classification", model_names=MODELS,
+                include_deep_diagnostics=False,
+            )
+
+        honest = check()
+        flipped_test_answers()
+        rigged = check()
+        single = honest["baseline"]["best_single_column"]
+        assert single["applicable"] is True
+        assert rigged["baseline"]["best_single_column"] == single
+        assert _chosen(rigged)["metrics"] != _chosen(honest)["metrics"]  # the report moved
+
+
 # ------------------------------------------------------------------ the improvement loop
 
 

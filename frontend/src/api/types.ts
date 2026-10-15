@@ -281,8 +281,30 @@ export interface BaselineAlternative {
   strategy: string;
   [metric: string]: number | string;
 }
-export type Baseline = Record<string, number | string | BaselineAlternative[]> & {
+
+/** The simplest model on the best input column alone, cross-validated on the training rows and
+ * set beside the chosen model. Skipped (`applicable: false`) when too many columns or rows. */
+export interface BestSingleColumn {
+  applicable: boolean;
+  /** Why it was skipped. */
+  reason?: string;
+  column?: string;
+  model?: string;
+  metric?: string;
+  score?: number;
+  std?: number;
+  chosen_score?: number;
+  /** The chosen model's fold score minus the single column's. */
+  lead?: number;
+  paired_difference?: { difference: number; low: number; high: number } | null;
+  /** Whether the chosen model's lead over that column is more than the folds' noise. */
+  adds_over_it?: boolean;
+  note?: string;
+}
+
+export type Baseline = Record<string, number | string | BaselineAlternative[] | BestSingleColumn> & {
   others?: BaselineAlternative[];
+  best_single_column?: BestSingleColumn;
 };
 
 export interface ModelPlan {

@@ -494,6 +494,18 @@ but their fits are deterministic) and report "not applicable"; above 20,000 trai
 skipped and says why. It reads the training folds only, and a case in the integrity suite flips every
 held-out answer to show it does not move. The price is four more cross-validations of the chosen model.
 
+**What the chosen model adds over its best single input.** A model that scores well may be doing little
+more than one strong column. The simplest model for the task (logistic or ridge regression) is
+cross-validated on each input column alone, on the training rows and the same folds the candidates were
+compared on, and the best is stored as `baseline.best_single_column` with its column, fold score and a
+paired fold-by-fold difference against the chosen model. The comparison table shows it as a row and the
+page and card say whether the chosen model's lead is more than noise or whether most of what it does may
+come from that one column. It is skipped, with the reason shown, for a single input column, more than 40
+input columns or more than 50,000 training rows. The simplest model is linear, so a column whose effect is
+a U-shape under-scores here; the sentence says "on its own", not "is all the model uses". A case in the
+integrity suite flips every held-out answer to show it does not move. The price is one cross-validation per
+input column of a fast model.
+
 **Repeated folds when a small file is compared.** With a few hundred training rows one 5-fold
 partition can rank two close candidates one way and another partition the other way round. Below
 2,000 training rows, choosing the model, tuning it and the fold spread shown beside the score now

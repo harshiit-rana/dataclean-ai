@@ -353,9 +353,42 @@ function ModelComparison({ result, keys }: { result: ModelResult; keys: string[]
                   </tr>
                 );
               })}
+              {result.baseline?.best_single_column?.applicable && (
+                <tr className="border-b border-border text-muted-foreground last:border-0">
+                  <td className="px-2 py-1.5">
+                    <em>Best single input alone: {result.baseline.best_single_column.column}</em>
+                  </td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">
+                    {result.baseline.best_single_column.score?.toFixed(3) ?? "—"}
+                  </td>
+                  <td className="px-2 py-1.5 text-right tabular-nums">
+                    {result.baseline.best_single_column.std != null
+                      ? `± ${result.baseline.best_single_column.std.toFixed(3)}`
+                      : "—"}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
+
+        {result.baseline?.best_single_column?.applicable && (
+          <p
+            className={cn(
+              "text-sm",
+              result.baseline.best_single_column.adds_over_it
+                ? "text-muted-foreground"
+                : "rounded-md border border-amber-500/40 bg-amber-500/5 p-3",
+            )}
+          >
+            {result.baseline.best_single_column.note}
+          </p>
+        )}
+        {result.baseline?.best_single_column?.applicable === false && (
+          <p className="text-xs text-muted-foreground">
+            Best single input not compared: {result.baseline.best_single_column.reason}
+          </p>
+        )}
 
         {selection.distinguishable_note && (
           <p className="text-sm text-muted-foreground">{selection.distinguishable_note}</p>

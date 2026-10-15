@@ -1680,6 +1680,129 @@ def seed_stability(selection: dict, build_with_seed, X_train, y_train, task: str
     }
 
 
+# The best-single-column baseline fits the simplest model once per input column, so it is bounded:
+# past either limit it is skipped, with the reason shown, rather than slowing every run.
+BASELINE_MAX_COLUMNS = 40
+BASELINE_MAX_ROWS = 50_000
+
+
+def best_single_column_baseline(
+    selection: dict,
+    build_chosen,
+    features: dict,
+    used: list[str],
+    X_train,
+    y_train,
+    task: str,
+    *,
+    groups=None,
+    ordered=False,
+) -> dict:
+    """What the chosen model adds over the best input column on its own.
+
+    A model that scores well may be doing little more than one strong column. So the simplest
+    registry model for the task is cross-validated on each input column alone, on the training
+    rows and the very folds the candidates were compared on, and the best of those is set beside
+    the chosen model with a paired fold-by-fold difference. The test set takes no part.
+
+    Returns `{"applicable": False, "reason"}` when it is skipped, otherwise the column, its fold
+    score, and `adds_over_it` -- whether the chosen model's lead over that column is more than the
+    folds' noise.
+    """
+    from app.services import tuning, uncertainty
+
+    if len(used) < 2:
+        return {"applicable": False, "reason": "There is only one input column, so there is nothing to compare it with."}
+    if len(used) > BASELINE_MAX_COLUMNS:
+        return {
+            "applicable": False,
+            "reason": f"Skipped: {len(used)} input columns is more than the {BASELINE_MAX_COLUMNS} it is "
+            f"worth fitting a model to one at a time.",
+        }
+    if len(X_train) > BASELINE_MAX_ROWS:
+        return {
+            "applicable": False,
+            "reason": f"Skipped on {len(X_train):,} training rows: one cross-validation per input column "
+            f"costs more than it tells on a file this size.",
+        }
+
+    simplest = min(models_for_task(task), key=lambda spec: spec.complexity_rank)
+    chosen = selection.get("chosen")
+    scores = selection.get("scores") or {}
+    folds = int(
+        (scores.get(chosen) or {}).get("folds")
+        or (SELECTION_FOLDS_LARGE if len(X_train) > ROWS_FOR_FEWER_SELECTION_FOLDS else tuning.CV_FOLDS)
+    )
+
+    best: tuple[str, tuning.SearchResult] | None = None
+    for column in used:
+        found = tuning.score_config(
+            lambda column=column: build_pipeline(
+                simplest.name,
+                [column] if column in features["numeric"] else [],
+                [column] if column in features["categorical"] else [],
+                None,
+                [column] if column in features["frequent"] else [],
+                clip=[column] if column in (features.get("clipped") or []) else None,
+            ),
+            X_train[[column]], y_train, task, folds=folds, groups=groups, ordered=ordered,
+        )
+        if found is not None and (best is None or found.score > best[1].score):
+            best = (column, found)
+    if best is None:
+        return {"applicable": False, "reason": "No single column could be cross-validated on these training rows."}
+
+    column, single = best
+    chosen_scored = scores.get(chosen)
+    if chosen_scored is None:
+        # Only one model was trained, so the selection kept no fold scores for it.
+        again = tuning.score_config(build_chosen, X_train, y_train, task, folds=folds, groups=groups, ordered=ordered)
+        chosen_scored = (
+            None if again is None
+            else {"score": again.score, "fold_scores": list(again.fold_scores), "folds": again.fits // max(again.repeats, 1)}
+        )
+    if chosen_scored is None:
+        return {"applicable": False, "reason": "The chosen model could not be cross-validated for the comparison."}
+
+    per_repeat = int(chosen_scored.get("folds") or folds)
+    gap = uncertainty.fold_difference(
+        chosen_scored.get("fold_scores"), single.fold_scores,
+        test_train_ratio=1 / (per_repeat - 1) if per_repeat > 1 else None,
+    )
+    adds = bool(gap is not None and gap["low"] > 0)
+    metric = single.metric
+    metric_label = _BASELINE_METRIC_LABELS.get(metric, metric)
+    lead = round(float(chosen_scored["score"]) - float(single.score), 4)
+    if adds:
+        note = (
+            f"The best input on its own, '{column}', scores {single.score:.3f} on the training folds "
+            f"({metric_label}); the chosen model's {float(chosen_scored['score']):.3f} is ahead by "
+            f"{_signed(lead)} and the folds agree that lead is more than noise."
+        )
+    else:
+        note = (
+            f"The best input on its own, '{column}', scores {single.score:.3f} on the training folds "
+            f"({metric_label}), and the chosen model's {float(chosen_scored['score']):.3f} is not "
+            f"clearly better ({_signed(lead)}): most of what this model does may come from that one column."
+        )
+    return {
+        "applicable": True,
+        "column": column,
+        "model": simplest.label,
+        "metric": metric,
+        "score": single.score,
+        "std": single.std,
+        "folds": folds,
+        "chosen_score": round(float(chosen_scored["score"]), 4),
+        "lead": lead,
+        "paired_difference": gap,
+        "adds_over_it": adds,
+        "note": note,
+    }
+
+
+_BASELINE_METRIC_LABELS = {"roc_auc": "area under the curve", "accuracy": "accuracy", "r2": "R-squared"}
+
 # Above this many training rows, selection uses three folds instead of five. It fits every
 # candidate once per fold, and on a large file the extra folds cost more than they tell.
 ROWS_FOR_FEWER_SELECTION_FOLDS = 20_000
@@ -2213,6 +2336,11 @@ def train_candidates(
         entry["cv_score"] = scored["score"] if scored else None
         entry["cv_std"] = scored["std"] if scored else None
     baseline = baseline_score(y_train, y_test, task, point.positive_label)
+    # What the chosen model adds over its best single input: training folds only.
+    baseline["best_single_column"] = best_single_column_baseline(
+        selection, build_best, features, used, X_train, y_train, task,
+        groups=selection_groups, ordered=fold_order,
+    )
     for entry in results:
         # Beside the candidate's own Brier score, where the history and the card can read it.
         if "brier_score" in entry["metrics"] and "brier_score" in baseline:

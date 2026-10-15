@@ -405,6 +405,12 @@ are both running locally, you're ready to make changes.
   takes a `random_state` but fits deterministically must not be marked, or the check reports a spread of
   zero as if it had been worth running. The check uses training folds only and is covered by
   `TestCheckingTheChoiceAgainstOtherSeeds` in the integrity suite.
+- **The best-single-column baseline is bounded and reads training rows only.**
+  `modeling.best_single_column_baseline` fits the simplest registry model once per input column, so it is
+  skipped past `BASELINE_MAX_COLUMNS` / `BASELINE_MAX_ROWS` and says why in the result; raise those limits only
+  after measuring the cost. It must be scored on the same folds as the candidates (same `folds`, same
+  splitter) or the paired difference is meaningless. It is covered by
+  `TestComparingWithTheBestSingleColumn` in the integrity suite.
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,

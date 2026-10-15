@@ -759,3 +759,46 @@ describe("ModelResults — whether the choice survives other seeds (#32)", () =>
     expect(screen.queryByText(/depends on the seed/)).not.toBeInTheDocument();
   });
 });
+
+describe("ModelResults — what the model adds over its best single input (#40)", () => {
+  const withSingle = (best_single_column: NonNullable<ModelResult["baseline"]["best_single_column"]>) => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.baseline = { ...r.baseline, best_single_column };
+    return r;
+  };
+
+  it("shows the column as a row in the table, and a plain line when the model clearly adds to it", () => {
+    render(
+      <ModelResults
+        result={withSingle({
+          applicable: true, column: "tenure", score: 0.71, std: 0.02, adds_over_it: true,
+          note: "The best input on its own, 'tenure', scores 0.710 on the training folds; the lead is more than noise.",
+        })}
+      />
+    );
+    expect(screen.getByText("Best single input alone: tenure")).toBeInTheDocument();
+    expect(screen.getByText(/the lead is more than noise/)).not.toHaveClass("bg-amber-500/5");
+  });
+
+  it("warns when the model is not clearly better than that one column", () => {
+    render(
+      <ModelResults
+        result={withSingle({
+          applicable: true, column: "key", score: 0.99, std: 0.01, adds_over_it: false,
+          note: "The best input on its own, 'key', scores 0.990, and the chosen model is not clearly better.",
+        })}
+      />
+    );
+    expect(screen.getByText(/is not clearly better/)).toHaveClass("bg-amber-500/5");
+  });
+
+  it("says why it was skipped, and says nothing for an older result", () => {
+    const { unmount } = render(
+      <ModelResults result={withSingle({ applicable: false, reason: "Skipped: 60 input columns is more than the 40 it is worth fitting." })} />
+    );
+    expect(screen.getByText(/Best single input not compared: Skipped: 60 input columns/)).toBeInTheDocument();
+    unmount();
+    render(<ModelResults result={result({ evaluation: EVAL(1, "independent") })} />);
+    expect(screen.queryByText(/Best single input/)).not.toBeInTheDocument();
+  });
+});
