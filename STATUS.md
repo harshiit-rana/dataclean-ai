@@ -954,6 +954,15 @@ that is not one of those kinds is refused with a 422), and they can be changed o
 evaluated; after that an edit is refused with a 409, because criteria changed after seeing the results would be chosen
 to fit them.
 
+The comparison is evaluated on a labelled file both models have never seen (#82). Each run applies its *own* cleaning,
+with its own learned values (from its snapshot of the log, #75), its own schema check and inputs, and answers at its
+own cut-off. Only rows both can score, with an answer, and not in the file the models were built from are compared,
+and the rest are counted by reason. Each model's metrics come from the same code as the bootstrap; the deciding
+metric's difference is paired on the shared rows and passes only if the improvement is at least the stated minimum
+*and* its 95% range is above zero. Every constraint reports pass or fail with its evidence. Evaluating freezes the
+comparison (a second evaluation is refused: start a new comparison for another file), and each model's score is
+recorded in the ledger as an evaluation on new data, never a look at the held-out rows.
+
 ### Where test information could reach a decision — an audit
 
 Prompted by a roadmap review that made the rule explicit: *the final test set must never be used

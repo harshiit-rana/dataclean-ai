@@ -173,3 +173,185 @@ def update(directory: Path, comparison_id: str, **fields) -> dict:
         record.update(fields)
         _write(directory, comparisons)
     return record
+
+
+# --- Evaluating both on the same rows (#82) -------------------------------------------------------------------------
+
+# The bootstrap's name for a metric where it differs from the criteria's.
+_BOOTSTRAP_NAME = {"brier": "brier_score"}
+
+
+def _scored(directory: Path, run_id: str, new, original, fallback_actions) -> dict:
+    """One run's view of the new file: its own cleaning (with its own learned values), its own schema check, its own
+    inputs and model, at its own cut-off. `rows` are the labels of the rows it could score."""
+    import pandas as pd
+
+    from app.services import model_store, replay, scoring, validation
+
+    result = model_store.load_run(directory, run_id)
+    pipeline, notes = model_store.load_run_pipeline(directory, run_id)
+    actions = (result.get("run_metadata") or {}).get("actions")
+    if actions is None:
+        actions = fallback_actions or []
+    steps, reproduced = replay.freeze(original, actions)
+    target = result.get("target_column")
+    applied = replay.apply(new, steps, target_column=target)
+    schema = result.get("input_schema")
+    if schema:
+        report, _ = validation.validate(schema, applied.frame, target)
+        if report["blocking"]:
+            return {"run_id": run_id, "result": result, "refused": validation.describe_blocking(report)}
+    X, _ = scoring.prepare_inputs(applied.frame, result, reference=reproduced)
+    predicted = scoring.predict(pipeline, X, result) if len(X) else pd.DataFrame(index=X.index)
+    return {"run_id": run_id, "result": result, "predicted": predicted, "notes": notes, "rows": set(X.index)}
+
+
+def _positive_label(result: dict, truth) -> str | None:
+    import pandas as pd
+
+    labels = sorted(pd.Series(truth).astype(str).unique())
+    if len(labels) != 2:
+        return None
+    wanted = (result.get("operating_point") or {}).get("positive_label")
+    return str(wanted) if wanted is not None and str(wanted) in labels else labels[-1]
+
+
+def _predictions(scored: dict, rows: list, task: str, positive: str | None) -> dict:
+    predicted = scored["predicted"].loc[rows]
+    target = scored["result"].get("target_column")
+    called = predicted[f"predicted_{target}"].to_numpy()
+    column = f"probability_{positive}"
+    scores = predicted[column].to_numpy() if positive is not None and column in predicted.columns else None
+    return {"called": called if task == "regression" else called.astype(str), "scores": scores}
+
+
+def _criterion(constraint: dict, champion: dict, challenger: dict, champion_inputs: set, challenger_inputs: set) -> dict:
+    kind = constraint["kind"]
+    if kind == "no_new_required_columns":
+        added = sorted(challenger_inputs - champion_inputs)
+        return {**constraint, "passed": not added,
+                "evidence": "needs no column the champion did not" if not added else f"also needs {', '.join(added)}"}
+    metric = constraint["metric"]
+    have, before = challenger.get(metric), champion.get(metric)
+    if have is None:
+        return {**constraint, "passed": False, "evidence": f"{metric} could not be computed for the challenger"}
+    if kind == "metric_at_least":
+        return {**constraint, "passed": have >= constraint["value"], "evidence": f"{metric} {have:.4f}"}
+    if kind == "metric_at_most":
+        return {**constraint, "passed": have <= constraint["value"], "evidence": f"{metric} {have:.4f}"}
+    if before is None:
+        return {**constraint, "passed": False, "evidence": f"{metric} could not be computed for the champion"}
+    tolerance = constraint.get("tolerance", 0.0)
+    worse_by = (have - before) if metric in LOWER_IS_BETTER else (before - have)
+    return {**constraint, "passed": worse_by <= tolerance,
+            "evidence": f"{metric} {have:.4f} against {before:.4f} for the champion"}
+
+
+def _inputs(result: dict) -> set:
+    columns = {c["name"] for c in (result.get("input_schema") or {}).get("columns") or []}
+    if columns:
+        return columns
+    feats = result.get("features") or {}
+    return set(feats.get("numeric", []) + feats.get("categorical", []) + feats.get("frequent", []))
+
+
+def evaluate(directory: Path, comparison_id: str, new, *, file_fingerprint: str, fallback_actions=None) -> dict:
+    """Both runs scored on the same rows of a labelled file, the criteria checked, the comparison frozen.
+
+    Each run applies its own cleaning and inputs. Rows either cannot score, rows without an answer, and rows that
+    were in the file the models were built from (scoring a model on its training rows is not new evidence) are left
+    out and counted. The deciding metric's difference is paired on the shared rows, so it is far narrower than two
+    separate ranges.
+    """
+    import pandas as pd
+
+    from app.api.routes_apply import _rows_seen_at_build
+    from app.services import uncertainty
+
+    record = get(directory, comparison_id)
+    if record["status"] != "open":
+        raise ComparisonError(
+            "This comparison has already been evaluated, and its result stands. Start a new comparison to evaluate "
+            "on another file.", "already_evaluated",
+        )
+    criteria = Criteria.model_validate(record["criteria"])
+    original = pd.read_csv(Path(directory) / "original.csv")
+    champion = _scored(directory, record["champion_run_id"], new, original, fallback_actions)
+    challenger = _scored(directory, record["challenger_run_id"], new, original, fallback_actions)
+    target = champion["result"].get("target_column")
+    task = champion["result"].get("task") or "classification"
+    if target not in new.columns:
+        raise ComparisonError(
+            f"The evaluation file has no '{target}' column, so there are no answers to compare the models on.",
+            "no_answers",
+        )
+    refused = {role: s["refused"] for role, s in (("champion", champion), ("challenger", challenger)) if "refused" in s}
+    if refused:
+        raise ComparisonError(" ".join(f"The {role}: {why}" for role, why in refused.items()), "cannot_score")
+
+    labelled = set(new.index[new[target].notna()])
+    seen = _rows_seen_at_build(new, original, target)
+    both = champion["rows"] & challenger["rows"]
+    rows = sorted((both & labelled) - seen)
+    excluded = {
+        "only_one_model_could_score": len((champion["rows"] | challenger["rows"]) - both),
+        "no_answer": len(both - labelled),
+        "in_the_training_file": len((both & labelled) & seen),
+    }
+    if len(rows) < 2:
+        raise ComparisonError(
+            f"Only {len(rows)} labelled row{'s' if len(rows) != 1 else ''} could be scored by both models and were "
+            f"not in the training file, which is too few to compare anything.", "too_few_rows",
+        )
+    truth = new.loc[rows, target]
+    truth = truth.astype(float).to_numpy() if task == "regression" else truth.astype(str).to_numpy()
+    positive = _positive_label(challenger["result"], truth) if task != "regression" else None
+    a = _predictions(challenger, rows, task, positive)
+    b = _predictions(champion, rows, task, positive)
+    metrics = {
+        "champion": uncertainty.point_estimates(truth, b["called"], b["scores"], task, positive),
+        "challenger": uncertainty.point_estimates(truth, a["called"], a["scores"], task, positive),
+    }
+    for side in metrics.values():
+        if "brier_score" in side:
+            side["brier"] = side["brier_score"]
+
+    deciding = criteria.deciding_metric
+    paired = uncertainty.paired_difference(truth, a, b, task, _BOOTSTRAP_NAME.get(deciding, deciding),
+                                           positive_label=positive)
+    sign = -1.0 if deciding in LOWER_IS_BETTER else 1.0
+    if paired is None:
+        deciding_result = {"metric": deciding, "passed": False,
+                           "evidence": f"{deciding} could not be computed for both models on these rows"}
+    else:
+        improvement = sign * paired["difference"]
+        # The improvement's own range: for a metric where smaller is better, a fall is a gain, so the bounds swap.
+        low, high = sorted((sign * paired["low"], sign * paired["high"]))
+        deciding_result = {
+            "metric": deciding, "min_improvement": criteria.min_improvement,
+            "difference": round(paired["difference"], 6), "improvement": round(improvement, 6),
+            "improvement_low": round(low, 6), "improvement_high": round(high, 6),
+            "passed": bool(improvement >= criteria.min_improvement and low > 0),
+            "evidence": (
+                f"{deciding} {metrics['challenger'].get(deciding, float('nan')):.4f} against "
+                f"{metrics['champion'].get(deciding, float('nan')):.4f} for the champion: an improvement of "
+                f"{improvement:+.4f} (95% range {low:+.4f} to {high:+.4f}), needing at least "
+                f"{criteria.min_improvement:g} and to be beyond the noise"
+            ),
+        }
+    constraints = [
+        _criterion(c.model_dump(mode="json"), metrics["champion"], metrics["challenger"],
+                   _inputs(champion["result"]), _inputs(challenger["result"]))
+        for c in criteria.constraints
+    ]
+    evaluation = {
+        "evaluated_at": _now(),
+        "file_fingerprint": file_fingerprint,
+        "rows_compared": len(rows),
+        "rows_excluded": excluded,
+        "metrics": metrics,
+        "deciding": deciding_result,
+        "constraints": constraints,
+        "all_passed": bool(deciding_result["passed"] and all(c["passed"] for c in constraints)),
+    }
+    return update(directory, comparison_id, status="evaluated", evaluation=evaluation)

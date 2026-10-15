@@ -153,6 +153,18 @@ def check_pipeline(pipeline_file: Path) -> list[str]:
     return []
 
 
+def load_run_pipeline(directory: Path, run_id: str):
+    """A stored run's fitted pipeline, checked first like the model in use (`check_pipeline`). Returns
+    `(pipeline, notes)`, or `(None, [])` when the run kept no pipeline."""
+    import joblib
+
+    path = run_dir(directory, run_id) / PIPELINE_FILENAME
+    if not path.exists():
+        return None, []
+    notes = check_pipeline(path)
+    return joblib.load(path), notes
+
+
 def load_pipeline(directory: Path):
     """The fitted pipeline of the model in use, checked first (`check_pipeline`). Every load in the app goes
     through here. Returns `(pipeline, notes)`, or `(None, [])` when there is no stored model."""

@@ -4,21 +4,26 @@
 - `GET  /api/model/{id}/comparisons`                      every comparison, newest first
 - `GET  /api/model/{id}/comparisons/{comparison_id}`      one comparison
 - `PUT  /api/model/{id}/comparisons/{comparison_id}/criteria`  change the criteria, until it is evaluated (409 after)
+- `POST /api/model/{id}/comparisons/{comparison_id}/evaluate`  score both on the same rows of a labelled file
 
 See services/promotion.py for why the criteria are typed and frozen.
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, UploadFile
 from pydantic import BaseModel
 
 from app.config import Settings, get_settings
-from app.core.errors import AppError, SessionNotFoundError
-from app.services import model_store, promotion
-from app.services.session_store import read_session_meta, session_dir
+from app.core.errors import AppError, FileTooLargeError, SessionNotFoundError, UnsupportedFileTypeError
+from app.dependencies import get_graph_if_any
+from app.services import action_log as action_log_service
+from app.services import evaluation_ledger, model_store, promotion
+from app.services.encoding import read_csv_bytes
+from app.services.session_store import current_dataset_version_in, read_session_meta, session_dir
 
 router = APIRouter()
 
@@ -102,3 +107,40 @@ async def change_criteria(
         return promotion.set_criteria(_directory(settings, session_id), comparison_id, request.criteria)
     except promotion.ComparisonError as exc:
         raise _refused(exc) from exc
+
+
+@router.post("/api/model/{session_id}/comparisons/{comparison_id}/evaluate")
+async def evaluate_comparison(
+    session_id: str,
+    comparison_id: str,
+    file: UploadFile,
+    settings: Settings = Depends(get_settings),
+    graph=Depends(get_graph_if_any),
+) -> dict:
+    """Scores the champion and the challenger on the same rows of a labelled file, each with its own cleaning and
+    inputs, checks every criterion, and freezes the comparison (promotion.evaluate). Recorded in the ledger as an
+    evaluation on new data for each model -- never a look at the held-out rows."""
+    directory = _directory(settings, session_id)
+    if not file.filename or not file.filename.lower().endswith(".csv"):
+        raise UnsupportedFileTypeError()
+    raw = await file.read()
+    if len(raw) > settings.max_file_size_bytes:
+        raise FileTooLargeError(settings.max_file_size_mb)
+    new = read_csv_bytes(raw)
+    fingerprint = model_store.full_fingerprint(new)[:16]
+    log = await action_log_service.read(graph, session_id)
+    try:
+        record = await asyncio.to_thread(
+            promotion.evaluate, directory, comparison_id, new, file_fingerprint=fingerprint, fallback_actions=log
+        )
+    except promotion.ComparisonError as exc:
+        raise _refused(exc) from exc
+    version = current_dataset_version_in(directory)
+    for role in ("champion", "challenger"):
+        evaluation_ledger.record(
+            directory, event=evaluation_ledger.NEW_DATA, split=None, route="compare",
+            run_id=record[f"{role}_run_id"], version=version,
+            metrics=record["evaluation"]["metrics"][role],
+            extra={"comparison_id": comparison_id, "upload_fingerprint": fingerprint, "role": role},
+        )
+    return record

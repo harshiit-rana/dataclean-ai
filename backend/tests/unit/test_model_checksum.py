@@ -141,13 +141,20 @@ class TestEveryLoadGoesThroughTheCheck:
             for match in re.finditer(r"joblib\.load\b|pickle\.loads?\(", text):
                 line = text[: match.start()].count("\n") + 1
                 source_line = text.splitlines()[line - 1]
-                # The exported script's own text tells the user how to load; that is not the app loading.
-                if path.name == "model_export.py" or path.name == "model_store.py":
+                # Script templates (train_model.py, predict.py) are text written for the user -- predict.py checks
+                # model.json itself -- not the app loading a model.
+                if path.name in {"model_export.py", "predict_export.py", "model_store.py"}:
                     continue
                 offenders.append(f"{path.name}:{line}: {source_line.strip()}")
         assert offenders == []
+        import inspect
+
+        # Inside the store, every unpickling is preceded by the check in the same function.
+        for loader in (model_store.load_pipeline, model_store.load_run_pipeline):
+            source = inspect.getsource(loader)
+            assert source.index("check_pipeline(path)") < source.index("joblib.load(path)")
         store = (app_dir / "services" / "model_store.py").read_text(encoding="utf-8")
-        assert store.count("joblib.load(") == 1
+        assert store.count("joblib.load(") == 2
 
 
 class TestTheCardSnippet:
