@@ -59,6 +59,108 @@ RUN_RESULT_FILENAME = "result.json"
 # no longer the data.
 SUPERSEDED_FILENAME = "superseded.json"
 DEFAULT_MAX_STORED_RUNS = 10
+# Beside each fitted pipeline: its SHA-256 and the versions that wrote it, checked before every load
+# (`load_pipeline`) and shipped in the export bundle so a user can check the file they were given.
+MODEL_SIDECAR_FILENAME = "model.json"
+
+
+class ModelArtifactError(Exception):
+    """A stored model that must not be loaded, with a reason the user can act on.
+
+    `code` is "model_changed" (the file is not the one that was saved) or "model_version_mismatch" (it was saved
+    by a scikit-learn whose models this one does not promise to load).
+    """
+
+    def __init__(self, message: str, code: str):
+        super().__init__(message)
+        self.code = code
+
+
+def file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def write_model_sidecar(pipeline_file: Path, *, run_id: str | None, model: str | None) -> None:
+    """Records the saved pipeline's checksum and the versions that wrote it, next to it."""
+    from app.services import run_metadata
+
+    env = run_metadata.environment()
+    (pipeline_file.parent / MODEL_SIDECAR_FILENAME).write_text(
+        json.dumps({
+            "file": pipeline_file.name,
+            "sha256": file_sha256(pipeline_file),
+            "run_id": run_id,
+            "model": model,
+            "python": env.get("python"),
+            "scikit_learn": env.get("scikit_learn"),
+            "joblib": env.get("joblib"),
+            "saved_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        }),
+        encoding="utf-8",
+    )
+
+
+def _minor(version: str | None) -> tuple[str, ...]:
+    return tuple((version or "").split(".")[:2])
+
+
+def check_pipeline(pipeline_file: Path) -> list[str]:
+    """Checks a stored pipeline against its sidecar before it is unpickled. Returns notes worth showing; raises
+    `ModelArtifactError` when it must not be loaded.
+
+    The rule, so it is the same everywhere: a checksum that does not match is refused, because the file is not
+    what was saved, and unpickling an unknown file runs whatever is in it. A different scikit-learn minor
+    version is refused, because scikit-learn does not support loading a model across versions and one that
+    loads may predict differently. A different patch release only gets a note. A model saved before sidecars
+    existed loads with a note that nothing could be checked.
+    """
+    from app.services import run_metadata
+
+    sidecar = pipeline_file.parent / MODEL_SIDECAR_FILENAME
+    if not sidecar.exists():
+        return ["This model was saved before checksums were kept, so the file could not be checked."]
+    try:
+        recorded = json.loads(sidecar.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        raise ModelArtifactError(
+            "The record kept beside the saved model cannot be read, so the model file cannot be checked. "
+            "Retrain to save a new one.",
+            "model_changed",
+        ) from None
+    if recorded.get("sha256") != file_sha256(pipeline_file):
+        raise ModelArtifactError(
+            "The saved model file is not the one that was trained: its checksum does not match the one recorded "
+            "when it was saved. It was not loaded. Retrain to save a new one.",
+            "model_changed",
+        )
+    saved, here = recorded.get("scikit_learn"), run_metadata.environment().get("scikit_learn")
+    if saved and here and _minor(saved) != _minor(here):
+        raise ModelArtifactError(
+            f"This model was saved with scikit-learn {saved}, and this server has {here}. scikit-learn does not "
+            f"promise that a model loads, or predicts the same, across versions, so it was not loaded. Retrain "
+            f"it here.",
+            "model_version_mismatch",
+        )
+    if saved and here and saved != here:
+        return [f"This model was saved with scikit-learn {saved}; this server has {here}, a bug-fix release of "
+                f"the same version."]
+    return []
+
+
+def load_pipeline(directory: Path):
+    """The fitted pipeline of the model in use, checked first (`check_pipeline`). Every load in the app goes
+    through here. Returns `(pipeline, notes)`, or `(None, [])` when there is no stored model."""
+    import joblib
+
+    path = pipeline_path(directory)
+    if path is None:
+        return None, []
+    notes = check_pipeline(path)
+    return joblib.load(path), notes
 
 # History entries kept per session. It used to be 20, cut silently, and with failed attempts and restores in the
 # record the useful runs dropped off sooner still. An entry is a few hundred bytes, so this is far past any working
@@ -429,6 +531,7 @@ def save_result(
             import joblib
 
             joblib.dump(best["pipeline"], folder / PIPELINE_FILENAME)
+            write_model_sidecar(folder / PIPELINE_FILENAME, run_id=result["run_id"], model=result.get("best_model"))
         except Exception:  # noqa: BLE001
             logger.exception("Fitted pipeline could not be saved; results were still written")
 

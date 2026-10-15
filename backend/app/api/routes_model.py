@@ -32,7 +32,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse, PlainTextResponse
 
 from app.config import Settings, get_settings
-from app.core.errors import AppError, SessionNotFoundError, UnparseableCSVError
+from app.core.errors import AppError, ModelArtifactRefusedError, SessionNotFoundError, UnparseableCSVError
 from app.models.api_schemas import ImproveRequest, ModelPlanResponse, TrainRequest
 from app.models.graph_state import GoalContext
 from app.services import (
@@ -1486,11 +1486,11 @@ async def finalise_model(
     if pipeline_file is None:
         raise NoTrainedModelError()
 
-    import joblib
-
     try:
-        pipeline = await asyncio.to_thread(joblib.load, pipeline_file)
+        pipeline, _ = await asyncio.to_thread(model_store.load_pipeline, directory)
         opened = await asyncio.to_thread(_open_the_sealed_holdout, df, stored, pipeline)
+    except model_store.ModelArtifactError as exc:
+        raise ModelArtifactRefusedError(str(exc), exc.code) from exc
     except (SealedRowsChangedError, modeling.ModelingError):
         raise
     except Exception as exc:  # noqa: BLE001 -- surface the reason rather than a bare 500

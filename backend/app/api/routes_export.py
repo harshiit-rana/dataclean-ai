@@ -214,6 +214,12 @@ async def export_bundle(
         (directory / model_store.CARD_FILENAME, model_store.CARD_FILENAME),
         (directory / model_store.SCRIPT_FILENAME, model_store.SCRIPT_FILENAME),
         (model_store.pipeline_path(directory) or directory / model_store.PIPELINE_FILENAME, model_store.PIPELINE_FILENAME),
+        # Its checksum and the versions that wrote it, so the file in the bundle can be checked before loading.
+        (
+            (model_store.pipeline_path(directory) or directory / model_store.PIPELINE_FILENAME).parent
+            / model_store.MODEL_SIDECAR_FILENAME,
+            model_store.MODEL_SIDECAR_FILENAME,
+        ),
     ]
     present = [(path, name) for path, name in candidates if path.exists()]
     if not present:

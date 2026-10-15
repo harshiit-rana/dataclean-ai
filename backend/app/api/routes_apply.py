@@ -28,6 +28,7 @@ from app.config import Settings, get_settings
 from app.core.errors import (
     AppError,
     FileTooLargeError,
+    ModelArtifactRefusedError,
     SessionNotFoundError,
     UnparseableCSVError,
     UnsupportedFileTypeError,
@@ -151,9 +152,11 @@ def _run(directory, session_id: str, new: pd.DataFrame, action_log: list[dict], 
     }
     response["drift"] = drift.compare(X_ref, X_new, numeric, categorical, blanks_from=blanks_from)
 
-    import joblib
-
-    pipeline = joblib.load(model_path)
+    try:
+        pipeline, load_notes = model_store.load_pipeline(directory)
+    except model_store.ModelArtifactError as exc:
+        raise ModelArtifactRefusedError(str(exc), exc.code) from exc
+    response.setdefault("notes", []).extend(load_notes)
     predicted = scoring.predict(pipeline, X_new, result) if len(X_new) else pd.DataFrame(index=X_new.index)
 
     # Every uploaded row, as uploaded, with its prediction -- or the reason it has none.

@@ -70,6 +70,16 @@ class HeaderOnlyFileError(AppError):
         super().__init__("No data rows", "File has no data rows.")
 
 
+class ModelArtifactRefusedError(AppError):
+    """A stored model was not loaded: its file changed since it was saved, or this server's scikit-learn cannot be
+    trusted to load it. The detail says which and what to do."""
+
+    status_code = 409
+
+    def __init__(self, detail: str, code: str):
+        super().__init__("The saved model was not loaded", detail, code)
+
+
 # --- Session errors (PRD §14.3) -----------------------------------------------------------
 
 

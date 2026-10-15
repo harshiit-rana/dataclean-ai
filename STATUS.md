@@ -856,6 +856,14 @@ whatever is newest. At start-up each script compares the installed versions with
 they differ; it never refuses to run. The model card has an Environment section with the versions, seeds,
 configuration hash, data version and training time, or says *not recorded* for an older run.
 
+A saved model is checked before it is loaded (#74). `model.joblib` is a pickle: a file changed on disk could run
+anything when unpickled, and one loaded under another scikit-learn could load and predict differently. Each saved model
+has a `model.json` beside it with its SHA-256 and the Python, scikit-learn and joblib versions that wrote it. Every load
+in the app goes through `model_store.load_pipeline` (a test greps for any other), which refuses a file whose checksum
+does not match and a model saved by a different scikit-learn minor version, with a 409 saying why and to retrain; a
+different bug-fix release only adds a note. The export bundle carries `model.json`, and the card's loading snippet says
+to check it (and, for a model trained with stated costs, to copy its `CostWeighted` class first).
+
 ### Where test information could reach a decision — an audit
 
 Prompted by a roadmap review that made the rule explicit: *the final test set must never be used

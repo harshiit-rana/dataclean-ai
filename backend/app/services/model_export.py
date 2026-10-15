@@ -714,9 +714,19 @@ def build_prediction_snippet(result: dict) -> str:
         if features.get("clipped")
         else ""
     )
+    weighting_note = (
+        "\n# This model was trained with your stated costs and contains a CostWeighted step. Copy that\n"
+        "# class from train_model.py into this file before loading, or joblib cannot find it.\n"
+        if (next((r for r in result.get("results", []) if r.get("model") == result.get("best_model")), {})
+             .get("tuned_params") or {}).get("cost_weighting")
+        else ""
+    )
     return f'''import joblib
 import pandas as pd
-{clip_note}
+{clip_note}{weighting_note}
+# model.json beside model.joblib records the file's SHA-256 and the scikit-learn version that saved it.
+# Check both before loading: unpickling runs code, and another scikit-learn version may load the model
+# but predict differently.
 pipeline = joblib.load("model.joblib")
 {calibration_note}{derived_note}
 # Column names and order must match training. The pipeline handles the rest -- missing
