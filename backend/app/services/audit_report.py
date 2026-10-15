@@ -154,6 +154,57 @@ def _checks_table(checks: list[dict]) -> list[str]:
     return lines
 
 
+def _model_section(model: dict | None) -> list[str]:
+    """What was built from this data and how it was evaluated, in a few lines, with a pointer to the
+    model card. Only when a model exists: a report for a session that never trained one says nothing
+    about models.
+
+    Written from the stored result and the same protocol facts the card prints, so the two cannot
+    describe the evaluation differently. No figure passes through a language model.
+    """
+    if not model or not model.get("best_model"):
+        return []
+    from app.services import model_card, model_store
+
+    best = next((r for r in model.get("results", []) if r.get("model") == model.get("best_model")), {})
+    assessment = model.get("assessment") or {}
+    metric = model.get("primary_metric")
+    value = (best.get("metrics") or {}).get(metric)
+    interval = ((best.get("metrics_intervals") or {}).get("metrics") or {}).get(metric)
+    label = model_card._METRIC_LABELS.get(metric or "", (metric or "score",))[0]
+    split = model.get("split") or {}
+
+    lines = [
+        "",
+        "## Model built from this data",
+        "",
+        f"A model was built to predict **{model.get('target_column')}** ({model.get('task')}) from the cleaned "
+        f"data. The numbers below are for that model; the full write-up is the model card.",
+        "",
+        "| | |",
+        "| --- | --- |",
+        f"| Model chosen | {best.get('label', model.get('best_model'))} |",
+        f"| Rows trained on / held back | {model_card._fmt(split.get('train_rows'))} / {model_card._fmt(split.get('test_rows'))} |",
+    ]
+    if value is not None:
+        lines.append(
+            f"| {label} on the held-out rows | {model_card._fmt_with_interval(value, interval)} |"
+        )
+    verdict = model_card._VERDICT_HEADINGS.get(assessment.get("verdict", ""))
+    if verdict:
+        lines.append(f"| Verdict | {verdict} |")
+    lines += ["", assessment.get("headline", ""), ""] if assessment.get("headline") else [""]
+
+    facts = model_card.protocol_facts(model, model_card.AUDIT_PROTOCOL_LABELS)
+    if facts:
+        lines += ["**How these numbers were obtained**", ""] + facts + [""]
+    lines.append(
+        f"The model card (`{model_store.CARD_FILENAME}` in the export bundle) has the results for each answer, "
+        f"the cautions to read before relying on the model, and how to reproduce it."
+    )
+    return lines
+
+
 def build_markdown_report(
     *,
     session_id: str,
@@ -164,6 +215,7 @@ def build_markdown_report(
     executive_summary: str,
     dispositions: dict[str, str],
     readiness: dict | None = None,
+    model: dict | None = None,
 ) -> str:
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     applied = [a for a in action_log if a["status"] == "applied"]
@@ -215,6 +267,7 @@ def build_markdown_report(
 
     lines += _readiness_section(readiness)
     lines += _rules_section(readiness)
+    lines += _model_section(model)
 
     lines += ["", "## Changes applied", ""]
     if not applied:

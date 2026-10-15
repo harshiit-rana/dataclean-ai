@@ -485,6 +485,16 @@ class TestOpeningIt:
         # A different set of rows than the development score was measured on.
         assert body["metrics"]["roc_auc"] != trained["results"][0]["metrics"]["roc_auc"]
 
+    def test_opening_it_marks_a_written_audit_report_stale(self):
+        from app.graph.nodes.audit_agent import STALE_MARKER, is_report_stale
+
+        session_id, directory = _session(learnable())
+        train(session_id, sealed_holdout=True)
+        (directory / "audit_report.md").write_text("# report", encoding="utf-8")
+        (directory / STALE_MARKER).unlink(missing_ok=True)
+        assert client.post(f"/api/model/{session_id}/finalise").status_code == 200
+        assert is_report_stale(directory)
+
     def test_it_is_recorded_as_its_own_event_not_a_look(self):
         session_id, directory = _session(learnable())
         body = train(session_id, sealed_holdout=True)

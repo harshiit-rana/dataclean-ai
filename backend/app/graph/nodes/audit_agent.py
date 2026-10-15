@@ -74,6 +74,13 @@ def mark_report_stale(directory: Path) -> None:
     (directory / STALE_MARKER).write_text("", encoding="utf-8")
 
 
+def mark_report_stale_if_written(directory: Path) -> None:
+    """For changes to the model: a report that was never written has nothing to go stale, and will
+    describe the model as it is when it is."""
+    if (directory / "audit_report.md").exists():
+        mark_report_stale(directory)
+
+
 def is_report_stale(directory: Path) -> bool:
     return (directory / STALE_MARKER).exists()
 
@@ -118,6 +125,21 @@ def _readiness_for_report(state: GraphState) -> dict | None:
         return None
 
 
+def _model_for_report(directory: Path) -> dict | None:
+    """The current model's result, with what happened to it since, or None when there is none.
+    Never allowed to sink the report."""
+    try:
+        from app.services import evaluation_ledger, model_store
+
+        result = model_store.load_result(directory)
+        if not result:
+            return None
+        return evaluation_ledger.attach_later_evidence(directory, result)
+    except Exception:  # noqa: BLE001
+        logger.exception("The model could not be read for the report; it will omit that section")
+        return None
+
+
 async def generate_audit_artifacts(state: GraphState, emit=_no_op) -> dict:
     """Writes audit_report.md (and audit_report.pdf when WeasyPrint can run) for this
     session, returning the paths.
@@ -141,6 +163,7 @@ async def generate_audit_artifacts(state: GraphState, emit=_no_op) -> dict:
         executive_summary=executive_summary,
         dispositions=dispositions,
         readiness=_readiness_for_report(state),
+        model=_model_for_report(Path(state.file_path).parent),
     )
 
     session_dir = Path(state.file_path).parent

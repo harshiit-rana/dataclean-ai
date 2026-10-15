@@ -353,6 +353,20 @@ def already_evaluated(directory: Path, upload_fingerprint: str | None, run_id: s
     )
 
 
+def attach_later_evidence(directory: Path, result: dict) -> dict:
+    """Adds what happened to a model after it was built -- checks on new data, and the sealed final
+    holdout once opened -- to its result's `evaluation`. Looked up when a result is read, never
+    stored with it: both arrive later, and a stored copy would be stale the moment one did.
+
+    One place, so the page, the model card and the audit report read the same record.
+    """
+    if isinstance(result.get("evaluation"), dict):
+        run_id = result.get("run_id")
+        result["evaluation"]["new_data"] = new_data_summary(directory, run_id)
+        result["evaluation"]["final"] = final_summary(directory, run_id)
+    return result
+
+
 def new_data_summary(directory: Path, run_id: str | None) -> dict | None:
     """How the model has done on rows that did not exist when it was built, or None.
 

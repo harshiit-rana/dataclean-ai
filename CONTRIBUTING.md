@@ -433,6 +433,11 @@ are both running locally, you're ready to make changes.
   `TrainingProblem` with the action it leads to, and a case in `tests/unit/test_training_error_codes.py`. Codes are
   part of the API: never reuse one for a different meaning. A refusal with no useful action stays code-less and
   shows as a message.
+- **Anything that changes the model's evaluation marks the audit report stale.** Use
+  `audit_agent.mark_report_stale_if_written(directory)` where the result, the sealed holdout or the new-data
+  record changes, and read the model into the report with `evaluation_ledger.attach_later_evidence`, so the report,
+  the card and the page see the same record. The report's model facts come from `model_card.protocol_facts`; do not
+  restate them.
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,

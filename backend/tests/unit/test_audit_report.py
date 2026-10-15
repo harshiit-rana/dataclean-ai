@@ -254,3 +254,73 @@ class TestBusinessRulesReachTheDocument:
         )
         assert "## Business rules" not in report
         assert "break age >= 0" in report
+
+
+class TestTheModelReachesTheAuditReport:
+    """A reviewer reading only the audit report should learn that a model was built and how it was
+    evaluated -- and learn nothing about models for a session that never trained one."""
+
+    @staticmethod
+    def _model(**overrides) -> dict:
+        base = {
+            "task": "classification",
+            "target_column": "churned",
+            "best_model": "random_forest_classifier",
+            "primary_metric": "roc_auc",
+            "split": {"strategy": "random", "train_rows": 800, "test_rows": 200, "test_fraction": 0.2},
+            "selection": {"method": "cross_validation", "metric": "roc_auc", "folds": 5, "repeats": 1,
+                          "chosen_on": "cross-validated roc_auc"},
+            "assessment": {"verdict": "useful", "headline": "It separates churners from the rest."},
+            "evaluation": {"look_count": 1, "status": "independent", "message": ""},
+            "results": [
+                {"model": "random_forest_classifier", "label": "Random forest", "metrics": {"roc_auc": 0.81},
+                 "metrics_intervals": {"metrics": {"roc_auc": {"low": 0.74, "high": 0.87}}}},
+            ],
+        }
+        base.update(overrides)
+        return base
+
+    def test_the_section_names_the_model_the_verdict_and_the_score_with_its_range(self):
+        report = _report(model=self._model())
+        assert "## Model built from this data" in report
+        section = report[report.index("## Model built from this data") :]
+        assert "predict **churned** (classification)" in section
+        assert "| Model chosen | Random forest |" in section
+        assert "| ROC AUC on the held-out rows | 0.81 (0.74–0.87) |" in section
+        assert "| Verdict | This model works |" in section
+        assert "It separates churners from the rest." in section
+
+    def test_it_carries_the_evaluation_protocol_facts_the_card_prints(self):
+        report = _report(model=self._model())
+        assert "**How these numbers were obtained**" in report
+        assert "800 rows to train on and 200 held back for testing (20%), at random" in report
+        assert "By cross-validated ROC AUC over 5 folds of the training rows" in report
+        assert "first time these rows were used to evaluate a model" in report
+
+    def test_the_facts_are_the_cards_own_lines(self):
+        from app.services import model_card
+
+        model = self._model()
+        for bullet in model_card.protocol_facts(model, model_card.AUDIT_PROTOCOL_LABELS):
+            assert bullet in _report(model=model)
+
+    def test_a_reused_holdout_is_stated(self):
+        model = self._model(evaluation={"look_count": 4, "status": "reused",
+                                        "message": "These held-out rows have now been used 4 times."})
+        assert "These held-out rows have now been used 4 times." in _report(model=model)
+
+    def test_the_reader_is_pointed_at_the_model_card(self):
+        assert "(`model_card.md` in the export bundle)" in _report(model=self._model())
+
+    def test_there_is_no_model_section_when_no_model_was_trained(self):
+        assert "Model built from this data" not in _report()
+        assert "Model built from this data" not in _report(model=None)
+        assert "Model built from this data" not in _report(model={})
+
+    def test_the_section_comes_before_the_changes(self):
+        report = _report(model=self._model())
+        assert report.index("## Model built from this data") < report.index("## Changes applied")
+
+    def test_a_sparse_old_result_does_not_break_the_report(self):
+        report = _report(model={"best_model": "m", "results": [{"model": "m", "label": "M", "metrics": {}}]})
+        assert "| Model chosen | M |" in report

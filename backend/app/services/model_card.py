@@ -778,6 +778,28 @@ def _protocol_section(result: dict) -> list[str]:
     return lines
 
 
+# The facts of the protocol section that matter to someone who reads the audit report and not the card.
+AUDIT_PROTOCOL_LABELS = (
+    "How the rows were divided.",
+    "How the model was chosen.",
+    "Use of the held-out rows.",
+    "Sealed final holdout.",
+    "Checked on new data.",
+)
+
+
+def protocol_facts(result: dict, labels: tuple[str, ...] | None = None) -> list[str]:
+    """The bullets of "How these numbers were obtained", optionally only the named ones.
+
+    Read out of `_protocol_section` rather than rebuilt, so the audit report and the card cannot
+    describe the same evaluation differently.
+    """
+    bullets = [line for line in _protocol_section(result) if line.startswith("- **")]
+    if labels is None:
+        return bullets
+    return [b for b in bullets if any(b.startswith(f"- **{label}**") for label in labels)]
+
+
 def _looks_cell(result: dict) -> str:
     """A run made before the ledger existed has no count, and says so. Reading that as one
     look would present a score of unknown history as an independent one."""

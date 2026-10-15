@@ -116,6 +116,25 @@ class TestWhenItCounts:
         assert entries(directory) == []
 
 
+class TestTheAuditReportHearsAboutIt:
+    def test_a_counted_check_on_new_data_marks_a_written_report_stale(self):
+        from app.graph.nodes.audit_agent import is_report_stale
+
+        session_id, directory = session()
+        (directory / "audit_report.md").write_text("# report", encoding="utf-8")
+        assert not is_report_stale(directory)
+        assert apply(session_id, frame(200, 11)).json()["answers"]["counted_as_independent"] is True
+        assert is_report_stale(directory)
+
+    def test_a_file_with_no_answers_leaves_it_alone(self):
+        from app.graph.nodes.audit_agent import is_report_stale
+
+        session_id, directory = session()
+        (directory / "audit_report.md").write_text("# report", encoding="utf-8")
+        apply(session_id, frame(200, 11).drop(columns="churned"))
+        assert not is_report_stale(directory)
+
+
 class TestTheSameFileTwice:
     def test_the_second_upload_is_recognised_and_not_counted(self):
         session_id, directory = session()

@@ -50,6 +50,7 @@ from app.services import (
     why_this_model,
 )
 from app.api.routes_rules import stored_rules
+from app.graph.nodes.audit_agent import mark_report_stale_if_written
 from app.dependencies import get_graph_if_any
 from app.api.sse import sse_response
 from app.services.session_store import (
@@ -740,6 +741,8 @@ def _save_and_record(
     payload = model_store.save_result(
         directory, result, fingerprint=model_store.fingerprint_frame(df)
     )
+    # A report already written describes the model that was here before this one.
+    mark_report_stale_if_written(directory)
     best = next(
         (r for r in payload.get("results", []) if r.get("model") == payload.get("best_model")),
         {},
@@ -766,10 +769,7 @@ def _with_later_evidence(directory, result: dict) -> dict:
     response to a train and the response to reading it back have the same shape: what a stream's
     last event shows and what a refresh shows must not be able to differ.
     """
-    if isinstance(result.get("evaluation"), dict):
-        run_id = result.get("run_id")
-        result["evaluation"]["new_data"] = evaluation_ledger.new_data_summary(directory, run_id)
-        result["evaluation"]["final"] = evaluation_ledger.final_summary(directory, run_id)
+    evaluation_ledger.attach_later_evidence(directory, result)
     # Worked out from the result itself each time it is served, so it cannot go stale beside it and
     # the card (which calls the same function) says the same words.
     try:
@@ -1302,6 +1302,8 @@ async def finalise_model(
         logger.exception("Opening the sealed holdout failed for session %s", session_id)
         raise TrainingFailedError(f"The sealed holdout could not be opened: {exc}") from exc
 
+    # Opening the sealed rows adds a score to the audit report's account of the model.
+    mark_report_stale_if_written(directory)
     entry = evaluation_ledger.record(
         directory,
         event=evaluation_ledger.FINAL,

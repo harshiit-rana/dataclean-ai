@@ -561,6 +561,16 @@ chooser, and `no_model_trained` opens the column and model chooser. A code the p
 the same message box as before, and an error without a code has exactly the body it always had. The codes are
 listed in the `TrainingFailedError` docstring and must not change meaning.
 
+**The audit report mentions the model.** A session that trained a model now gets a short "Model built from this
+data" section in the audit report, before the changes: the model chosen, rows trained on and held back, its main
+score with the plausible range, the verdict, and the same lines the model card prints under "How these numbers
+were obtained" (how the rows were divided, how the model was chosen, how often the held-out rows were used, the
+sealed holdout, checks on new data), with a pointer to `model_card.md` in the export bundle. It is read from the
+stored result and the evaluation record, so no figure passes through the language model, and it is absent when no
+model was trained. Anything that changes the model's evaluation (training again, opening the sealed holdout, a
+counted check on new data) marks a written report stale, so the next export rebuilds it; a report that was never
+written is left alone.
+
 **Repeated folds when a small file is compared.** With a few hundred training rows one 5-fold
 partition can rank two close candidates one way and another partition the other way round. Below
 2,000 training rows, choosing the model, tuning it and the fold spread shown beside the score now

@@ -33,6 +33,7 @@ from app.core.errors import (
     UnsupportedFileTypeError,
 )
 from app.dependencies import get_graph
+from app.graph.nodes.audit_agent import mark_report_stale_if_written
 from app.services import action_log, drift, evaluation_ledger, model_store, replay, scoring
 from app.services.encoding import read_csv_bytes
 from app.services.session_store import (
@@ -260,6 +261,7 @@ def _record_new_data_evaluation(
     if evaluation_ledger.already_evaluated(directory, upload_fingerprint, result.get("run_id")):
         answers["already_counted"] = True
         return False
+    mark_report_stale_if_written(directory)
     evaluation_ledger.record(
         directory,
         event=evaluation_ledger.NEW_DATA,
