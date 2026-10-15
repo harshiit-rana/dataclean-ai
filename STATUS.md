@@ -713,8 +713,13 @@ or model page — and does everything it can with it:
   predictions back onto their own data.
 - **Says whether the new rows look like the training data.** PSI per input against the
   training deciles, the share of values outside the training range, the share of categories
-  the model never saw. Below 30 rows it declines to judge. A model scores whatever it is given
-  and never notices when it is extrapolating; this is the app saying so for it.
+  the model never saw. Below 30 rows it declines to judge, and each column is judged on its own
+  filled-in values too: a column that is 95% blank in a 500-row file has 25 values to go on, so it is
+  reported as not judged, with the counts, and left out of the verdict (the headline names it). How
+  often a column is blank is compared as well -- a column that stops being filled in has drifted as
+  surely as one whose values moved -- and a derived input such as a text length, which is never blank,
+  is judged on its source column's blankness. A model scores whatever it is given and never notices
+  when it is extrapolating; this is the app saying so for it.
 - **Checks itself when it can.** If the new file carries real answers, it reports how the model
   did on them against how it did when built — with the same too-few-rows rule as the verdict.
 

@@ -41,8 +41,25 @@ function describeLearned(step: AppliedStep): string | null {
   return null;
 }
 
+function blankDetail(column: DriftColumn): string {
+  if (!column.blank_status || column.blank_status === "stable") return "";
+  return `blank in ${pct(column.training_blank_share)} of training rows, ${pct(column.new_blank_share)} here`;
+}
+
+function counts(column: DriftColumn): string {
+  return column.training_values != null && column.new_values != null
+    ? `${column.training_values.toLocaleString()} / ${column.new_values.toLocaleString()}`
+    : "—";
+}
+
 function driftDetail(column: DriftColumn): string {
-  if (column.status === "not_judged") return column.note ?? "";
+  const blank = blankDetail(column);
+  if (column.note) return blank ? `${blank}. ${column.note}` : column.note;
+  const values = valueDetail(column);
+  return [blank, values].filter(Boolean).join("; ");
+}
+
+function valueDetail(column: DriftColumn): string {
   if (column.kind === "categorical") {
     const unseen = column.unseen_share ?? 0;
     return unseen > 0
@@ -181,6 +198,7 @@ export function ApplyPage() {
                         <th className="py-2 pr-3 font-medium">Input</th>
                         <th className="py-2 pr-3 font-medium">Compared with training</th>
                         <th className="py-2 pr-3 text-right font-medium">Shift (PSI)</th>
+                        <th className="py-2 pr-3 text-right font-medium">Values (training / here)</th>
                         <th className="py-2 font-medium">What changed</th>
                       </tr>
                     </thead>
@@ -195,10 +213,17 @@ export function ApplyPage() {
                               column.status === "shifted" && "text-amber-700 dark:text-amber-500"
                             )}
                           >
-                            {column.status === "stable" ? "same" : column.status}
+                            {column.status === "stable"
+                              ? "same"
+                              : column.status === "not_judged"
+                                ? "too few values"
+                                : column.status}
                           </td>
                           <td className="py-1.5 pr-3 text-right tabular-nums">
                             {column.psi != null ? column.psi.toFixed(3) : "—"}
+                          </td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums text-muted-foreground">
+                            {counts(column)}
                           </td>
                           <td className="py-1.5 text-xs text-muted-foreground">{driftDetail(column)}</td>
                         </tr>

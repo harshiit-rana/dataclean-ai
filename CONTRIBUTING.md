@@ -388,6 +388,11 @@ are both running locally, you're ready to make changes.
   place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
   does not need this application's class to load. Nothing may build a fold splitter without the groups -- not even to ask whether folds are possible -- or `test_identical_rows_folds.py` rightly flags it. `TestCalibratingTheProbabilities` in
   `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
+- **Drift is judged per column on what the column actually has.** `drift.compare` gives every column
+  its own filled-in counts and refuses to judge one below `MIN_VALUES_TO_JUDGE`; it compares blank
+  shares (a change beyond chance is a finding in itself); and a derived input is passed its source
+  column through `blanks_from`, because its own values are never blank. A new derived kind needs its
+  source wired the same way in `routes_apply`.
 - **A model with a random fit is marked `seeded`.** `ModelSpec.seeded` (set through `_SEEDED_MODELS`)
   is what makes `modeling.seed_stability` refit the chosen model with `SEEDS_TO_CHECK`; a model that
   takes a `random_state` but fits deterministically must not be marked, or the check reports a spread of

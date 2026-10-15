@@ -140,7 +140,15 @@ def _run(directory, session_id: str, new: pd.DataFrame, action_log: list[dict], 
     notes.extend(coerced)
 
     numeric, categorical = scoring.input_columns(result)
-    response["drift"] = drift.compare(X_ref, X_new, numeric, categorical)
+    # A derived input (a length, a date part) is never blank itself; it is judged on the blankness
+    # of the column it is made from, in each file as it was uploaded.
+    blanks_from = {
+        output: (reference[recipe["column"]], applied.frame[recipe["column"]])
+        for recipe in (result.get("features", {}).get("derived") or [])
+        if recipe.get("column") in reference and recipe.get("column") in applied.frame
+        for output in recipe.get("outputs") or []
+    }
+    response["drift"] = drift.compare(X_ref, X_new, numeric, categorical, blanks_from=blanks_from)
 
     import joblib
 

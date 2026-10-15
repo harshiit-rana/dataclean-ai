@@ -174,3 +174,39 @@ describe("ApplyPage", () => {
     expect(await screen.findByText(/missing 1 column the model needs: signal/)).toBeInTheDocument();
   });
 });
+
+describe("ApplyPage — each column judged on its own values (#46)", () => {
+  beforeEach(() => applyToNewFile.mockReset());
+
+  const withColumns = (columns: ApplyResult["drift"] extends infer D ? D extends { columns: infer C } ? C : never : never) => ({
+    ...RESULT,
+    drift: { verdict: "different" as const, headline: "'notes' no longer looks like the data the model learned from.", columns },
+  });
+
+  it("shows how many filled-in values each file had", async () => {
+    await runWith(withColumns([
+      { column: "spend", kind: "numeric", status: "stable", psi: 0.02, training_values: 1000, new_values: 300,
+        training_blank_share: 0, new_blank_share: 0, blank_status: "stable" },
+    ]));
+    expect(await screen.findByText("Values (training / here)")).toBeInTheDocument();
+    expect(screen.getByText("1,000 / 300")).toBeInTheDocument();
+  });
+
+  it("says when a column had too few values to compare, and why", async () => {
+    await runWith(withColumns([
+      { column: "remarks", kind: "categorical", status: "not_judged", training_values: 60, new_values: 15,
+        training_blank_share: 0.97, new_blank_share: 0.97, blank_status: "stable",
+        note: "Only 15 filled-in values in the new file (60 in training, 15 here); at least 30 are needed to compare them." },
+    ]));
+    expect(await screen.findByText("too few values")).toBeInTheDocument();
+    expect(screen.getByText(/Only 15 filled-in values in the new file/)).toBeInTheDocument();
+  });
+
+  it("reports a column going blank as what changed", async () => {
+    await runWith(withColumns([
+      { column: "notes", kind: "numeric", status: "different", psi: 0.03, training_values: 1960, new_values: 180,
+        training_blank_share: 0.02, new_blank_share: 0.4, blank_status: "different" },
+    ]));
+    expect(await screen.findByText(/blank in 2% of training rows, 40% here/)).toBeInTheDocument();
+  });
+});

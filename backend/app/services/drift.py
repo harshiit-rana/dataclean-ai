@@ -18,7 +18,10 @@ PSI thresholds are the long-standing credit-scoring convention: under 0.1 stable
 a shift worth knowing about, over 0.25 a different population. They are conventions, not
 statistics, and the report says so by showing the numbers behind every call.
 
-Like the model verdict, it declines to judge a sample too small to mean anything.
+Like the model verdict, it declines to judge a sample too small to mean anything -- the file as a
+whole, and each column on its own filled-in values: a column that is 95% blank in a 500-row file
+has 25 values to judge, not 500. How often a column is blank is compared too, because a column that
+stops being filled in has drifted as surely as one whose values moved.
 """
 
 from __future__ import annotations
@@ -35,6 +38,14 @@ OUTSIDE_RANGE_MAJOR = 0.2  # share of rows outside the training range
 # it. A warning that fires on every column of every file teaches people to ignore it.
 SHIFT_SHARE = 0.05
 MIN_ROWS_TO_JUDGE = 30
+# The same bar for each column's own filled-in values, in either file.
+MIN_VALUES_TO_JUDGE = 30
+# A change in how often a column is blank, in percentage points of the rows, and only when it is
+# more than chance on these row counts (a two-proportion z of at least 3).
+BLANK_SHIFT_MODERATE = 0.10
+BLANK_SHIFT_MAJOR = 0.25
+_BLANK_Z = 3.0
+_ORDER = {"not_judged": -1, "stable": 0, "shifted": 1, "different": 2}
 _BINS = 10
 _EPS = 1e-4  # floor for an empty bin, so the log term stays finite
 
@@ -45,12 +56,52 @@ def _psi(expected: np.ndarray, actual: np.ndarray) -> float:
     return float(np.sum((actual - expected) * np.log(actual / expected)))
 
 
-def _numeric(column: str, ref: pd.Series, new: pd.Series) -> dict:
-    ref = pd.to_numeric(ref, errors="coerce").dropna()
-    new = pd.to_numeric(new, errors="coerce").dropna()
-    if ref.empty or new.empty:
-        return {"column": column, "kind": "numeric", "status": "not_judged",
-                "note": "No numeric values to compare."}
+def _blanks(ref_all: pd.Series, new_all: pd.Series) -> dict:
+    """How often the column is blank in each file, and whether that moved by more than chance."""
+    ref_share = float(ref_all.isna().mean()) if len(ref_all) else 0.0
+    new_share = float(new_all.isna().mean()) if len(new_all) else 0.0
+    change = new_share - ref_share
+    pooled = (ref_all.isna().sum() + new_all.isna().sum()) / max(len(ref_all) + len(new_all), 1)
+    spread = float(np.sqrt(pooled * (1 - pooled) * (1 / max(len(ref_all), 1) + 1 / max(len(new_all), 1))))
+    beyond_chance = spread > 0 and abs(change) / spread >= _BLANK_Z
+    status = "stable"
+    if beyond_chance and abs(change) >= BLANK_SHIFT_MAJOR:
+        status = "different"
+    elif beyond_chance and abs(change) >= BLANK_SHIFT_MODERATE:
+        status = "shifted"
+    return {
+        "training_blank_share": round(ref_share, 4),
+        "new_blank_share": round(new_share, 4),
+        "blank_status": status,
+    }
+
+
+def _too_few(column: str, kind: str, ref_values: int, new_values: int, blanks: dict) -> dict | None:
+    """The column's own verdict when it has too few filled-in values to compare, or None.
+
+    The values cannot be compared, but the blank share still can: a column that stopped being
+    filled in is a finding, not a gap in the evidence."""
+    if ref_values >= MIN_VALUES_TO_JUDGE and new_values >= MIN_VALUES_TO_JUDGE:
+        return None
+    where = "the new file" if new_values < MIN_VALUES_TO_JUDGE else "the training data"
+    note = (
+        f"Only {min(ref_values, new_values):,} filled-in values in {where} "
+        f"({ref_values:,} in training, {new_values:,} here); at least {MIN_VALUES_TO_JUDGE} are "
+        f"needed to compare them."
+    )
+    status = blanks["blank_status"] if blanks["blank_status"] != "stable" else "not_judged"
+    return {
+        "column": column, "kind": kind, "status": status, "note": note,
+        "training_values": ref_values, "new_values": new_values, **blanks,
+    }
+
+
+def _numeric(column: str, ref_all: pd.Series, new_all: pd.Series, blanks: dict) -> dict:
+    ref = pd.to_numeric(ref_all, errors="coerce").dropna()
+    new = pd.to_numeric(new_all, errors="coerce").dropna()
+    sparse = _too_few(column, "numeric", len(ref), len(new), blanks)
+    if sparse is not None:
+        return sparse
 
     edges = np.unique(np.quantile(ref, np.linspace(0, 1, _BINS + 1)))
     if len(edges) < 3:
@@ -72,16 +123,19 @@ def _numeric(column: str, ref: pd.Series, new: pd.Series) -> dict:
         "training_range": [float(ref.min()), float(ref.max())],
         "training_median": float(ref.median()),
         "new_median": float(new.median()),
-        "status": _status(psi, outside, OUTSIDE_RANGE_MAJOR),
+        "training_values": int(len(ref)),
+        "new_values": int(len(new)),
+        **blanks,
+        "status": _worse(_status(psi, outside, OUTSIDE_RANGE_MAJOR), blanks["blank_status"]),
     }
 
 
-def _categorical(column: str, ref: pd.Series, new: pd.Series) -> dict:
-    ref = ref.dropna().astype(str)
-    new = new.dropna().astype(str)
-    if ref.empty or new.empty:
-        return {"column": column, "kind": "categorical", "status": "not_judged",
-                "note": "No values to compare."}
+def _categorical(column: str, ref_all: pd.Series, new_all: pd.Series, blanks: dict) -> dict:
+    ref = ref_all.dropna().astype(str)
+    new = new_all.dropna().astype(str)
+    sparse = _too_few(column, "categorical", len(ref), len(new), blanks)
+    if sparse is not None:
+        return sparse
     categories = ref.value_counts().index
     expected = ref.value_counts(normalize=True).reindex(categories).to_numpy()
     seen = new.isin(set(categories))
@@ -95,8 +149,15 @@ def _categorical(column: str, ref: pd.Series, new: pd.Series) -> dict:
         "psi": round(psi, 4),
         "unseen_share": round(unseen_share, 4),
         "unseen_examples": [str(v) for v in unseen_values],
-        "status": _status(psi, unseen_share, UNSEEN_MAJOR),
+        "training_values": int(len(ref)),
+        "new_values": int(len(new)),
+        **blanks,
+        "status": _worse(_status(psi, unseen_share, UNSEEN_MAJOR), blanks["blank_status"]),
     }
+
+
+def _worse(a: str, b: str) -> str:
+    return a if _ORDER[a] >= _ORDER[b] else b
 
 
 def _status(psi: float, share: float, share_major: float) -> str:
@@ -107,8 +168,18 @@ def _status(psi: float, share: float, share_major: float) -> str:
     return "stable"
 
 
-def compare(reference: pd.DataFrame, new: pd.DataFrame, numeric: list[str], categorical: list[str]) -> dict:
+def compare(
+    reference: pd.DataFrame,
+    new: pd.DataFrame,
+    numeric: list[str],
+    categorical: list[str],
+    blanks_from: dict[str, tuple[pd.Series, pd.Series]] | None = None,
+) -> dict:
     """Column-by-column comparison and an overall verdict.
+
+    `blanks_from` gives, for a derived input, the source column whose blankness it inherits: a
+    length or a date part is never blank itself, so a source that stops being filled in would
+    otherwise pass unnoticed.
 
     Verdicts: `not_enough_rows`, `similar`, `shifted` (worth knowing, predictions still
     usable), `different` (at least one input no longer looks like what the model learned
@@ -123,13 +194,20 @@ def compare(reference: pd.DataFrame, new: pd.DataFrame, numeric: list[str], cate
             "columns": [],
         }
 
+    sources = blanks_from or {}
+
+    def blanks(c: str) -> dict:
+        ref_all, new_all = sources.get(c, (reference[c], new[c]))
+        return _blanks(ref_all, new_all)
+
     columns = [
-        _numeric(c, reference[c], new[c]) for c in numeric if c in reference and c in new
+        _numeric(c, reference[c], new[c], blanks(c)) for c in numeric if c in reference and c in new
     ] + [
-        _categorical(c, reference[c], new[c]) for c in categorical if c in reference and c in new
+        _categorical(c, reference[c], new[c], blanks(c)) for c in categorical if c in reference and c in new
     ]
     different = [c["column"] for c in columns if c["status"] == "different"]
     shifted = [c["column"] for c in columns if c["status"] == "shifted"]
+    unjudged = [c["column"] for c in columns if c["status"] == "not_judged"]
 
     if different:
         verdict = "different"
@@ -148,7 +226,16 @@ def compare(reference: pd.DataFrame, new: pd.DataFrame, numeric: list[str], cate
         )
     else:
         verdict = "similar"
-        headline = "Every input looks like the data the model learned from."
+        headline = (
+            "Every input that could be compared looks like the data the model learned from."
+            if unjudged
+            else "Every input looks like the data the model learned from."
+        )
+    if unjudged:
+        headline += (
+            f" {_list(unjudged)} had too few filled-in values to compare, so "
+            f"{'it was' if len(unjudged) == 1 else 'they were'} left out of this verdict."
+        )
     # The most changed first: that is the one to look at.
     columns.sort(key=lambda c: c.get("psi", -1), reverse=True)
     return {"verdict": verdict, "headline": headline, "columns": columns}

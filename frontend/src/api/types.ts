@@ -986,6 +986,13 @@ export interface DriftColumn {
   unseen_share?: number;
   unseen_examples?: string[];
   note?: string;
+  /** Filled-in values each file had for this column: what it was judged on. */
+  training_values?: number;
+  new_values?: number;
+  /** How often the column is blank in each file; a column that stops being filled in has drifted. */
+  training_blank_share?: number;
+  new_blank_share?: number;
+  blank_status?: "stable" | "shifted" | "different";
 }
 
 export interface DriftReport {
