@@ -322,8 +322,8 @@ def _constraints(result: dict) -> list[dict]:
         statements.append(
             _statement(
                 result, "split_override", "constraints",
-                f"The app recommended splitting {_split_phrase(recommended.get('strategy'), recommended.get('column'))}; "
-                f"this run split {_split_phrase(strategy, split.get('time_column') or split.get('group_column'))} "
+                f"The app recommended splitting {split_phrase(recommended.get('strategy'), recommended.get('column'))}; "
+                f"this run split {split_phrase(strategy, split.get('time_column') or split.get('group_column'))} "
                 f"instead, so its scores are a different kind of evidence from a run that followed the advice.",
                 ("split.recommended.strategy", "recommended"), ("split.strategy", "used"),
                 tone="notable",
@@ -393,7 +393,7 @@ def _constraints(result: dict) -> list[dict]:
     return statements
 
 
-def _split_phrase(strategy: str | None, column: str | None) -> str:
+def split_phrase(strategy: str | None, column: str | None) -> str:
     if strategy == "time":
         return f"by date on {column}" if column else "by date"
     if strategy == "group":

@@ -417,6 +417,9 @@ are both running locally, you're ready to make changes.
   value shown. Never put text from a language model in
   it, and never claim more than the fields support: say "too close to call" when the folds cannot separate two
   models.
+- **A fact that changes how a score should be read belongs in the card's `_protocol_section`.** It is written in
+  code from the result (never by the language model), its optional parts appear only when they apply, and each
+  needs a case in `tests/unit/test_card_evaluation_protocol.py`.
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,

@@ -518,6 +518,17 @@ carries the result fields it rests on with their values. A choice that is not cl
 (or a model picked by default order, or on the test set in an old result) is a warning and leads the panel.
 Results saved before it existed get one computed on read.
 
+**How these numbers were obtained (model card).** Every card now has a section before the results saying how
+the rows were divided (and whether that is the split the app recommended), how the model was chosen, how often
+the held-out rows had been used when it was scored, and, where they apply, the sealed final holdout and whether
+it was opened, checks on new data, calibration, the cut-off, and overlaps such as test rows that are copies of
+training rows or fixes worked out over every row. It ends with what the numbers support (with the plausible
+range of the main score) and what they do not (a later period under a random or grouped split, data collected
+differently, an independent estimate once the holdout has been reused). It is assembled in code from the result
+and its evaluation record, so no figure in it passes through the language model, and the card route now reads
+the result with its later evidence so the new-data and final-holdout lines are present. A card is written once
+and kept, so those lines are as of the day it was first requested.
+
 **Repeated folds when a small file is compared.** With a few hundred training rows one 5-fold
 partition can rank two close candidates one way and another partition the other way round. Below
 2,000 training rows, choosing the model, tuning it and the fold spread shown beside the score now

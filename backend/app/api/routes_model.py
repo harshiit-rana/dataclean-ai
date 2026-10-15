@@ -1384,6 +1384,9 @@ async def get_model_card(
     if existing.exists():
         return {"session_id": session_id, "markdown": existing.read_text(encoding="utf-8")}
 
+    # With what happened after the model was built (checks on new data, the sealed holdout), so the
+    # card's account of how the numbers were obtained is as complete as the page's.
+    result = _with_later_evidence(directory, result)
     raw_goal = meta.get("goal_context")
     markdown = await model_card.generate_model_card(
         session_id=session_id,

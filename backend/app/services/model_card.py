@@ -605,6 +605,179 @@ def _trust_section(result: dict) -> list[str]:
     return lines
 
 
+def _upper_first(text: str) -> str:
+    return text[:1].upper() + text[1:]
+
+
+def _protocol_section(result: dict) -> list[str]:
+    """How the numbers on this card were obtained, and what they can and cannot support.
+
+    Assembled entirely from fields of the result and its evaluation record -- no number in it
+    passes through a language model. It is the facts that change how a score should be read:
+    how the rows were divided, how the model was chosen, how often the held-out rows have been
+    used, whether anything was checked on rows that did not exist when the model was built.
+    Parts that do not apply (a sealed holdout, new data, a cut-off) are left out, so the section
+    stays short; the section itself is in every card.
+    """
+    split = result.get("split") or {}
+    selection = result.get("selection") or {}
+    evaluation = result.get("evaluation") or {}
+    task = result.get("task")
+    best = next((r for r in result.get("results", []) if r.get("model") == result.get("best_model")), {})
+    lines = ["", "## How these numbers were obtained", ""]
+
+    # --- the split
+    division = (
+        f"{_fmt(split.get('train_rows'))} rows to train on and {_fmt(split.get('test_rows'))} held back "
+        f"for testing ({float(split.get('test_fraction') or 0):.0%}), {_split_description(split)}."
+    )
+    recommended = split.get("recommended") or {}
+    if recommended.get("strategy"):
+        phrase = why_this_model.split_phrase(recommended["strategy"], recommended.get("column"))
+        division += (
+            f" The app recommended splitting {phrase}; this run split differently, so its scores are "
+            f"not from the recommended protocol."
+            if split.get("overridden")
+            else " This is the split the app recommended."
+        )
+    lines.append(f"- **How the rows were divided.** {division}")
+
+    # --- choosing the model
+    method = selection.get("method")
+    if not selection:
+        chosen = (
+            "The model was picked by its held-out score (this result predates choosing on training "
+            "folds), so that score is the best of several draws on those rows."
+        )
+    elif method == "only_candidate":
+        chosen = "Only one model was trained, so none was chosen between."
+    elif method == "default_order":
+        chosen = f"{_upper_first(str(selection.get('chosen_on') or ''))}."
+    else:
+        label = _METRIC_LABELS.get(selection.get("metric") or "", (selection.get("metric") or "the score",))[0]
+        repeats = int(selection.get("repeats") or 1)
+        chosen = (
+            f"By cross-validated {label} over {selection.get('folds')} folds of the training rows"
+            f"{f', repeated {repeats} times' if repeats > 1 else ''}; the held-out rows took no part."
+        )
+        if selection.get("distinguishable") is False:
+            chosen += " The folds could not separate the chosen model from its closest rival."
+        stability = selection.get("seed_stability") or {}
+        if stability.get("seed_dependent"):
+            chosen += " Which of the two comes out ahead depends on the random seed."
+    trail = result.get("improvement")
+    if trail:
+        chosen += (
+            f" It was then improved by a search of {len(trail.get('rounds') or [])} rounds, each judged "
+            f"on the training folds."
+        )
+    lines.append(f"- **How the model was chosen.** {chosen}")
+
+    # --- how often the held-out rows have been used
+    if not evaluation:
+        used = (
+            "Not recorded: this result predates the record of how often the held-out rows are used, so "
+            "the score may not be an independent estimate."
+        )
+    else:
+        if evaluation.get("status") == "independent":
+            used = (
+                "This was the first time these rows were used to evaluate a model, so the score is an "
+                "independent estimate."
+            )
+            if evaluation.get("message"):
+                used += f" {evaluation['message']}"
+        else:
+            used = evaluation.get("message") or (
+                f"These rows had been used {evaluation.get('look_count')} times when this model was scored."
+            )
+    lines.append(f"- **Use of the held-out rows.** {used}")
+
+    if split.get("sealed"):
+        sealed = (
+            f"A further {_fmt(split.get('final_rows'))} rows ({float(split.get('final_fraction') or 0):.0%}) "
+            f"were sealed away"
+        )
+        if split.get("sealed_after_looks"):
+            sealed += f" after {split['sealed_after_looks']} earlier look(s) at the data"
+        final = evaluation.get("final")
+        if final:
+            value = (final.get("metrics") or {}).get(final.get("primary_metric"))
+            sealed += (
+                f"; they have been opened once, scoring {_fmt(value)} on "
+                f"{_METRIC_LABELS.get(final.get('primary_metric') or '', ('the main score',))[0]}."
+            )
+        else:
+            sealed += "; they have not been opened, so the figures here are still a development estimate."
+        lines.append(f"- **Sealed final holdout.** {sealed}")
+    elif split.get("sealed_unavailable_reason"):
+        lines.append(f"- **Sealed final holdout.** Asked for and not made: {split['sealed_unavailable_reason']}")
+
+    new_data = evaluation.get("new_data")
+    if new_data:
+        latest = new_data.get("latest") or {}
+        lines.append(
+            f"- **Checked on new data.** {new_data.get('count')} time(s). Latest: {_fmt(latest.get('rows'))} rows "
+            f"that did not exist when the model was built, "
+            f"{_METRIC_LABELS.get(latest.get('metric') or '', ('the main score',))[0]} {_fmt(latest.get('value'))} "
+            f"({_fmt(latest.get('reported'))} when it was built)."
+        )
+
+    # --- probabilities and cut-off
+    calibration = result.get("calibration") or {}
+    if calibration.get("method") not in (None, "none"):
+        lines.append(
+            f"- **Probabilities.** Calibrated with {calibration['method']}, {calibration.get('fitted_on')}."
+        )
+    elif calibration.get("refused_because"):
+        lines.append(f"- **Probabilities.** Calibration was asked for and not applied: {calibration['refused_because']}")
+    elif task == "classification":
+        lines.append("- **Probabilities.** As the model produced them, not calibrated.")
+    point = result.get("operating_point") or {}
+    if point.get("objective") not in (None, "default") and point.get("threshold") is not None:
+        lines.append(
+            f"- **Cut-off.** {point['threshold']}, chosen on {point.get('chosen_on') or 'the training folds'}; "
+            f"the held-out rows had no say in it."
+        )
+
+    # --- leaks and overlaps, only where there are any
+    overlaps = []
+    if split.get("keep_duplicates_together"):
+        overlaps.append("exact copies of a row were kept on one side of the split")
+    if split.get("test_rows_seen_in_training"):
+        overlaps.append(
+            f"{split['test_rows_seen_in_training']} test rows are exact copies of training rows, answer included"
+        )
+    whole_file = evaluation.get("whole_file_statistics") or []
+    if whole_file:
+        overlaps.append(
+            f"{len(whole_file)} approved fix(es) worked a value out over every row, the held-out rows included"
+        )
+    if overlaps:
+        lines.append(f"- **Overlaps.** {_upper_first('; '.join(overlaps))}.")
+
+    # --- what the numbers can and cannot support
+    interval = ((best.get("metrics_intervals") or {}).get("metrics") or {}).get(result.get("primary_metric"))
+    supports = (
+        "The held-out score estimates how this model does on rows drawn the same way as the test rows"
+        + (
+            f", and on rows like them it could plausibly land between {_fmt(interval.get('low'))} and "
+            f"{_fmt(interval.get('high'))}."
+            if interval else "."
+        )
+    )
+    lines += ["", f"**What the numbers support.** {supports}", ""]
+    limits = ["data collected differently from this file"]
+    if split.get("strategy") in (None, "random", "group"):
+        limits.append("how the model will do in a later period")
+    if evaluation and evaluation.get("status") not in (None, "independent"):
+        limits.append(
+            f"an independent estimate: the held-out rows had been used {evaluation.get('look_count')} times"
+        )
+    lines.append(f"**What they do not support.** {_upper_first('; '.join(limits))}.")
+    return lines
+
+
 def _looks_cell(result: dict) -> str:
     """A run made before the ledger existed has no count, and says so. Reading that as one
     look would present a score of unknown history as an independent one."""
@@ -774,6 +947,8 @@ def build_model_card(
         f"| How the data was split | {_split_description(split)} |",
         f"| Times these held-out rows have been used | {_looks_cell(result)} |",
     ]
+
+    lines += _protocol_section(result)
 
     lines += ["", "## Results", ""]
     lines += _comparison_table(result)
