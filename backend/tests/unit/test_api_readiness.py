@@ -42,7 +42,9 @@ def _set_goal(session_id: str, **overrides) -> None:
     assert client.post(f"/api/goal/{session_id}", json=body).status_code == 200
 
 
-def _rows(n: int = 80, *, blank_targets: int = 0) -> list[dict]:
+def _rows(n: int = 200, *, blank_targets: int = 0) -> list[dict]:
+    # Big enough that some fraction of it leaves a test set a verdict can be given on: 80 balanced
+    # rows cannot (30% is 24 test rows), and readiness now says so before anything is trained.
     # `region` cycles on 3 and `approved` on 2 so the two stay independent -- a feature that
     # tracks the target exactly is a leak, and would (correctly) drag the verdict down.
     rows = [
