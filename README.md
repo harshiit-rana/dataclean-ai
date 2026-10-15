@@ -156,10 +156,18 @@ attaches it for you, downloads included.
 It is deliberately **not** an account system: there are no users here and sessions are
 ephemeral. What it buys is that holding the id is no longer sufficient.
 
-Enforcement follows `APP_ENV` unless you set `REQUIRE_SESSION_TOKENS` explicitly — off in
-development, so `docker compose up` and a browser is still all it takes to try the app; on
-everywhere else. Sessions created before it was switched on have no stored hash and keep
-working, so enabling it doesn't strand work in progress.
+Tokens are **required by default**. They are off only when development is switched on
+explicitly — `APP_ENV=development`, which the shipped `.env.example` and `docker-compose.yml`
+set so `docker compose up` and a browser is still all it takes to try the app — or when
+`REQUIRE_SESSION_TOKENS=false` is set. With nothing set, `APP_ENV` means `production`. The app
+logs a prominent warning at every start while tokens are off.
+
+**Deploying:** do not carry `APP_ENV=development` over to a hosted instance. Unset it (or set
+`production`) and tokens are enforced, and unexpected errors stop echoing their details to the
+browser. *Upgrading:* a self-hosted instance that relied on the old default (development when
+unset) now requires tokens; the web UI sends them already, but a script calling the API must
+send `X-Session-Token`. Sessions created before tokens were switched on have no stored hash and
+keep working, so enabling it doesn't strand work in progress.
 
 **Not implemented:** the `conversational_loop` graph node is an unwired stub — conversational
 cleaning is served by `POST /api/chat` instead, since the graph has already completed by the

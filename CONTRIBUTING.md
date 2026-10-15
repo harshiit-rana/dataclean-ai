@@ -61,6 +61,9 @@ are both running locally, you're ready to make changes.
   models — nested models get serialized into checkpoint envelopes that don't reliably
   reconstruct, which breaks resuming a session. Validate into the real models at node
   boundaries instead. The docstring on `GraphState` explains this.
+- **Security: safe by default.** A setting that weakens protection (session tokens, error details) is off unless
+  it is switched on explicitly; `APP_ENV` unset means production. Tests run with `APP_ENV=development` from
+  `tests/conftest.py`; a test about the protection sets its own mode.
 - **Security: a CSV for download goes through `spreadsheet_safe`.** `csv_download` (or `csv_bytes` for an archive)
   escapes formula-leading text cells; a test fails on any other `text/csv` response. Escape only on the way out --
   never the files the app itself reads, which must stay exactly the data.

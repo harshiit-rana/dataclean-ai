@@ -94,9 +94,66 @@ def test_upload_hands_back_a_token_and_stores_only_its_hash(tmp_path):
 
 
 def test_development_does_not_require_a_token():
-    """The default. `docker compose up` and a browser has to keep working."""
+    """Explicitly enabled (the test setup sets APP_ENV=development, as docker-compose.yml does), so
+    `docker compose up` and a browser keeps working."""
     session_id, _ = _upload()
     assert client.get(f"/api/preview/{session_id}").status_code == 200
+
+
+def test_with_nothing_set_a_token_is_required(monkeypatch):
+    """The fail-safe default: a deployment that sets no environment at all must not serve a session's data
+    to anyone holding its id."""
+    session_id, _ = _upload()
+    monkeypatch.delenv("APP_ENV", raising=False)
+    monkeypatch.delenv("REQUIRE_SESSION_TOKENS", raising=False)
+    get_settings.cache_clear()
+    assert get_settings().app_env == "production" and get_settings().session_tokens_required is True
+    assert client.get(f"/api/preview/{session_id}").status_code == 403
+
+
+def test_an_explicit_setting_wins_over_the_environment(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("REQUIRE_SESSION_TOKENS", "false")
+    get_settings.cache_clear()
+    assert get_settings().session_tokens_required is False
+
+
+def test_the_app_warns_at_startup_when_tokens_are_off(caplog):
+    """Called first thing in the lifespan (main.py); tested directly because the lifespan needs Redis."""
+    import logging
+
+    from app.main import warn_if_tokens_are_off
+
+    with caplog.at_level(logging.WARNING, logger="app.main"):
+        assert warn_if_tokens_are_off(get_settings()) is True
+    assert any("SESSION TOKENS ARE OFF" in r.getMessage() for r in caplog.records)
+
+
+def test_the_app_says_nothing_of_the_kind_when_tokens_are_on(monkeypatch, caplog):
+    import logging
+
+    from app.main import warn_if_tokens_are_off
+
+    _require_tokens(monkeypatch)
+    with caplog.at_level(logging.WARNING, logger="app.main"):
+        assert warn_if_tokens_are_off(get_settings()) is False
+    assert not any("SESSION TOKENS ARE OFF" in r.getMessage() for r in caplog.records)
+
+
+def test_the_lifespan_calls_the_warning():
+    import inspect
+
+    from app import main
+
+    assert "warn_if_tokens_are_off(settings)" in inspect.getsource(main.lifespan)
+
+
+def test_the_shipped_local_setup_turns_development_on_explicitly():
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[3]
+    assert "APP_ENV: ${APP_ENV:-development}" in (root / "docker-compose.yml").read_text(encoding="utf-8")
+    assert "APP_ENV=development" in (root / ".env.example").read_text(encoding="utf-8")
 
 
 def test_the_right_token_gets_in(monkeypatch):

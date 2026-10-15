@@ -58,10 +58,24 @@ async def _sweep_expired_sessions(settings) -> None:
         await asyncio.sleep(settings.cleanup_interval_seconds)
 
 
+def warn_if_tokens_are_off(settings) -> bool:
+    """Says loudly, at every start, when session tokens are off: then knowing a session id is enough to read its
+    data. Returns whether it warned."""
+    if settings.session_tokens_required:
+        return False
+    logger.warning(
+        "SESSION TOKENS ARE OFF (APP_ENV=%s, REQUIRE_SESSION_TOKENS=%s): anyone who knows a session id can read "
+        "that session's data and exports. Fine for local development; never for a hosted instance.",
+        settings.app_env, settings.require_session_tokens,
+    )
+    return True
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
     configure_logging(settings.log_level)
+    warn_if_tokens_are_off(settings)
 
     async with build_checkpointer(settings) as checkpointer:
         app.state.graph = build_graph(checkpointer)

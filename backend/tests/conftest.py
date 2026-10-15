@@ -21,6 +21,9 @@ def _test_env(monkeypatch, tmp_path):
     actually take effect."""
     monkeypatch.setenv("UPLOAD_DIR", str(tmp_path))
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key-not-real")
+    # Development, said explicitly: the app requires session tokens unless it is told otherwise, and most tests
+    # exercise the routes without them. The token tests set their own mode.
+    monkeypatch.setenv("APP_ENV", "development")
 
     from app.config import get_settings
 

@@ -51,20 +51,23 @@ class Settings(BaseSettings):
 
     chroma_persist_dir: str = "./chroma_db"  # reserved, currently unused — see README
 
-    app_env: str = "development"
+    # "production" unless set. It used to default to "development", which turned session tokens off -- so a hosted
+    # deployment that forgot to set it served every session's data to anyone holding a session id. Development is
+    # now something a setup says out loud: .env.example and docker-compose.yml set it for the local setup.
+    app_env: str = "production"
     log_level: str = "INFO"
 
-    # Require the token issued at upload on every request scoped to that session. Left off in
-    # development so `docker compose up` and a browser is still all it takes to try the app;
-    # on by default anywhere else, because a session id alone should not be enough to read
-    # someone's uploaded data. See services/session_access.py.
+    # Require the token issued at upload on every request scoped to that session. On unless development is
+    # explicitly enabled (APP_ENV=development) or this is set to false, because a session id alone should not be
+    # enough to read someone's uploaded data; the app logs a warning at startup whenever it is off. See
+    # services/session_access.py.
     require_session_tokens: Optional[bool] = None
 
     frontend_origin: str = "http://localhost:5173"
 
     @property
     def session_tokens_required(self) -> bool:
-        """Explicit setting wins; otherwise on everywhere but development."""
+        """Explicit setting wins; otherwise on everywhere but an explicitly development setup."""
         if self.require_session_tokens is not None:
             return self.require_session_tokens
         return self.app_env.lower() != "development"

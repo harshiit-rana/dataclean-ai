@@ -22,6 +22,9 @@ services:
     env_file: .env
     environment:
       REDIS_HOST: redis
+      # The bundled setup is for trying the app locally: development turns session tokens off (and the app logs a
+      # warning saying so). A hosted instance must not run with this -- the default, unset, requires tokens.
+      APP_ENV: ${APP_ENV:-development}
     depends_on:
       redis:
         condition: service_healthy

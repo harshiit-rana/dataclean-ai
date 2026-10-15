@@ -1083,7 +1083,11 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   nothing adds nothing, and an undo that lands on an old state is recorded as a new version, so
   the history stays chronological. `GET /api/session/{id}` returns them.
 - **Session access tokens.** Knowing a session id isn't enough to read its data. Issued at
-  upload, only the hash stored, required on every session-scoped request. Off in development.
+  upload, only the hash stored, required on every session-scoped request. Required by default
+  (#113): `APP_ENV` used to default to development, which turned them off, so a hosted instance
+  that forgot to set it served everything to anyone holding an id. Unset now means production;
+  development is switched on explicitly by `.env.example` and `docker-compose.yml` for the local
+  setup, and the app logs a warning at every start while tokens are off.
 - **Retention.** Files deleted 24 hours after last use, swept hourly in-process.
 - **CSV downloads a spreadsheet cannot run (#112).** A text cell from the uploaded data that begins with `=`, `+`,
   `-`, `@`, a tab or a carriage return is read by Excel or Sheets as a formula (CSV injection). Every CSV download --
