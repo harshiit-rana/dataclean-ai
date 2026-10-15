@@ -5,6 +5,8 @@
 - `GET  /api/model/{id}/comparisons/{comparison_id}`      one comparison
 - `PUT  /api/model/{id}/comparisons/{comparison_id}/criteria`  change the criteria, until it is evaluated (409 after)
 - `POST /api/model/{id}/comparisons/{comparison_id}/evaluate`  score both on the same rows of a labelled file
+- `POST /api/model/{id}/comparisons/{comparison_id}/decision`  promote or reject, recorded with its evidence
+- `GET  /api/model/{id}/decisions`                        every promotion, rejection and rollback, oldest first
 
 See services/promotion.py for why the criteria are typed and frozen.
 """
@@ -21,6 +23,7 @@ from app.config import Settings, get_settings
 from app.core.errors import AppError, FileTooLargeError, SessionNotFoundError, UnsupportedFileTypeError
 from app.dependencies import get_graph_if_any
 from app.services import action_log as action_log_service
+from app.graph.nodes.audit_agent import mark_report_stale_if_written
 from app.services import evaluation_ledger, model_store, promotion
 from app.services.encoding import read_csv_bytes
 from app.services.session_store import current_dataset_version_in, read_session_meta, session_dir
@@ -144,3 +147,57 @@ async def evaluate_comparison(
             extra={"comparison_id": comparison_id, "upload_fingerprint": fingerprint, "role": role},
         )
     return record
+
+
+class Decision(BaseModel):
+    decision: str  # "promote" | "reject"
+    # Stored exactly as written and never sent to the language model.
+    reason: Optional[str] = None
+    # Promote although a criterion failed. Needs a reason; recorded as an override.
+    override: bool = False
+
+
+def _trained_on_current_data(directory, run_id: str) -> bool:
+    """The rule a restore follows (#67): a run is put in use only if it was trained on the data as it is now."""
+    import pandas as pd
+
+    entry = next((r for r in model_store.load_history(directory) if r.get("run_id") == run_id), {}) or {}
+    cleaned = directory / "cleaned.csv"
+    try:
+        current = model_store.fingerprint_frame(pd.read_csv(cleaned if cleaned.exists() else directory / "original.csv"))
+    except Exception:  # noqa: BLE001 -- without the data there is nothing to check against
+        return False
+    return bool(entry.get("data_fingerprint")) and entry["data_fingerprint"] == current
+
+
+@router.post("/api/model/{session_id}/comparisons/{comparison_id}/decision")
+async def decide_comparison(
+    session_id: str, comparison_id: str, request: Decision, settings: Settings = Depends(get_settings)
+) -> dict:
+    """Promotes the challenger or rejects it, and records the decision with its evidence (promotion.decide).
+    Promotion makes the challenger the model in use, by the rule a restore follows."""
+    directory = _directory(settings, session_id)
+    try:
+        record = promotion.get(directory, comparison_id)
+    except promotion.ComparisonError as exc:
+        raise _refused(exc) from exc
+    if request.decision == "promote" and not _trained_on_current_data(directory, record["challenger_run_id"]):
+        raise ComparisonRefusedError(
+            "The data has changed since the challenger was trained, so it cannot be put in use: its scores "
+            "describe rows that are no longer the data. Retrain it on the data as it is now.", "data_changed",
+        )
+    try:
+        entry = promotion.decide(
+            directory, comparison_id, decision=request.decision, reason=request.reason, override=request.override
+        )
+    except promotion.ComparisonError as exc:
+        raise _refused(exc) from exc
+    if entry["decision"] == "promoted":
+        model_store.set_current(directory, entry["challenger_run_id"], promoted=entry["decision_id"])
+        mark_report_stale_if_written(directory)
+    return entry
+
+
+@router.get("/api/model/{session_id}/decisions")
+async def list_decisions(session_id: str, settings: Settings = Depends(get_settings)) -> dict:
+    return {"decisions": promotion.decisions(_directory(settings, session_id))}

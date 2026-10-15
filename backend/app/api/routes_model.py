@@ -1856,6 +1856,11 @@ async def get_model_card(
     # With what happened after the model was built (checks on new data, the sealed holdout), so the
     # card's account of how the numbers were obtained is as complete as the page's.
     result = _with_later_evidence(directory, result)
+    # How it came to be the model in use, when a comparison promoted it. Rendered in code into the card; the
+    # prompt is built from a fixed list of fields, so the user's reason never reaches the language model.
+    from app.services import promotion
+
+    result["promotion"] = promotion.promotion_of(directory, result.get("run_id"))
     raw_goal = meta.get("goal_context")
     markdown = await model_card.generate_model_card(
         session_id=session_id,

@@ -963,6 +963,14 @@ metric's difference is paired on the shared rows and passes only if the improvem
 comparison (a second evaluation is refused: start a new comparison for another file), and each model's score is
 recorded in the ledger as an evaluation on new data, never a look at the held-out rows.
 
+The decision is recorded with its evidence (#83). Promoting or rejecting a challenger appends an entry to an
+append-only log (never truncated): both runs, the criteria, the evaluation file's fingerprint, the rows compared and
+excluded, every criterion's result, the decision and the user's reason exactly as written. Promotion is refused while
+any criterion failed, unless the user overrides it and gives a reason, which is recorded as an override; it follows
+the restore rule (#67), so a challenger trained before the data changed cannot be put in use. A promoted model's card
+says how it came to be the model in use, with the reason. The reason is never sent to the language model: the card's
+prompt is built from a fixed list of fields, which a test checks.
+
 ### Where test information could reach a decision — an audit
 
 Prompted by a roadmap review that made the rule explicit: *the final test set must never be used

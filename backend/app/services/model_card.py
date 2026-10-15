@@ -571,6 +571,41 @@ def _excluded_section(result: dict) -> list[str]:
     return lines
 
 
+def _promotion_section(result: dict) -> list[str]:
+    """How this model came to replace the one before: the comparison, the criteria and the decision."""
+    entry = result.get("promotion")
+    if not entry:
+        return []
+    lines = [
+        "",
+        "## How it came to be the model in use",
+        "",
+        f"Promoted on {entry.get('at')} over run `{entry.get('champion_run_id')}`, after both were scored on the same "
+        f"{entry.get('rows_compared')} newly labelled rows (file `{entry.get('file_fingerprint')}`) against criteria "
+        f"fixed before the results were seen.",
+        "",
+        "| Criterion | Met | Evidence |",
+        "| --- | --- | --- |",
+    ]
+    deciding = entry.get("deciding") or {}
+    if deciding:
+        lines.append(
+            f"| Deciding metric: {deciding.get('metric')} | {'yes' if deciding.get('passed') else 'no'} | "
+            f"{str(deciding.get('evidence', '')).replace('|', '/')} |"
+        )
+    for constraint in entry.get("constraints") or []:
+        name = constraint.get("kind", "").replace("_", " ") + (f" ({constraint['metric']})" if constraint.get("metric") else "")
+        lines.append(
+            f"| {name} | {'yes' if constraint.get('passed') else 'no'} | {str(constraint.get('evidence', '')).replace('|', '/')} |"
+        )
+    if entry.get("override"):
+        lines += ["", f"**Promoted by override**, although {len(entry.get('failed_criteria') or [])} criteria were not "
+                      f"met. The reason given: \"{entry.get('reason')}\""]
+    elif entry.get("reason"):
+        lines += ["", f"The reason given: \"{entry.get('reason')}\""]
+    return lines
+
+
 def _schema_section(result: dict) -> list[str]:
     """What the model expects as input, from the schema saved with it."""
     schema = result.get("input_schema")
@@ -1146,6 +1181,7 @@ def build_model_card(
         logger.warning("Prediction snippet could not be rendered", exc_info=True)
         script_note = ""
 
+    lines += _promotion_section(result)
     lines += _schema_section(result)
     lines += _environment_section(result)
     lines += [

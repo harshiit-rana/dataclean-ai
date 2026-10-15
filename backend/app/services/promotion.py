@@ -355,3 +355,90 @@ def evaluate(directory: Path, comparison_id: str, new, *, file_fingerprint: str,
         "all_passed": bool(deciding_result["passed"] and all(c["passed"] for c in constraints)),
     }
     return update(directory, comparison_id, status="evaluated", evaluation=evaluation)
+
+
+# --- The decision, recorded (#83) -----------------------------------------------------------------------------------
+
+DECISIONS_FILENAME = "decisions.json"
+
+
+def decisions(directory: Path) -> list[dict]:
+    """Every promotion, rejection and rollback, oldest first. Append-only: never truncated or rewritten."""
+    path = Path(directory) / FOLDER / DECISIONS_FILENAME
+    if not path.exists():
+        return []
+    try:
+        found = json.loads(path.read_text(encoding="utf-8"))
+        return found if isinstance(found, list) else []
+    except (OSError, ValueError):
+        return []
+
+
+def _append_decision(directory: Path, entry: dict) -> dict:
+    with _LOCK:
+        entries = decisions(directory)
+        entries.append(entry)
+        (_folder(directory) / DECISIONS_FILENAME).write_text(json.dumps(entries, indent=2), encoding="utf-8")
+    return entry
+
+
+def decide(directory: Path, comparison_id: str, *, decision: str, reason: str | None, override: bool) -> dict:
+    """Records a promotion or a rejection with its evidence. Promotion is refused when any criterion failed, unless
+    the user overrides it and says why, which is recorded as an override. Making the challenger the model in use is
+    the caller's (it follows the restore rule, #67); this records the decision.
+
+    The reason is stored exactly as written and is never sent to the language model: it is the user's account of
+    their own decision, like the reasons they give for declining a fix.
+    """
+    if decision not in ("promote", "reject"):
+        raise ComparisonError("A decision is either to promote the challenger or to reject it.", "bad_decision")
+    record = get(directory, comparison_id)
+    if record["status"] == "open":
+        raise ComparisonError("Evaluate the comparison before deciding it: there is no evidence yet.", "not_evaluated")
+    if record["status"] == "decided":
+        raise ComparisonError("This comparison has already been decided; the decision stands.", "already_decided")
+    evaluation = record["evaluation"] or {}
+    failed = [c for c in evaluation.get("constraints") or [] if not c.get("passed")]
+    if not (evaluation.get("deciding") or {}).get("passed"):
+        failed = [{"kind": "deciding_metric", **(evaluation.get("deciding") or {})}, *failed]
+    overridden = False
+    if decision == "promote" and failed:
+        if not override:
+            raise ComparisonError(
+                f"{len(failed)} of the criteria were not met, so the challenger cannot be promoted. To promote it "
+                f"anyway, override and say why; the override is recorded with your reason.", "criteria_failed",
+            )
+        if not (reason or "").strip():
+            raise ComparisonError("Overriding the criteria needs a reason, which is recorded with the decision.",
+                                  "override_needs_reason")
+        overridden = True
+    entry = {
+        "decision_id": uuid.uuid4().hex[:12],
+        "at": _now(),
+        "decision": "promoted" if decision == "promote" else "rejected",
+        "comparison_id": comparison_id,
+        "champion_run_id": record["champion_run_id"],
+        "challenger_run_id": record["challenger_run_id"],
+        "criteria": record["criteria"],
+        "file_fingerprint": evaluation.get("file_fingerprint"),
+        "rows_compared": evaluation.get("rows_compared"),
+        "rows_excluded": evaluation.get("rows_excluded"),
+        "deciding": evaluation.get("deciding"),
+        "constraints": evaluation.get("constraints"),
+        "all_passed": evaluation.get("all_passed"),
+        "override": overridden,
+        "failed_criteria": [c.get("kind") for c in failed],
+        # Verbatim. Never sent to the language model.
+        "reason": reason,
+    }
+    _append_decision(directory, entry)
+    update(directory, comparison_id, status="decided", decision_id=entry["decision_id"])
+    return entry
+
+
+def promotion_of(directory: Path, run_id: str | None) -> dict | None:
+    """The latest promotion that made `run_id` the model in use, if any -- for its model card."""
+    for entry in reversed(decisions(directory)):
+        if entry.get("decision") == "promoted" and entry.get("challenger_run_id") == run_id:
+            return entry
+    return None
