@@ -118,3 +118,47 @@ describe("ImprovementTrail — the rungs of a halving search (#49)", () => {
     expect(screen.queryByRole("list", { name: "Rungs" })).not.toBeInTheDocument();
   });
 });
+
+describe("ImprovementTrail — the strategy chosen for each search (#50)", () => {
+  const round = (strategy: string, reason: string) => ({
+    name: "hyperparameters", label: "Model settings", what_it_tried: "Tried 60 fits.",
+    score: 0.8, std: 0.02, gain: 0.01, accepted: false, outcome: "No setting beat the defaults.",
+    detail: { strategy, strategy_reason: reason },
+  });
+
+  it("says which strategy a search used and why", () => {
+    render(
+      <ImprovementTrail
+        trail={trail({
+          rounds: [round("random", "240 training rows is below the 5,000 where scoring fewer folds saves real time")],
+          search_strategy: "auto",
+          search_strategies: ["random"],
+        })}
+      />
+    );
+    expect(
+      screen.getByText(/Searched by random search: 240 training rows is below the 5,000/)
+    ).toBeInTheDocument();
+    expect(screen.getByText(/settings searched by random search/)).toBeInTheDocument();
+  });
+
+  it("names what auto resolved to, not the word auto", () => {
+    render(<ImprovementTrail trail={trail({ search_strategy: "auto", search_strategies: ["halving", "random"] })} />);
+    expect(screen.getByText(/settings searched by successive halving and random search/)).toBeInTheDocument();
+    expect(screen.queryByText(/searched by auto/)).not.toBeInTheDocument();
+  });
+
+  it("shows the user's own choice as theirs", () => {
+    render(
+      <ImprovementTrail
+        trail={trail({ rounds: [round("halving", "you chose halving search")], search_strategy: "halving", search_strategies: ["halving"] })}
+      />
+    );
+    expect(screen.getByText(/Searched by successive halving: you chose halving search/)).toBeInTheDocument();
+  });
+
+  it("says nothing about a run that asked for auto and recorded nothing else", () => {
+    render(<ImprovementTrail trail={trail({ search_strategy: "auto" })} />);
+    expect(screen.queryByText(/settings searched by/)).not.toBeInTheDocument();
+  });
+});

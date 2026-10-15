@@ -270,8 +270,9 @@ class ImproveRequest(TrainRequest):
     # no limit beyond the budget. The final refit and the report on the held-out rows come after it.
     time_limit_seconds: Optional[float] = Field(default=None, ge=1.0, le=3600.0)
     # How the model settings are searched: "random" draws settings at random and scores each on every
-    # fold; "halving" scores many on a few folds and gives the promising ones more.
-    search_strategy: Literal["random", "halving"] = "random"
+    # fold; "halving" scores many on a few folds and gives the promising ones more; "auto" picks one for
+    # each search from the model, the number of rows and the budget, and says why in the trail.
+    search_strategy: Literal["auto", "random", "halving"] = "auto"
 
 
 class SessionStatusResponse(BaseModel):

@@ -129,9 +129,13 @@ def improve(
     time_gap_days: int | None = None,
     group_columns: list[str] | None = None,
     time_limit_seconds: float | None = None,
-    search_strategy: str = tuning.DEFAULT_STRATEGY,
+    search_strategy: str = "auto",
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
+
+    `search_strategy` is "random", "halving" or "auto" (the default), which picks one for each settings
+    search from the model, the training rows and the budget (`tuning.choose_strategy`) and records why.
+    An explicit choice is respected and recorded as the user's.
 
     `time_limit_seconds` bounds the wall-clock time the search may take, counted from the call. The
     deadline is checked before each round and before each runner-up family in the third, and the
@@ -303,6 +307,20 @@ def improve(
             )
         )
 
+    strategies_used: set[str] = set()
+
+    def strategy_for(model: str) -> tuple[str, str]:
+        """The strategy for this model's settings search, and the reason, for the trail."""
+        if search_strategy != "auto":
+            return search_strategy, f"you chose {tuning.STRATEGIES[search_strategy].name} search"
+        return tuning.choose_strategy(model, len(X_train), budget)
+
+    def searched(found: tuning.SearchResult, reason: str) -> dict:
+        strategies_used.add(found.strategy)
+        reached = _reached(found)
+        # A halving search that fell back to random says so itself; otherwise the reason it was chosen.
+        return {**reached, "strategy_reason": found.note or reason}
+
     def time_tail(found) -> str:
         if not found.stopped_for_time:
             return ""
@@ -406,10 +424,11 @@ def improve(
         skip_for_time("hyperparameters", "Model settings", "Searched this model's settings.")
     if not stopped_because:
         starting("hyperparameters", f"Searching the settings of {modeling.MODELS[best_name].label.lower()}.")
+        chosen, why = strategy_for(best_name)
         found = tuning.search(
             build_for(best_name), best_name, X_train, y_train, task,
             budget=budget, groups=train_groups, ordered=ordered, deadline=deadline,
-            strategy=search_strategy,
+            strategy=chosen,
         )
         cut_short = cut_short or bool(found and found.stopped_for_time)
         if found is None:
@@ -435,7 +454,7 @@ def improve(
                     gain=gain,
                     accepted=True,
                     outcome=f"Better settings found: {metric_label} up {gain:+.3f}.",
-                    detail={"params": found.readable_params, **_reached(found)},
+                    detail={"params": found.readable_params, **searched(found, why)},
                 )
             )
         else:
@@ -451,7 +470,7 @@ def improve(
                     accepted=False,
                     outcome="No setting beat the defaults by more than the folds disagree "
                     "with each other, so the defaults were kept.",
-                    detail={"params": found.readable_params, **_reached(found)},
+                    detail={"params": found.readable_params, **searched(found, why)},
                 )
             )
 
@@ -484,11 +503,14 @@ def improve(
             if out_of_time():
                 untried_for_time.append(name)
                 continue
+            chosen, why = strategy_for(name)
             found = tuning.search(
                 build_for(name), name, X_train, y_train, task,
                 budget=budget, groups=train_groups, ordered=ordered, deadline=deadline,
-                strategy=search_strategy,
+                strategy=chosen,
             )
+            if found:
+                strategies_used.add(found.strategy)
             cut_short = cut_short or bool(found and found.stopped_for_time)
             if found and _is_real_gain(found.score, best_score, found.std):
                 if improved_challenger is None or found.score > improved_challenger[1].score:
@@ -680,6 +702,7 @@ def improve(
         "time_limit_seconds": limit,
         "skipped_for_time": skipped_for_time,
         "search_strategy": search_strategy,
+        "search_strategies": sorted(strategies_used),
         "best": {
             "model": best_name,
             "label": modeling.MODELS[best_name].label,

@@ -183,6 +183,8 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
             "stopped_because": improvement.get("stopped_because"),
             # Which search strategy the loop used, so two tuned runs are not compared as if one search.
             "search_strategy": improvement.get("search_strategy"),
+            # What the searches actually used, which for "auto" is the part worth showing.
+            "search_strategies": improvement.get("search_strategies") or [],
             # Whether the probabilities were calibrated, and by which method. A run that differs
             # only here is the comparison "did calibrating help?" needs to be able to show.
             "calibration": (result.get("calibration") or {}).get("method"),

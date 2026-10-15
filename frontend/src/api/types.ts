@@ -469,6 +469,9 @@ export interface ModelRun {
   tuned: boolean;
   tuned_settings: Record<string, unknown>;
   stopped_because: string | null;
+  /** How the settings were searched: what was asked for, and what the searches used. */
+  search_strategy?: string | null;
+  search_strategies?: string[];
   /** Which derived inputs this run used -- two runs on the same columns with different
    * derived inputs are the comparison the loop's fourth round exists to make. */
   feature_recipes?: string[];
@@ -943,8 +946,10 @@ export interface ImprovementTrail {
   time_limit_seconds?: number | null;
   /** The rounds that did not run because the limit was reached first. */
   skipped_for_time?: string[];
-  /** How the model settings were searched: "random" so far. Absent on older runs. */
+  /** What was asked for: "auto", "random" or "halving". Absent on older runs. */
   search_strategy?: string | null;
+  /** What the searches actually used, which for "auto" is the part worth showing. */
+  search_strategies?: string[];
   /** Cross-validated, from the training rows only -- not the headline number, which is
    * measured once on rows nothing was selected against. */
   cv_score: number;
@@ -955,8 +960,9 @@ export interface ImprovementTrail {
 export interface ImproveRequest extends TrainRequest {
   goal?: number | null;
   budget?: number;
-  /** How model settings are searched: at random, or by halving (many settings on a few folds, the best on more). */
-  search_strategy?: "random" | "halving";
+  /** How model settings are searched: "auto" (the default) picks for each search and says why; or at random;
+   * or by halving (many settings on a few folds, the best on more). */
+  search_strategy?: "auto" | "random" | "halving";
   /** The most wall-clock time the search may take, in seconds (1 to 3600). Absent means no limit. */
   time_limit_seconds?: number | null;
 }

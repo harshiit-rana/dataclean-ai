@@ -91,6 +91,11 @@ describe("RunHistory", () => {
     expect(screen.getByText(/grouped by customer_id/)).toBeInTheDocument();
   });
 
+  it("says which search found a tuned run's settings, when it was recorded (#50)", () => {
+    renderHistory([run({ tuned: true, search_strategies: ["halving", "random"] }), run()]);
+    expect(screen.getByText(/tuned \(halving \+ random\)/)).toBeInTheDocument();
+  });
+
   it("marks a tuned run", () => {
     renderHistory([run({ tuned: true }), run()]);
     expect(screen.getByText(/tuned/)).toBeInTheDocument();

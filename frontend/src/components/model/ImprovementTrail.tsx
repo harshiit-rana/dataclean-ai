@@ -58,6 +58,17 @@ const STOPPED: Record<Trail["stopped_because"], { title: string; blurb: string; 
   },
 };
 
+/** What searched the settings, by name: the strategies the searches used if the run recorded them (which
+ * is what "auto" resolved to), else what was asked for. Empty for a run from before it was recorded. */
+function strategyUsed(trail: Trail): string {
+  const names = trail.search_strategies?.length
+    ? trail.search_strategies
+    : trail.search_strategy && trail.search_strategy !== "auto"
+      ? [trail.search_strategy]
+      : [];
+  return names.map((name) => STRATEGY_LABELS[name] ?? name).join(" and ");
+}
+
 function formatScore(value: number | null, metric: string): string {
   if (value === null) return "—";
   return metric === "r2" ? value.toFixed(3) : value.toFixed(3);
@@ -137,6 +148,13 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
                   ))}
                 </ol>
               )}
+              {typeof round.detail?.strategy_reason === "string" && !round.detail?.note && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Searched by{" "}
+                  {STRATEGY_LABELS[String(round.detail.strategy)] ?? String(round.detail.strategy)}:{" "}
+                  {round.detail.strategy_reason}.
+                </p>
+              )}
               {typeof round.detail?.note === "string" && (
                 <p className="mt-1 text-xs text-muted-foreground">{round.detail.note}</p>
               )}
@@ -152,8 +170,7 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
             Best cross-validated {metric}: {trail.cv_score.toFixed(3)} (±
             {trail.cv_std.toFixed(3)} across folds)
             {trail.goal !== null && ` · your target was ${trail.goal.toFixed(3)}`}
-            {trail.search_strategy &&
-              ` · settings searched by ${STRATEGY_LABELS[trail.search_strategy] ?? trail.search_strategy}`}
+            {strategyUsed(trail) && ` · settings searched by ${strategyUsed(trail)}`}
           </p>
         </div>
 

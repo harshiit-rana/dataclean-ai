@@ -685,6 +685,16 @@ that only shows its worth across all of them can be dropped before it gets there
 folds there is nothing to halve over, and it searches at random and says so. It checks the deadline between settings;
 if the time limit hits, the leader is finished on the remaining folds so what is reported is still a full score.
 
+**The search strategy is chosen for you (#50).** "Try to do better" no longer needs the user to know which search
+suits their file. `tuning.choose_strategy(model, training_rows, budget)` is a pure rule: halving when the model has at
+least 12 possible settings, the budget is at least 12 and there are at least 5,000 training rows (below those, fits
+are cheap and scoring fewer folds saves little and only adds noise); random search otherwise. It is decided for each
+settings search, so a small linear model and a large forest in the same run can use different ones, and the trail says
+which was used and why in a sentence for each search. `search_strategy` on the improve request overrides it
+("random" or "halving"); an override is respected, recorded as the user's, and a halving search that finds nothing
+to halve says it fell back. The run history shows the strategies used. The three thresholds are a first guess to be
+revisited with benchmark data on real files; moving them changes which strategy a run uses, never what either does.
+
 **A record of what you tried.** Results used to overwrite a single file, so retraining
 discarded the previous run — which made the question people actually ask unanswerable: *did the
 thing I just changed help?* Every run is now kept with its settings, its headline number and

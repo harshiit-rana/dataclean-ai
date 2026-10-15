@@ -219,12 +219,12 @@ class TestInTheLoop:
         assert settings["score"] is not None
         assert settings["detail"]["rungs"][-1]["folds"] == max(r["folds"] for r in settings["detail"]["rungs"])
 
-    def test_the_default_is_still_random_search(self):
+    def test_a_small_file_is_still_searched_at_random_by_default(self):
         found = improvement.improve(
             self.frame(), target_column="outcome", task="classification",
             model_names=["logistic_regression"], budget=4,
         )
-        assert found["search_strategy"] == "random"
+        assert found["search_strategy"] == "auto" and found["search_strategies"] == ["random"]
 
 
 class TestOverHttp:

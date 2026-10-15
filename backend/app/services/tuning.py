@@ -471,6 +471,43 @@ class SuccessiveHalvingSearch:
         return sorted({max(1, round(total / cls.FACTOR**j)) for j in range(cls.RUNGS - 1, -1, -1)})
 
 
+# Where halving starts to pay. Below these the fits are cheap enough that scoring fewer folds saves
+# little and only adds noise to the ranking. They are a first guess, to be revisited with benchmark data
+# on real files: moving them changes which strategy a run uses, never what either strategy does.
+HALVING_MIN_ROWS = 5_000
+HALVING_MIN_SETTINGS = 12  # settings in the model's space
+HALVING_MIN_BUDGET = 12  # fits the caller allows
+
+
+def choose_strategy(model_name: str, training_rows: int, budget: int) -> tuple[str, str]:
+    """Which strategy to search this model's settings with, and why, in a sentence for the trail.
+
+    Halving when there are many settings, a budget big enough to cut from, and enough rows that a fit
+    costs something worth saving; random search otherwise. Pure: the same inputs always give the same
+    answer, so the choice can be tested at each boundary and shown to the user with its reason.
+    """
+    space = SEARCH_SPACES.get(model_name) or {}
+    combinations = int(np.prod([len(v) for v in space.values()])) if space else 0
+    if combinations < HALVING_MIN_SETTINGS:
+        return "random", (
+            f"this model has only {combinations} settings to try, fewer than the {HALVING_MIN_SETTINGS} "
+            f"needed for halving to have anything to discard"
+        )
+    if budget < HALVING_MIN_BUDGET:
+        return "random", (
+            f"a budget of {budget} is below the {HALVING_MIN_BUDGET} where halving pays for its early rungs"
+        )
+    if training_rows < HALVING_MIN_ROWS:
+        return "random", (
+            f"{training_rows:,} training rows is below the {HALVING_MIN_ROWS:,} where scoring fewer folds "
+            f"saves real time"
+        )
+    return "halving", (
+        f"{training_rows:,} training rows and {combinations:,} possible settings: cheaper to rank them on a "
+        f"few folds first and score only the promising ones on all of them"
+    )
+
+
 def _with(result: SearchResult, **changes) -> SearchResult:
     from dataclasses import replace
 

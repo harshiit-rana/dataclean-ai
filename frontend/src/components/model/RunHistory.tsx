@@ -34,7 +34,11 @@ function describeSetup(run: ModelRun): string {
   }
   if (run.split.gap_days) parts.push(`${run.split.gap_days}-day gap`);
   if (run.split_overridden) parts.push("overrode the recommended split");
-  if (run.tuned) parts.push("tuned");
+  if (run.tuned) {
+    // Which search found the settings, when the run recorded it: two tuned runs searched differently
+    // are not quite the same experiment.
+    parts.push(run.search_strategies?.length ? `tuned (${run.search_strategies.join(" + ")})` : "tuned");
+  }
   if (run.calibration && run.calibration !== "none") parts.push(`calibrated (${run.calibration})`);
   if (run.feature_recipes?.length) {
     parts.push(`${run.feature_recipes.length} derived`);

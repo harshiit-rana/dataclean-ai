@@ -455,6 +455,9 @@ are both running locally, you're ready to make changes.
   partial folds inside a rung, but what it returns is the survivor's mean over every fold of the same splitter. A new
   strategy that uses a cheaper resource must end the same way, and must reuse the splitter it is handed (spy tests in
   `test_successive_halving.py` show how to check group-aware and forward folds at every rung).
+- **The automatic strategy choice is a pure function with documented thresholds.** Change `HALVING_MIN_*` in
+  `tuning.py` and the boundary cases in `tests/unit/test_choose_strategy.py` together, and say in the commit what
+  data justified it: a threshold moved without a benchmark is a guess, and the tests exist to make that visible.
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,
