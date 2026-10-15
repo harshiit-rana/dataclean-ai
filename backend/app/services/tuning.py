@@ -146,9 +146,18 @@ def cv_splitter(task: str, y, folds: int = CV_FOLDS, groups=None, ordered: bool 
         TimeSeriesSplit,
     )
 
+    from app.services.time_folds import TimeFoldRule
+
     if ordered:
         usable = min(folds, len(y) - 1)
-        return TimeSeriesSplit(n_splits=usable) if usable >= 2 else None
+        if usable < 2:
+            return None
+        # A rule carries the timestamps, so the folds keep every timestamp on one side and can
+        # leave a gap. The bare flag is for callers that have no timestamps to give (and for
+        # tests); it falls back to cutting at row positions, which the app itself never does.
+        if isinstance(ordered, TimeFoldRule):
+            return ordered.splitter(usable)
+        return TimeSeriesSplit(n_splits=usable)
 
     if groups is not None:
         usable = min(folds, int(pd.Series(groups).nunique()))

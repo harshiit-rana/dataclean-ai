@@ -538,7 +538,12 @@ to choose anything*. Every decision the model path makes was traced to the rows 
   correctly the most recent rows, but model choice, tuning, the cut-off, the cross-validation
   spread and the learning curve all trained on later rows and validated on earlier ones —
   rewarding whatever exploits the future, the very thing the split exists to rule out. All of
-  them now use forward-in-time folds.
+  them now use forward-in-time folds. Those folds used to cut at row positions, so rows sharing a
+  timestamp (daily data, records loaded in batches) could straddle a fold boundary exactly as they
+  once did at the train/test cut; they now use a splitter that is handed the timestamps and moves
+  every boundary to the nearest change of timestamp, so no timestamp is on both sides of any fold. With
+  distinct timestamps it reproduces `TimeSeriesSplit` exactly. The exported script carries the same
+  splitter (copied by source) for a calibrated date-split model.
 - **Copies of training rows in the test set went uncounted.** The contradictory-labels check
   finds identical inputs with different answers; identical rows with the *same* answer on both
   sides of the split — questions the model has already seen answered — were invisible. They are

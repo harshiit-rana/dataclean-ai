@@ -430,17 +430,21 @@ def cross_validate_pipeline(
     scoring = scoring_for(task, y)
 
     if ordered:
-        # Date-based split: each fold validated on rows later than it trained on. X arrives
-        # in time order (the training rows come out of `split_data` that way).
+        # Date-based split: each fold validated on rows later than it trained on. The rule
+        # carries the timestamps, so no timestamp straddles a fold and the gap is kept; the bare
+        # flag falls back to cutting at row positions (X arrives in time order).
         from sklearn.model_selection import TimeSeriesSplit
 
         usable_folds = int(min(folds, len(y) - 1))
         if usable_folds < 2:
             return {}
         y_input = pd.Series(y).astype(str) if task == "classification" else y
-        scores = cross_val_score(
-            build(), X, y_input, cv=TimeSeriesSplit(n_splits=usable_folds), scoring=scoring, n_jobs=1
+        splitter = (
+            ordered.splitter(usable_folds)
+            if hasattr(ordered, "splitter")
+            else TimeSeriesSplit(n_splits=usable_folds)
         )
+        scores = cross_val_score(build(), X, y_input, cv=splitter, scoring=scoring, n_jobs=1)
         values = [round(float(s), 4) for s in scores]
         return {
             "metric": scoring,
@@ -525,7 +529,9 @@ def learning_curve_points(
         # Validated forwards in time, and not shuffled -- see cross_validate_pipeline.
         from sklearn.model_selection import TimeSeriesSplit
 
-        cv, shuffle = TimeSeriesSplit(n_splits=3), False
+        cv, shuffle = (
+            ordered.splitter(3) if hasattr(ordered, "splitter") else TimeSeriesSplit(n_splits=3)
+        ), False
     elif groups is not None:
         from sklearn.model_selection import GroupKFold, StratifiedGroupKFold
 

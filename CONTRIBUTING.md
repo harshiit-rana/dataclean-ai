@@ -168,10 +168,17 @@ are both running locally, you're ready to make changes.
   from every place a verdict is made (the train path and the sealed `finalise`); without them it
   falls back to the old fixed cut-offs, which ignore how many test rows there were. R² has no
   lower limit, so a wide negative-to-positive range on a small set is the correct message.
-- **A date-based split has to be forward-in-time all the way down.** Same rule as grouping:
-  `split_strategy="time"` sets `ordered=True` on every fold the run makes -- model choice,
-  tuning, the improvement loop, the cut-off, the cross-validation spread, the learning curve --
-  so each chunk is validated on a model trained only on rows before it. Rows arrive in time
+- **A date-based split has to be forward-in-time all the way down, and a timestamp is never split.**
+  Same rule as grouping: `split_strategy="time"` hands every fold the run makes -- model choice,
+  tuning, the improvement loop, the cut-off, calibration, the cross-validation spread, the learning
+  curve -- a `time_folds.TimeFoldRule` where the bare `ordered=True` used to go, and
+  `tuning.cv_splitter` turns it into `ForwardInTimeFolds`. That splitter is given the timestamps
+  explicitly, keyed by row label (so it also serves a subset of the rows, as inside the cut-off's own
+  folds), and moves every chunk boundary to the nearest change of timestamp, so rows sharing a
+  timestamp are never on both sides of a fold -- `TimeSeriesSplit` cut at row positions and let them
+  straddle. With distinct timestamps it is exactly `TimeSeriesSplit`. A fold producer that is not
+  passed the rule silently reverts to row positions, so `test_time_ordered_folds.py` spies on every
+  one. Each chunk is validated on a model trained only on rows before it. Rows arrive in time
   order from `split_data`; keep it that way. The cut-off uses an explicit fold loop rather than
   `cross_val_predict`, which refuses folds that don't cover every row. The train/test cut itself
   is `modeling.time_cut`, which moves to the nearest point where the timestamp changes so a day

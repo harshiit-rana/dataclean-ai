@@ -29,6 +29,7 @@ from app.services import (
     diagnostics,
     features as feature_recipes,
     operating_point,
+    time_folds,
     uncertainty,
 )
 
@@ -1709,6 +1710,9 @@ def train_candidates(
     used = features["numeric"] + features["categorical"] + features["frequent"]
     duplicate_columns = used if keep_identical_rows_together and split_strategy == "random" else None
     held_back = test_size if test_size else DEFAULT_TEST_SIZE
+    # What every fold inside the training rows is cut by, for a date split: the timestamps, so no
+    # timestamp straddles a fold. False for the other strategies.
+    fold_order = time_folds.time_rule(df, time_column) if split_strategy == "time" and time_column else False
     sealed_info: dict = {"sealed": False}
     parts = None
     if sealed_holdout:
@@ -1841,7 +1845,7 @@ def train_candidates(
         y_train,
         task,
         groups=selection_groups,
-        ordered=split_strategy == "time",
+        ordered=fold_order,
     )
     best = next(r for r in trained if r["model"] == selection["chosen"])
     if features.get("clipped"):
@@ -1882,7 +1886,7 @@ def train_candidates(
             try:
                 calibrated, fold_count = calibration_service.fit(
                     build_best, calibration, X_train, y_train,
-                    groups=fold_groups, ordered=split_strategy == "time",
+                    groups=fold_groups, ordered=fold_order,
                 )
                 after = evaluate(calibrated, X_test, y_test, task, uncalibrated.get("positive_label"))
                 if "brier_score" in baseline:
@@ -1891,7 +1895,7 @@ def train_candidates(
                 best["metrics"] = after
                 best["diagnostics"] = diagnostics.compute_diagnostics(calibrated, X_test, y_test, task, after)
                 point_build = calibration_service.estimator_factory(
-                    build_best, calibration, groups=fold_groups, ordered=split_strategy == "time"
+                    build_best, calibration, groups=fold_groups, ordered=fold_order
                 )
                 applied_calibration = {
                     "method": calibration,
@@ -1965,7 +1969,7 @@ def train_candidates(
             task,
             # The training rows' groups, row for row with what cross-validation is handed.
             groups=selection_groups,
-            ordered=split_strategy == "time",
+            ordered=fold_order,
         )
 
     # Where the cut-off sits, for a two-class model. Chosen on the training folds against
@@ -1986,7 +1990,7 @@ def train_candidates(
             point=point,
             positive_label=best["metrics"]["positive_label"],
             groups=train_groups,
-            ordered=split_strategy == "time",
+            ordered=fold_order,
             calibrated_with=applied_calibration["method"] if applied_calibration else None,
         )
         if chosen_point is not None:

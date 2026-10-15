@@ -170,7 +170,7 @@ def estimator_factory(build, method: str, *, groups=None, ordered: bool = False)
             estimator=build(),
             method=method,
             cv=TrainingFolds(groups, ordered),
-            ensemble=ordered,
+            ensemble=bool(ordered),
         )
 
     return make

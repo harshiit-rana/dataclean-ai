@@ -26,7 +26,7 @@ from typing import Callable
 
 import pandas as pd
 
-from app.services import features as feature_recipes, modeling, tuning
+from app.services import features as feature_recipes, modeling, time_folds, tuning
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +216,8 @@ def improve(
     X_train, X_test = X_train[used], X_test[used]
 
     # A date-based split validates every fold forwards in time, here as in the final split.
-    ordered = split_strategy == "time"
+    # The timestamps every fold is cut by for a date split; False otherwise. See time_folds.
+    ordered = time_folds.time_rule(df, time_column) if split_strategy == "time" and time_column else False
     if tuning.cv_splitter(task, y_train, groups=train_groups, ordered=ordered) is None:
         raise modeling.ModelingError(
             "There are too few rows in the smallest class to cross-validate, so there is no "

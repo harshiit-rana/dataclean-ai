@@ -16,7 +16,7 @@ import inspect
 import textwrap
 from datetime import datetime, timezone
 
-from app.services import clipping, features as feature_recipes, modeling
+from app.services import clipping, features as feature_recipes, modeling, time_folds
 from app.services.modeling import (
     DEFAULT_TEST_SIZE,
     MODELS,
@@ -289,9 +289,18 @@ def _calibration_block(result: dict, report: dict) -> str:
     copies = bool(split.get("keep_duplicates_together")) and not ordered and not grouped
 
     if ordered:
-        splitter = f"TimeSeriesSplit(n_splits={folds})"
+        # The app's own splitter, copied by source (see `_time_folds_block`), given the parsed
+        # dates the split block already made: every fold validates on later rows, no timestamp
+        # is on both sides, and the gap the run asked for is left.
+        splitter = (
+            f"ForwardInTimeFolds(order.loc[X_train.index], n_splits={folds}, "
+            f"gap_days={int(split.get('gap_days') or 0)})"
+        )
         arguments = "X_train, fold_labels"
-        why = "Forward in time: each fold is calibrated on rows later than the ones it trained on."
+        why = (
+            "Forward in time: each fold is calibrated on rows later than the ones it trained on,\n"
+            "# and a timestamp is never split across the two."
+        )
     elif grouped:
         splitter = f"StratifiedGroupKFold(n_splits={folds}, shuffle=True, random_state=42)"
         arguments = "X_train, fold_labels, groups.loc[X_train.index]"
@@ -332,10 +341,26 @@ def _calibration_imports(result: dict, report: dict) -> str:
     ordered = strategy == "time" and bool(split.get("time_column"))
     grouped = strategy == "group" and bool(split.get("group_column"))
     copies = bool(split.get("keep_duplicates_together")) and not ordered and not grouped
-    splitter = (
-        "TimeSeriesSplit" if ordered else "StratifiedGroupKFold" if (grouped or copies) else "StratifiedKFold"
-    )
+    if ordered:
+        return "from sklearn.calibration import CalibratedClassifierCV"
+    splitter = "StratifiedGroupKFold" if (grouped or copies) else "StratifiedKFold"
     return f"from sklearn.calibration import CalibratedClassifierCV\nfrom sklearn.model_selection import {splitter}"
+
+
+def _uses_time_folds(result: dict, calibrated: dict | None) -> bool:
+    """Whether the script needs the forward-in-time splitter: a calibrated model on a date split."""
+    split = result.get("split", {})
+    return bool(calibrated) and split.get("strategy") == "time" and bool(split.get("time_column"))
+
+
+def _time_folds_block() -> str:
+    """The app's forward-in-time splitter, copied by source like the other pieces the script
+    cannot import from the app."""
+    return (
+        "\n"
+        + _function_source(time_folds.ForwardInTimeFolds)
+        + "\n"
+    )
 
 
 def build_training_script(result: dict, *, file_name: str = "cleaned.csv") -> str:
@@ -380,7 +405,8 @@ def build_training_script(result: dict, *, file_name: str = "cleaned.csv") -> st
         f"#   - {d['column']}: {d['reason']}" for d in features.get("dropped", [])
     ) or "#   (none)"
 
-    clipper_imports = "import numpy as np\n" if clipped else ""
+    needs_time_folds = _uses_time_folds(result, calibrated)
+    clipper_imports = "import numpy as np\n" if (clipped or needs_time_folds) else ""
     base_import = (
         "from sklearn.base import BaseEstimator, TransformerMixin\n" if clipped else ""
     )
@@ -434,7 +460,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.pipeline import Pipeline
 {_metric_imports(task, brier)}
 {_calibration_imports(result, calibrated) + chr(10) if calibrated else ""}{spec.import_line}
-{_clipper_block(clipped)}
+{_clipper_block(clipped)}{_time_folds_block() if needs_time_folds else ""}
 TARGET = {_literal(target)}
 NUMERIC_FEATURES = {_literal(numeric)}
 CATEGORICAL_FEATURES = {_literal(categorical)}

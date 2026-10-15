@@ -186,7 +186,9 @@ class TestWhatTheScriptSays:
 
     def test_a_dated_script_uses_forward_folds_and_the_averaged_form(self):
         script = self.script(dated(), split_strategy="time", time_column="day")
-        assert "TimeSeriesSplit(n_splits=5)" in script and "ensemble=True" in script
+        assert "ForwardInTimeFolds(order.loc[X_train.index], n_splits=5, gap_days=0)" in script
+        assert "class ForwardInTimeFolds" in script and "ensemble=True" in script
+        assert "import TimeSeriesSplit" not in script  # the position-based one is not what the app used
 
     def test_a_copies_script_groups_the_folds_by_the_copy_key(self):
         script = self.script(with_copies(), model=LOGISTIC, keep_identical_rows_together=True)
