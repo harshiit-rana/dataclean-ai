@@ -26,14 +26,14 @@ def factory(name: str = "logistic_regression"):
 
 
 class TestTheRegistry:
-    def test_random_search_is_the_default_and_the_only_one_so_far(self):
+    def test_random_search_is_the_default_for_a_direct_search(self):
         assert tuning.DEFAULT_STRATEGY == "random"
-        assert set(tuning.STRATEGIES) == {"random"}
-        assert tuning.STRATEGIES["random"].name == "random"
+        assert set(tuning.STRATEGIES) == {"random", "halving"}
+        assert all(tuning.STRATEGIES[name].name == name for name in tuning.STRATEGIES)
 
     def test_an_unknown_strategy_is_refused_with_the_known_names(self):
         X, y = data()
-        with pytest.raises(ValueError, match="Unknown search strategy 'bayesian'.*random"):
+        with pytest.raises(ValueError, match="Unknown search strategy 'bayesian'.*halving.*random"):
             tuning.search(factory(), "logistic_regression", X, y, "classification", strategy="bayesian")
 
 
@@ -110,7 +110,7 @@ class TestTheNameTravels:
             self.frame(), target_column="outcome", task="classification",
             model_names=["logistic_regression", "random_forest_classifier"], budget=4,
         )
-        assert found["search_strategy"] == "random"
+        assert found["search_strategy"] == "auto" and found["search_strategies"] == ["random"]
         searched = [r for r in found["rounds"] if r["name"] in {"hyperparameters", "other_models"} and r["score"] is not None]
         assert searched and all(r["detail"].get("strategy") == "random" for r in searched if r["name"] == "hyperparameters")
 
