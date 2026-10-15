@@ -590,8 +590,18 @@ def _environment_section(result: dict) -> list[str]:
     if meta.get("config_hash"):
         lines.append(f"| Configuration | `{meta['config_hash']}` |")
     version = meta.get("dataset_version") or {}
+    actions = meta.get("actions")
+    fixes = (
+        "" if actions is None
+        else f", after {len(actions)} approved fix{'es' if len(actions) != 1 else ''}"
+    )
     if version:
-        lines.append(f"| Data version | {version.get('version')} ({version.get('rows')} rows, {version.get('columns')} columns) |")
+        lines.append(
+            f"| Data version | {version.get('version')} ({version.get('rows')} rows, {version.get('columns')} "
+            f"columns{fixes}) |"
+        )
+    elif actions is not None:
+        lines.append(f"| Cleaning | {len(actions)} approved fix{'es' if len(actions) != 1 else ''} |")
     if meta.get("runtime_seconds") is not None:
         lines.append(f"| Training took | {meta['runtime_seconds']:.1f} seconds |")
     lines += [

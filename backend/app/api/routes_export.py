@@ -51,20 +51,56 @@ def _session_files(settings: Settings, session_id: str) -> tuple[dict, Path]:
 CLEAN_SCRIPT_NAME = "clean.py"
 
 
-async def _cleaning_script(session_id: str, directory: Path, graph, file_name: str) -> str | None:
-    """clean.py for this session, built from its action log. None when the log can't be read.
+def run_actions(result: dict | None) -> list[dict] | None:
+    """The fixes a stored run was trained after, or None when it did not record them."""
+    return ((result or {}).get("run_metadata") or {}).get("actions")
+
+
+async def _cleaning_script(
+    session_id: str, directory: Path, graph, file_name: str, *, actions: list[dict] | None = None
+) -> str | None:
+    """clean.py for this session, built from its action log, or from `actions` -- a run's snapshot of the fixes it
+    was trained after -- when given. None when the log can't be read.
 
     Built on every request rather than written to disk: an undo or a chat instruction changes
     the log after the fact, and a script on disk would go stale the same way a report does --
     except nothing would mark it stale."""
     try:
-        state = await graph.aget_state(thread_config(session_id))
-        log = list((state.values or {}).get("action_log", [])) if state else []
+        if actions is not None:
+            log = list(actions)
+        else:
+            state = await graph.aget_state(thread_config(session_id))
+            log = list((state.values or {}).get("action_log", [])) if state else []
         original = pd.read_csv(directory / "original.csv")
         return cleaning_export.build_cleaning_script(original, log, file_name=file_name)
     except Exception:  # noqa: BLE001 -- a missing script must not sink the rest of the export
         logger.exception("clean.py could not be built for session %s", session_id)
         return None
+
+
+@router.get("/api/model/{session_id}/runs/{run_id}/clean-script", response_class=PlainTextResponse)
+async def get_run_cleaning_script(
+    session_id: str,
+    run_id: str,
+    settings: Settings = Depends(get_settings),
+    graph=Depends(get_graph),
+) -> PlainTextResponse:
+    """The cleaning a stored run was trained after, as a runnable script, from the run's own snapshot of the log:
+    undoing a fix or changing it by chat afterwards does not change it."""
+    meta, directory = _session_files(settings, session_id)
+    stored = model_store.load_run(directory, run_id)
+    actions = run_actions(stored)
+    if stored is None or actions is None:
+        raise NothingToExportError(
+            "That run has no record of the fixes it was trained after: it is not stored, or it was made before runs "
+            "recorded them."
+        )
+    script = await _cleaning_script(
+        session_id, directory, graph, meta.get("file_name", "original.csv"), actions=actions
+    )
+    if script is None:
+        raise NothingToExportError("The cleaning script for that run could not be built.")
+    return PlainTextResponse(script, headers={"Content-Disposition": 'attachment; filename="clean.py"'})
 
 
 @router.get("/api/export/{session_id}/clean-script", response_class=PlainTextResponse)
@@ -228,8 +264,14 @@ async def export_bundle(
         )
     # Only once there is something cleaned to reproduce -- a script for an untouched upload
     # would be a file that copies a CSV.
+    # The cleaning the model in the bundle was trained after: the current run's own snapshot of the log, so a
+    # change to the log since does not pair this model with a script for different data. Without a current run,
+    # the log as it stands.
     clean_script = (
-        await _cleaning_script(session_id, directory, graph, meta.get("file_name", "original.csv"))
+        await _cleaning_script(
+            session_id, directory, graph, meta.get("file_name", "original.csv"),
+            actions=run_actions(model_store.load_result(directory)),
+        )
         if (directory / "cleaned.csv").exists()
         else None
     )

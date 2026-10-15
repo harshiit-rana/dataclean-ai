@@ -822,6 +822,12 @@ scikit-learn" can be named. The streamed and the blocking search hash alike, and
 hashes like that state. The metadata rides on the saved result too, and the history table shows it under each run's
 *how it was made*; runs from before it was kept say *not recorded*. Gathering it can never fail a run.
 
+Each run also keeps the fixes it was trained after (#75): a snapshot of the applied entries of the action log, with
+their ids in the history entry. The log changes after the fact (an undo, a chat instruction), so the export bundle now
+writes `clean.py` from the current run's snapshot rather than from whatever the log says at export time, and
+`GET /api/model/{id}/runs/{run_id}/clean-script` returns any stored run's own script. Without a current run the bundle
+uses the log as it stands. The model card names the data version and how many approved fixes produced it.
+
 Attempts that produced no model are in the record too (#64). A train or search the readiness checks refused, or one that
 failed during fitting (a split that could not be made, no usable columns, an unexpected error), leaves an entry with
 `status` `refused` or `failed`, the reason the user was shown, its code, the request and the data version, in the same

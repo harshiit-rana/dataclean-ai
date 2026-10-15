@@ -162,11 +162,31 @@ def selection(result: dict) -> dict | None:
     }
 
 
+# What a run keeps of each fix it was trained after: enough to write clean.py from it again.
+ACTION_FIELDS = ("action_id", "operation", "column_name", "operation_params", "status", "source")
+
+
+def applied_actions(action_log: list[dict] | None) -> list[dict] | None:
+    """The fixes applied when the run was trained, in order. None when the log could not be read (not the same
+    as a session with no fixes, which is an empty list)."""
+    if action_log is None:
+        return None
+    return [
+        {k: entry.get(k) for k in ACTION_FIELDS if k in entry}
+        for entry in action_log
+        if entry.get("status") == "applied"
+    ]
+
+
 def describe(
     *, request: dict | None, route: str, dataset_version: dict | None, runtime_seconds: float | None, result: dict,
-    cost_limit: int | None = None,
+    cost_limit: int | None = None, action_log: list[dict] | None = None,
 ) -> dict:
-    """The run's metadata, as kept on the saved result and copied into its history entry."""
+    """The run's metadata, as kept on the saved result and copied into its history entry.
+
+    `actions` is a snapshot of the fixes applied when it was trained, so its clean.py can be written from the log
+    as it stood then, whatever undo or chat does to the log afterwards."""
+    actions = applied_actions(action_log)
     version = (
         {k: dataset_version.get(k) for k in ("version", "fingerprint", "rows", "columns", "event")}
         if dataset_version
@@ -182,4 +202,6 @@ def describe(
         "runtime_seconds": None if runtime_seconds is None else round(float(runtime_seconds), 2),
         "dataset_version": version,
         "selection": selection(result),
+        "actions": actions,
+        "applied_action_ids": None if actions is None else [a.get("action_id") for a in actions],
     }

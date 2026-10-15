@@ -327,7 +327,7 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
                 key: (result.get("run_metadata") or {}).get(key)
                 for key in (
                     "environment", "seeds", "request", "config_hash", "runtime_seconds", "dataset_version",
-                    "selection",
+                    "selection", "applied_action_ids",
                 )
             },
         }

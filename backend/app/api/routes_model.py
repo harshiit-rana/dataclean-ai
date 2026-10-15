@@ -803,7 +803,7 @@ def _save_and_record(
     result["evaluation"] = evaluation
     result["assessment"] = evaluation_ledger.qualify(result.get("assessment"), evaluation)
     version = current_dataset_version_in(directory, ensure=True)
-    result["run_metadata"] = _describe_run(result, request, route, version, started, cost_limit)
+    result["run_metadata"] = _describe_run(result, request, route, version, started, cost_limit, action_log)
     if (result.get("split") or {}).get("sealed"):
         result["split"]["sealed_after_looks"] = _record_the_seal(directory, result["split"], version)
     payload = model_store.save_result(
@@ -899,7 +899,7 @@ def _record_the_seal(directory, split: dict, version: dict | None) -> int:
     return looks_so_far
 
 
-def _describe_run(result: dict, request, route: str, version, started, cost_limit) -> dict | None:
+def _describe_run(result: dict, request, route: str, version, started, cost_limit, action_log=None) -> dict | None:
     """The run's metadata, or None if it could not be gathered. Bookkeeping never fails a finished run."""
     try:
         return run_metadata.describe(
@@ -909,6 +909,7 @@ def _describe_run(result: dict, request, route: str, version, started, cost_limi
             runtime_seconds=None if started is None else time.perf_counter() - started,
             result=result,
             cost_limit=cost_limit,
+            action_log=action_log,
         )
     except Exception:  # noqa: BLE001
         logger.warning("Run metadata could not be gathered", exc_info=True)
