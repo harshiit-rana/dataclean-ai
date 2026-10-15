@@ -959,10 +959,89 @@ def evaluate(pipeline, X_test, y_test, task: str, positive_label: str | None = N
         except Exception:  # noqa: BLE001 -- a missing AUC must not sink the whole evaluation
             logger.debug("ROC AUC could not be computed", exc_info=True)
 
+    # More than two answers have no single AUC, but each answer against the rest does, and their
+    # average says how well the model ranks every class -- information accuracy throws away.
+    if not binary and hasattr(pipeline, "predict_proba"):
+        macro = _macro_ovr_auc(pipeline, X_test, y_true, labels)
+        if macro is not None:
+            scores["roc_auc_ovr_macro"] = round(macro, 4)
+
     scores["confusion_matrix"] = sk.confusion_matrix(y_true, y_pred, labels=labels).tolist()
     scores["labels"] = labels
     scores["positive_label"] = pos_label
     return scores
+
+
+def _ovr_probabilities(pipeline, X_test, labels: list[str]):
+    """The model's probabilities, columns in `labels` order, or None when they cannot be read
+    against these labels: a class missing from the test rows (or from the model) leaves one-vs-rest
+    AUC undefined for it, and an average over the rest would not mean what it says."""
+    try:
+        classes = [str(c) for c in pipeline.classes_]
+        if sorted(classes) != sorted(labels):
+            return None
+        probabilities = np.asarray(pipeline.predict_proba(X_test), dtype=float)
+        return probabilities[:, [classes.index(label) for label in labels]]
+    except Exception:  # noqa: BLE001 -- a missing AUC must not sink the whole evaluation
+        logger.debug("Probabilities could not be read for the one-vs-rest AUC", exc_info=True)
+        return None
+
+
+def _macro_ovr_auc(pipeline, X_test, y_true, labels: list[str]) -> float | None:
+    from sklearn import metrics as sk
+
+    probabilities = _ovr_probabilities(pipeline, X_test, labels)
+    if probabilities is None:
+        return None
+    try:
+        return float(
+            sk.roc_auc_score(
+                np.asarray(y_true), probabilities, multi_class="ovr", average="macro", labels=labels
+            )
+        )
+    except ValueError:
+        return None
+
+
+# How many shuffles of the test answers the noise floor is read from, bounded by the work they
+# cost (rows x classes per shuffle). Enough that the tail it is read from means something on the
+# usual file; on a very large one the floor is so close to chance that a coarser estimate is fine.
+_FLOOR_MAX_SHUFFLES = 500
+_FLOOR_MIN_SHUFFLES = 60
+_FLOOR_WORK = 8_000_000
+
+
+def ovr_noise_floor(pipeline, X_test, y_test, model_count: int = 2, seed: int = 0) -> float | None:
+    """The macro one-vs-rest AUC that luck alone reaches on a test set of this size, or None.
+
+    For two answers the analytic standard error of AUC gives this (`_auc_noise_threshold`); there is
+    no such formula for the average of several correlated one-vs-rest AUCs, so it is read off the
+    data instead: shuffle the test answers (the model's probabilities stay where they are, so any
+    skill is destroyed and the class counts are kept), score each shuffle, and take the tail the
+    same multiple-candidates correction asks for -- 5% spread across `model_count` models. No
+    refitting, and the answers are only ever shuffled, never used to choose anything.
+    """
+    from sklearn import metrics as sk
+
+    labels = sorted(pd.Series(y_test).astype(str).unique())
+    probabilities = _ovr_probabilities(pipeline, X_test, labels)
+    if probabilities is None or len(labels) < 3:
+        return None
+    answers = pd.Series(y_test).astype(str).to_numpy()
+    shuffles = int(
+        min(_FLOOR_MAX_SHUFFLES, max(_FLOOR_MIN_SHUFFLES, _FLOOR_WORK // max(len(answers) * len(labels), 1)))
+    )
+    rng = np.random.default_rng(seed)
+    try:
+        null = [
+            sk.roc_auc_score(
+                rng.permutation(answers), probabilities, multi_class="ovr", average="macro", labels=labels
+            )
+            for _ in range(shuffles)
+        ]
+    except ValueError:
+        return None
+    return float(np.quantile(null, 1 - 0.05 / max(1, model_count)))
 
 
 def resolve_positive_label(labels: list[str], requested: str | None) -> str:
@@ -1055,7 +1134,8 @@ def baseline_score(y_train, y_test, task: str, positive_label: str | None = None
 # The scores a classification baseline reports, in the order the tables show them: every one a
 # model reports, so the baseline row has a value under each column.
 _BASELINE_KEYS = (
-    "accuracy", "precision", "recall", "f1", "roc_auc", "brier_score", "expected_calibration_error"
+    "accuracy", "precision", "recall", "f1", "roc_auc", "roc_auc_ovr_macro",
+    "brier_score", "expected_calibration_error",
 )
 
 
@@ -1156,6 +1236,8 @@ def _classification_baselines(y_train, y_test, positive_label: str | None) -> di
             "precision": float(np.mean([share[label] for label in labels])),
             "recall": float(np.mean([prior[label] for label in labels])),
             "f1": float(np.mean([harmonic(share[label], prior[label]) for label in labels])),
+            # No score ranks anything, so every answer against the rest is a coin flip.
+            "roc_auc_ovr_macro": 0.5,
         }
     baseline["others"] = [
         {
@@ -1299,6 +1381,7 @@ def assess_result(
     class_counts: list[int] | None = None,
     model_count: int = 2,
     intervals: dict | None = None,
+    ovr_auc_floor: float | None = None,
 ) -> dict:
     """Is this model actually worth anything?
 
@@ -1312,6 +1395,11 @@ def assess_result(
     `intervals` is the held-out metrics' 95% intervals (`uncertainty.metric_intervals`). A
     regression is judged on the lower end of its R² interval, which is what makes the verdict
     depend on how many test rows there are; without it the fixed cut-offs below are used.
+
+    For more than two answers, `ovr_auc_floor` is the macro one-vs-rest AUC that luck alone reaches
+    on this many test rows (`ovr_noise_floor`); with it and the model's own `roc_auc_ovr_macro` the
+    verdict is the same chance-adjusted comparison the two-class one makes, and the accuracy against
+    always answering the commonest answer is kept as a second line.
     """
     # Asked before anything else. Every verdict below is a claim about what the test set
     # shows, so if the test set is too small to show anything, none of them can be made --
@@ -1383,6 +1471,33 @@ def assess_result(
             f"same thing.",
         }
 
+    macro = metrics.get("roc_auc_ovr_macro")
+    if macro is not None and ovr_auc_floor is not None:
+        macro, floor = float(macro), float(ovr_auc_floor)
+        versus = (
+            f" Its {accuracy:.0%} accuracy compares with {baseline_accuracy:.0%} for "
+            f"{baseline.get('strategy', 'always giving the same answer')}."
+        )
+        if macro < floor:
+            return {
+                "verdict": "no_better_than_guessing",
+                "headline": f"This model is within the range of random guessing (macro AUC {macro:.2f}, "
+                f"where 0.50 is chance; luck alone reaches about {floor:.2f} on this many test rows)."
+                f"{versus}",
+            }
+        if macro < 0.70:
+            return {
+                "verdict": "marginal",
+                "headline": f"This model ranks the answers only weakly (macro AUC {macro:.2f}, above the "
+                f"{floor:.2f} that luck alone could produce here). Better than chance, but not enough "
+                f"to rely on.{versus}",
+            }
+        return {
+            "verdict": "useful",
+            "headline": f"This model ranks the answers meaningfully (macro AUC {macro:.2f}, against "
+            f"{floor:.2f} for luck).{versus}",
+        }
+
     strategy = baseline.get("strategy", "always giving the same answer")
     # Same idea without an AUC to lean on: how far above the baseline could this land by luck
     # given the number of test rows?
@@ -1391,22 +1506,30 @@ def assess_result(
         p = min(max(baseline_accuracy, 0.01), 0.99)
         margin = max(margin, 1.96 * float(np.sqrt(p * (1 - p) / test_rows)))
 
+    # Three or more answers and no usable AUC (an answer is missing from the test rows, or the
+    # model gives no probabilities): say that the chance-adjusted comparison was not available.
+    note = (
+        " (The one-vs-rest AUC was not available -- an answer is missing from the test rows, or the "
+        "model gives no probabilities -- so this compares accuracy with the baseline.)"
+        if len(metrics.get("labels") or []) > 2
+        else ""
+    )
     if accuracy <= baseline_accuracy + margin:
         return {
             "verdict": "no_better_than_guessing",
             "headline": f"At {accuracy:.0%} accuracy this model does no better than the "
-            f"{baseline_accuracy:.0%} you would get by choosing to {strategy}.",
+            f"{baseline_accuracy:.0%} you would get by choosing to {strategy}.{note}",
         }
     if accuracy < baseline_accuracy + max(0.10, margin * 2):
         return {
             "verdict": "marginal",
             "headline": f"At {accuracy:.0%} accuracy this model is only slightly ahead of the "
-            f"{baseline_accuracy:.0%} baseline.",
+            f"{baseline_accuracy:.0%} baseline.{note}",
         }
     return {
         "verdict": "useful",
         "headline": f"At {accuracy:.0%} accuracy this model is clearly ahead of the "
-        f"{baseline_accuracy:.0%} baseline.",
+        f"{baseline_accuracy:.0%} baseline.{note}",
     }
 
 
@@ -2186,5 +2309,10 @@ def train_candidates(
             # of fixing the thing it guarded against; until it is made, the bar stays strict.
             model_count=len(trained),
             intervals=best.get("metrics_intervals"),
+            ovr_auc_floor=(
+                ovr_noise_floor(best["pipeline"], X_test, y_test, len(trained))
+                if task == "classification" and "roc_auc_ovr_macro" in best["metrics"]
+                else None
+            ),
         ),
     }

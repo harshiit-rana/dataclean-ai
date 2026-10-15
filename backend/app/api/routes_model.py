@@ -1189,6 +1189,11 @@ def _open_the_sealed_holdout(df, stored: dict, pipeline) -> dict:
         ),
         model_count=len(stored["results"]),
         intervals=intervals,
+        ovr_auc_floor=(
+            modeling.ovr_noise_floor(pipeline, X_final[used], y_final, len(stored["results"]))
+            if task == "classification" and "roc_auc_ovr_macro" in metrics
+            else None
+        ),
     )
     return {
         "rows": int(len(y_final)),

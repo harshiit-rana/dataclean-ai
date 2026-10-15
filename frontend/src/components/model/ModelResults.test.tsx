@@ -693,3 +693,38 @@ describe("ModelResults — the gap is said where the split is described (#20)", 
     expect(screen.queryByText(/with a gap/)).not.toBeInTheDocument();
   });
 });
+
+describe("ModelResults — the macro AUC for more than two answers (#37)", () => {
+  const multi = (): ModelResult => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.results[0].metrics = { accuracy: 0.55, precision: 0.5, recall: 0.5, f1: 0.5, roc_auc_ovr_macro: 0.834 };
+    r.results[1].metrics = { accuracy: 0.5, precision: 0.45, recall: 0.45, f1: 0.45, roc_auc_ovr_macro: 0.79 };
+    r.baseline = {
+      strategy: "always answer 'c'",
+      accuracy: 0.28, precision: 0.07, recall: 0.25, f1: 0.11, roc_auc_ovr_macro: 0.5,
+      others: [{ strategy: "guess at random, in proportion to how common each answer is", accuracy: 0.26, precision: 0.25, recall: 0.25, f1: 0.25, roc_auc_ovr_macro: 0.5 }],
+    };
+    return r;
+  };
+
+  it("shows the column, named for what it is", () => {
+    render(<ModelResults result={multi()} />);
+    expect(screen.getByRole("columnheader", { name: "ROC AUC (macro)" })).toBeInTheDocument();
+    expect(screen.getByText("0.834")).toBeInTheDocument();
+  });
+
+  it("gives both no-model rows a coin flip under it, so the column is never compared with a blank", () => {
+    render(<ModelResults result={multi()} />);
+    const rows = screen.getAllByText(/No model at all/).map((cell) => cell.closest("tr") as HTMLElement);
+    expect(rows.length).toBe(2);
+    for (const row of rows) {
+      expect(within(row).getByText("0.500")).toBeInTheDocument();
+      expect(within(row).queryByText("—")).not.toBeInTheDocument();
+    }
+  });
+
+  it("does not show it for a result that has none, as every two-answer result", () => {
+    render(<ModelResults result={result({ evaluation: EVAL(1, "independent") })} />);
+    expect(screen.queryByRole("columnheader", { name: "ROC AUC (macro)" })).not.toBeInTheDocument();
+  });
+});

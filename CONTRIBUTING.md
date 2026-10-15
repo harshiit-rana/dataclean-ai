@@ -388,6 +388,13 @@ are both running locally, you're ready to make changes.
   place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
   does not need this application's class to load. Nothing may build a fold splitter without the groups -- not even to ask whether folds are possible -- or `test_identical_rows_folds.py` rightly flags it. `TestCalibratingTheProbabilities` in
   `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
+- **The multi-class verdict's noise floor comes from shuffling, not a formula.** `ovr_noise_floor`
+  shuffles the test answers against the model's own probabilities and reads the tail
+  (`1 - 0.05 / model_count`), bounded by `_FLOOR_WORK`; it must stay free of refits and must only ever
+  *shuffle* the answers. Every path that makes a verdict for more than two answers (the train route and
+  the sealed `finalise`) passes it to `assess_result` as `ovr_auc_floor`; without it the verdict falls
+  back to the accuracy rule, with a note. Add a new multi-class metric to the baselines too, or its
+  column has nothing to be compared with.
 - **A group key is built in one place and copied by source.** `modeling.with_group_key` returns the
   frame, the column to split on and the columns to withhold; one column is used as it is (the
   behaviour before composite keys), several become a column named "a + b" made by

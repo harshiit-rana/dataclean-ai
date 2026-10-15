@@ -36,6 +36,11 @@ _METRIC_LABELS = {
     "recall": ("Recall", "Of the real cases, how many it catches."),
     "f1": ("F1", "A single score balancing precision and recall."),
     "roc_auc": ("ROC AUC", "How well it ranks cases. 0.50 is a coin flip, 1.00 is perfect."),
+    "roc_auc_ovr_macro": (
+        "ROC AUC (macro)",
+        "How well it ranks each answer against all the others, averaged over the answers. 0.50 is "
+        "chance, 1.00 is perfect.",
+    ),
     "brier_score": (
         "Brier score",
         "How far its probabilities are from what happened, squared and averaged. 0 is perfect; "
@@ -180,7 +185,10 @@ def _held_out_comparison(result: dict, chosen_only: bool = False) -> list[str]:
     keys = (
         ["r2", "mae", "rmse", "mae_vs_baseline"]
         if task == "regression"
-        else ["accuracy", "precision", "recall", "f1", "roc_auc", "brier_score", "expected_calibration_error"]
+        else [
+            "accuracy", "precision", "recall", "f1", "roc_auc", "roc_auc_ovr_macro",
+            "brier_score", "expected_calibration_error",
+        ]
     )
     present = [
         k

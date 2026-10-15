@@ -257,6 +257,19 @@ target. So results are judged against what luck alone could produce on a test se
 and against always guessing the same answer. On data with no signal, 23 of 25 runs are
 correctly flagged and none are called useful.
 
+A target with more than two answers is judged on a chance-adjusted AUC too. It used to compare accuracy
+with the commonest answer plus a binomial margin, which ignores how well the model ranks every answer.
+Results now report the macro one-vs-rest AUC (`roc_auc_ovr_macro`, left out when an answer is missing
+from the test rows or the model gives no probabilities), and the verdict compares it with what luck
+reaches on this many test rows, read off the data by shuffling the test answers (no refits; the
+probabilities stay put, so any skill is destroyed and the class counts are kept) and taking the tail the
+multiple-candidates correction asks for. The accuracy against the baseline stays as a second line, and
+a result without the AUC falls back to the accuracy rule and says why. Measured: on four-answer noise with
+48 test rows, 23 of 25 runs with two candidates are called guessing and none useful (the old accuracy rule
+got 24 of 25 with one, so noise is no better and no worse); on a weak but real signal the old rule called
+20 of 20 files "no better than guessing" and the new one finds all of them (marginal or useful). Two
+answers are untouched.
+
 A regression is judged the same way. It used to be fixed R² cut-offs (under 0.05 is guessing,
 under 0.3 marginal) for 35 test rows and 35,000 alike, so a lucky 0.35 on a few dozen rows was
 "useful". The verdict now stands on the lower end of the 95% R² interval from the bootstrap over

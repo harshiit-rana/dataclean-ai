@@ -25,7 +25,7 @@ from app.services.model_card import build_model_card
 
 client = TestClient(app)
 TWO_CLASS_KEYS = {"accuracy", "precision", "recall", "f1", "roc_auc", "brier_score", "expected_calibration_error"}
-MULTI_CLASS_KEYS = {"accuracy", "precision", "recall", "f1"}
+MULTI_CLASS_KEYS = {"accuracy", "precision", "recall", "f1", "roc_auc_ovr_macro"}
 
 
 def labels(rate: float, n: int = 1000, seed: int = 0) -> pd.Series:

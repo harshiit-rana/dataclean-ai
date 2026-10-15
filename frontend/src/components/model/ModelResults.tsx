@@ -41,6 +41,7 @@ const METRIC_LABELS: Record<string, string> = {
   recall: "Recall",
   f1: "F1",
   roc_auc: "ROC AUC",
+  roc_auc_ovr_macro: "ROC AUC (macro)",
   brier_score: "Brier score",
   expected_calibration_error: "Calibration error",
   r2: "R²",
@@ -57,6 +58,7 @@ const CLASSIFICATION_KEYS = [
   "recall",
   "f1",
   "roc_auc",
+  "roc_auc_ovr_macro",
   "brier_score",
   "expected_calibration_error",
 ];
