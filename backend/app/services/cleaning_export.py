@@ -177,6 +177,10 @@ def build_cleaning_script(original: pd.DataFrame, action_log: list[dict], *, fil
         blocks.append(f"# {applied}. {label}{_learned_note(name, learned)}{source}\n" + "\n".join(lines))
 
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    from app.services import run_metadata
+
+    # The cleaning ran in this process, so its versions are this process's.
+    env = run_metadata.environment()
     body = "\n\n".join(blocks) if blocks else "# No fixes were applied in this session."
     return f'''"""Reproduces the cleaning DataClean AI applied to {file_name}.
 
@@ -188,13 +192,18 @@ from the data -- a median, a most-common value, outlier limits -- is written in 
 fixed number rather than recomputed, so new rows are filled and clipped exactly as the rows a
 model was trained on were.
 
-    pip install pandas
+Produced with Python {env.get("python")}, pandas {env.get("pandas")}, numpy {env.get("numpy")}. The
+script says so when the installed versions differ; it runs either way.
+
+    {run_metadata.install_line(env, ("pandas", "numpy"))}
     python clean.py {file_name} cleaned.csv
 """
 
 import sys
 
 import pandas as pd
+
+{run_metadata.versions_block(env, ("pandas", "numpy"))}
 
 source = sys.argv[1] if len(sys.argv) > 1 else {file_name!r}
 destination = sys.argv[2] if len(sys.argv) > 2 else "cleaned.csv"

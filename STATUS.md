@@ -820,6 +820,14 @@ instead of a row of dashes.
 not to trust. A test runs the generated script in a subprocess and checks it reproduces the
 reported metrics.
 
+Both scripts say which software produced the numbers (#73). `train_model.py` lists the Python, scikit-learn, pandas,
+numpy and joblib versions the run recorded (this process's, for a result saved before runs recorded them), and
+`clean.py` lists Python, pandas and numpy. The install line pins each library to the same minor series
+(`scikit-learn~=1.7.0`): exact pins fail on a Python the old wheel was never built for, and open requirements install
+whatever is newest. At start-up each script compares the installed versions with the ones used and prints a note when
+they differ; it never refuses to run. The model card has an Environment section with the versions, seeds,
+configuration hash, data version and training time, or says *not recorded* for an older run.
+
 ### Where test information could reach a decision — an audit
 
 Prompted by a roadmap review that made the rule explicit: *the final test set must never be used

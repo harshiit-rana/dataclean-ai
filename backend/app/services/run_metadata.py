@@ -34,6 +34,67 @@ def environment() -> dict[str, str | None]:
     return found
 
 
+def pip_name(key: str) -> str:
+    """The package name pip installs for an environment key ("scikit_learn" -> "scikit-learn")."""
+    return next((name for name, k in LIBRARIES.items() if k == key), key)
+
+
+def compatible_requirement(name: str, version: str | None) -> str:
+    """A pin that allows bug-fix releases of the same minor version (`~=1.7.0` means >=1.7.0 and <1.8).
+
+    Exact pins fail to install on a Python the old wheel was never built for; an open requirement installs
+    whatever is newest, which is how a script stops reproducing. The minor series is the middle ground.
+    """
+    parts = (version or "").split(".")
+    if len(parts) < 2 or not parts[0].isdigit() or not parts[1].isdigit():
+        return name
+    return f"{name}~={parts[0]}.{parts[1]}.0"
+
+
+def install_line(env: dict, keys: tuple[str, ...]) -> str:
+    """`pip install ...` with each library pinned to the minor series that produced the result."""
+    return "pip install " + " ".join(f'"{compatible_requirement(pip_name(k), env.get(k))}"' for k in keys)
+
+
+def versions_block(env: dict, keys: tuple[str, ...]) -> str:
+    """Source for an exported script: the versions that produced its result, and a check that only warns.
+
+    Printed rather than raised: a newer library usually gives the same numbers, and refusing to run would
+    turn "might differ slightly" into "cannot be used". The check reads the installed versions the same way
+    `environment` does, so the names match.
+    """
+    used = {"python": env.get("python")} | {pip_name(k): env.get(k) for k in keys}
+    lines = [f"    {name!r}: {version!r}," for name, version in used.items() if version]
+    return (
+        "# --- The versions that produced the reported numbers ------------------------------------\n"
+        "# A different version usually gives the same result, but not always; the check below says so\n"
+        "# when they differ, and carries on either way.\n"
+        "VERSIONS_USED = {\n" + "\n".join(lines) + "\n}\n"
+        "\n"
+        "\n"
+        "def check_versions():\n"
+        "    import platform\n"
+        "    from importlib import metadata\n"
+        "\n"
+        "    different = []\n"
+        "    for name, used in VERSIONS_USED.items():\n"
+        "        try:\n"
+        "            installed = platform.python_version() if name == 'python' else metadata.version(name)\n"
+        "        except metadata.PackageNotFoundError:\n"
+        "            installed = 'not installed'\n"
+        "        if installed != used:\n"
+        "            different.append(f'{name} {installed} (the app used {used})')\n"
+        "    if different:\n"
+        "        print('Note: these versions differ from the ones that produced the reported numbers, '\n"
+        "              'so the results may differ slightly:')\n"
+        "        for line in different:\n"
+        "            print('  ' + line)\n"
+        "\n"
+        "\n"
+        "check_versions()\n"
+    )
+
+
 def seeds() -> dict[str, int]:
     """Every seed a run depends on. Fixed in code, which is why they were never written down -- and why a change
     to one would make two runs differ with nothing in the record to say so."""

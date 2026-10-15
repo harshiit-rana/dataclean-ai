@@ -571,6 +571,37 @@ def _excluded_section(result: dict) -> list[str]:
     return lines
 
 
+def _environment_section(result: dict) -> list[str]:
+    """The software, seeds and configuration that produced the numbers above, from the run's own record.
+
+    A run from before these were recorded says so rather than printing this process's versions as if they
+    were the run's: the app may have been upgraded in between.
+    """
+    meta = result.get("run_metadata") or {}
+    env = meta.get("environment")
+    lines = ["", "## Environment", ""]
+    if not env:
+        return lines + ["Not recorded: this run was made before the software versions were kept with each run."]
+    lines += ["| | |", "| --- | --- |", f"| Python | {env.get('python')} |"]
+    for key, label in (("scikit_learn", "scikit-learn"), ("pandas", "pandas"), ("numpy", "numpy"), ("joblib", "joblib")):
+        lines.append(f"| {label} | {env.get(key) or 'not installed'} |")
+    if meta.get("seeds"):
+        lines.append("| Seeds | " + ", ".join(f"{k} {v}" for k, v in meta["seeds"].items()) + " |")
+    if meta.get("config_hash"):
+        lines.append(f"| Configuration | `{meta['config_hash']}` |")
+    version = meta.get("dataset_version") or {}
+    if version:
+        lines.append(f"| Data version | {version.get('version')} ({version.get('rows')} rows, {version.get('columns')} columns) |")
+    if meta.get("runtime_seconds") is not None:
+        lines.append(f"| Training took | {meta['runtime_seconds']:.1f} seconds |")
+    lines += [
+        "",
+        "`train_model.py` lists these versions and says when the installed ones differ. A newer library "
+        "usually gives the same numbers, but not always.",
+    ]
+    return lines
+
+
 def _trust_section(result: dict) -> list[str]:
     """Cross-validation spread and the learning curve, read rather than just printed."""
     deep = result.get("deep_diagnostics") or {}
@@ -1072,6 +1103,7 @@ def build_model_card(
         logger.warning("Prediction snippet could not be rendered", exc_info=True)
         script_note = ""
 
+    lines += _environment_section(result)
     lines += [
         "",
         "## Reproducing this",

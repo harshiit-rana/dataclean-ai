@@ -458,6 +458,15 @@ def build_training_script(result: dict, *, file_name: str = "cleaned.csv") -> st
     target_encoded = [c for c in features.get("target_encoded", []) if c in set(frequent)]
     entries, _notes = _preprocessing_block(numeric, categorical, frequent, clipped, target_encoded, task)
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    # The versions that produced the reported numbers: the run's own record, or this process for a result
+    # saved before runs recorded them (the same libraries, unless the app was upgraded since).
+    from app.services import run_metadata
+
+    env = (result.get("run_metadata") or {}).get("environment") or run_metadata.environment()
+    script_libraries = ("scikit_learn", "pandas", "numpy", "joblib")
+    used_versions = ", ".join(
+        f"{run_metadata.pip_name(k)} {env.get(k)}" for k in script_libraries if env.get(k)
+    )
 
     dropped_note = "\n".join(
         f"#   - {d['column']}: {d['reason']}" for d in features.get("dropped", [])
@@ -507,8 +516,11 @@ splitting would let the test rows help choose the values written into the traini
 every score afterwards would be flattering. Inside the pipeline, fit() sees the training fold
 only.
 
+Produced with Python {env.get("python")}, {used_versions}. The script says so when
+the installed versions differ; it runs either way.
+
 Run it with:
-    pip install scikit-learn pandas joblib
+    {run_metadata.install_line(env, script_libraries)}
     python train_model.py {file_name}
 
 Columns left out of the model, and why:
@@ -526,6 +538,7 @@ from sklearn.pipeline import Pipeline
 {_metric_imports(task, brier)}
 {_calibration_imports(result, calibrated) + chr(10) if calibrated else ""}{spec.import_lines(plain_settings)}{_cost_weighting_block(weighting)}
 {_clipper_block(clipped)}{_time_folds_block() if needs_time_folds else ""}
+{run_metadata.versions_block(env, script_libraries)}
 TARGET = {_literal(target)}
 NUMERIC_FEATURES = {_literal(numeric)}
 CATEGORICAL_FEATURES = {_literal(categorical)}
