@@ -1244,6 +1244,26 @@ export interface DriftReport {
 }
 
 /** POST /api/apply/{session_id}: a finished session used on a new file. */
+/** A new file checked against the model's input schema (backend validation.py). */
+export interface FileValidation {
+  schema_version: number | null;
+  blocking: boolean;
+  missing_columns: string[];
+  unexpected_columns: string[];
+  findings: {
+    column: string;
+    finding: "type" | "unseen_category" | "out_of_range" | "blank_new" | string;
+    severity: "warning" | "blocking";
+    count: number;
+    /** Up to five 1-based row numbers, header not counted. */
+    rows: number[];
+    message: string;
+    values?: string[];
+  }[];
+  rows_with_findings: number;
+  rows_checked: number;
+}
+
 export interface ApplyResult {
   session_id: string;
   apply_id: string;
@@ -1255,6 +1275,8 @@ export interface ApplyResult {
   dropped: { row: number; reason: string }[];
   dropped_count: number;
   notes: string[];
+  /** Absent for a model saved before input schemas were kept. */
+  validation?: FileValidation | null;
   drift: DriftReport | null;
   predictions: {
     count: number;

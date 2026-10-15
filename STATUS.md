@@ -914,6 +914,14 @@ categories seen with counts (capped at 50), and the derived inputs that read it;
 is built from the training rows only, and the integrity suite puts values far outside training into the held-out
 rows to show they never reach it.
 
+A new file is checked against that schema before it is scored (#77). The apply response carries a `validation` block:
+missing columns (*blocking*: the run stops and names them), unexpected columns (ignored and listed), and per column
+the type problems (values that are not numbers or not dates, treated as blank), values never seen in training,
+numbers outside the training range, and blanks where training had none -- each a *warning*, with a count, up to five
+row numbers and example values. Every row of the predictions file gets a `dataclean_validation` column saying what
+its problem is, and the Apply page shows the findings. Vectorised per column: 100,000 rows of 20 columns check in
+about 0.2 seconds.
+
 ### Where test information could reach a decision — an audit
 
 Prompted by a roadmap review that made the rule explicit: *the final test set must never be used

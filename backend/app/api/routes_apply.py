@@ -34,7 +34,9 @@ from app.core.errors import (
 )
 from app.dependencies import get_graph
 from app.graph.nodes.audit_agent import mark_report_stale_if_written
-from app.services import action_log, drift, evaluation_ledger, model_store, replay, scoring, spreadsheet_safe
+from app.services import (
+    action_log, drift, evaluation_ledger, model_store, replay, scoring, spreadsheet_safe, validation,
+)
 from app.services.encoding import read_csv_bytes
 from app.services.session_store import (
     current_dataset_version_in,
@@ -51,6 +53,8 @@ _APPLY_ID = re.compile(r"^[0-9a-f]{12}$")
 _FILES = {"cleaned": "cleaned.csv", "predictions": "predictions.csv"}
 PREVIEW_ROWS = 20
 NOTE_COLUMN = "dataclean_note"
+# Each row's findings against the model's input schema (validation.py); empty for a row with none.
+VALIDATION_COLUMN = "dataclean_validation"
 
 
 class NothingToApplyError(AppError):
@@ -133,6 +137,16 @@ def _run(directory, session_id: str, new: pd.DataFrame, action_log: list[dict], 
     if result is None or model_path is None:
         return response
 
+    # Checked against the model's input schema first (validation.py): which columns and rows have problems,
+    # before anything is coerced. A missing column still stops the run; everything else is a warning.
+    row_notes = None
+    schema = result.get("input_schema")
+    if schema:
+        report, row_notes = validation.validate(schema, applied.frame, target)
+        response["validation"] = report
+        if report["blocking"]:
+            raise ScoringFailedError(validation.describe_blocking(report))
+
     try:
         X_new, coerced = scoring.prepare_inputs(applied.frame, result, reference=reference)
         X_ref, _ = scoring.prepare_inputs(reference, result, reference=reference)
@@ -163,6 +177,9 @@ def _run(directory, session_id: str, new: pd.DataFrame, action_log: list[dict], 
     output[NOTE_COLUMN] = [
         f"no prediction: {applied.dropped[i]}" if i in applied.dropped else "" for i in output.index
     ]
+    if row_notes is not None:
+        # Each row's findings against the schema, in a line of its own.
+        output[VALIDATION_COLUMN] = [row_notes.get(i, "") for i in output.index]
     output.to_csv(out_dir / _FILES["predictions"], index=False)
     response["downloads"]["predictions"] = f"/api/apply/{session_id}/{apply_id}/predictions"
 
