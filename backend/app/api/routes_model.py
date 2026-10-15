@@ -555,6 +555,7 @@ async def get_model_plan(
         ],
         date_columns=_date_columns(df),
         group_columns=_group_columns(df, target),
+        group_column_options=[str(c) for c in df.columns if c != target],
         blockers=readiness.get("blockers", []),
         warnings=readiness.get("warnings", []),
         trained=stored is not None,
@@ -827,6 +828,7 @@ async def train_model(
             split_strategy=request.split_strategy,
             time_column=request.time_column,
             group_column=request.group_column,
+            group_columns=request.group_columns,
             include_deep_diagnostics=request.include_deep_diagnostics,
             point=point,
             feature_recipes_wanted=request.feature_recipes,
@@ -896,6 +898,7 @@ def _improve_and_save(
         split_strategy=request.split_strategy,
         time_column=request.time_column,
         group_column=request.group_column,
+        group_columns=request.group_columns,
         goal=request.goal,
         budget=request.budget,
         feature_recipes_wanted=request.feature_recipes,
@@ -931,6 +934,7 @@ def _improve_and_save(
         split_strategy=request.split_strategy,
         time_column=request.time_column,
         group_column=request.group_column,
+        group_columns=request.group_columns,
         include_deep_diagnostics=request.include_deep_diagnostics,
         model_params={best["model"]: params},
         point=point,
@@ -1130,6 +1134,11 @@ def _open_the_sealed_holdout(df, stored: dict, pipeline) -> dict:
     recipes = [feature_recipes.Recipe(**r) for r in features.get("derived", []) or []]
 
     frame = feature_recipes.apply(df, recipes)
+    if split.get("strategy") == "group":
+        # A key made of several columns is rebuilt the same way it was made.
+        parts = split.get("group_columns") or ([split["group_column"]] if split.get("group_column") else [])
+        if parts:
+            frame, _, _ = modeling.with_group_key(frame, parts, target)
     X_train, X_dev, X_final, y_train, y_dev, y_final = modeling.split_with_sealed_holdout(
         frame,
         target,

@@ -132,6 +132,10 @@ class ModelPlanResponse(BaseModel):
     candidate_models: list[dict]
     split_options: list[dict]
     date_columns: list[str]  # candidates for a time-based split
+    # Every column that could be part of a group key, for building one that needs more than a
+    # single column. Wider than `group_columns`, which are the ones that already look like an
+    # entity on their own.
+    group_column_options: list[str] = []
     group_columns: list[str]  # candidates for a grouped split, most repeated first
     blockers: list[str]
     warnings: list[str]
@@ -213,6 +217,9 @@ class TrainRequest(BaseModel):
     time_column: Optional[str] = None
     # The column identifying which rows belong to the same entity, for a grouped split.
     group_column: Optional[str] = None
+    # The columns that together name an entity, when one is not enough (a store within a region).
+    # Takes precedence over `group_column`, which stays for single-column requests.
+    group_columns: list[str] = Field(default_factory=list, max_length=5)
     include_deep_diagnostics: bool = True
     # Two-class targets only; ignored otherwise.
     operating_point: Optional[OperatingPointRequest] = None

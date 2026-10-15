@@ -388,6 +388,14 @@ are both running locally, you're ready to make changes.
   place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
   does not need this application's class to load. Nothing may build a fold splitter without the groups -- not even to ask whether folds are possible -- or `test_identical_rows_folds.py` rightly flags it. `TestCalibratingTheProbabilities` in
   `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
+- **A group key is built in one place and copied by source.** `modeling.with_group_key` returns the
+  frame, the column to split on and the columns to withhold; one column is used as it is (the
+  behaviour before composite keys), several become a column named "a + b" made by
+  `composite_group_key`. The order of the key's labels decides which groups land in which fold, so the
+  export copies that function's source rather than rewriting it, and a sealed holdout is re-split from
+  `split["group_columns"]`. Any new place that groups rows must call `with_group_key` and withhold
+  everything it returns -- a key column left in the inputs is the memorisation the split exists to
+  prevent.
 - **A date split's gap is applied in three places that must agree.** `modeling.split_data`
   (`time_gap_days`) drops the training rows less than the gap before the first test row;
   `time_folds.TimeFoldRule.gap_days` does the same inside every fold, because

@@ -192,6 +192,19 @@ inputs, how the data splits, what gets tried. Leaky columns and row identifiers 
 pre-unticked with the reason attached. A time-based split is offered when there are dates,
 because a random split lets a model learn from the future to predict the past.
 
+**A grouped split can be on more than one column.** Some entities are named by several columns
+together (a store within a region, a patient at a site), and grouping on either alone puts the same
+entity on both sides. The plan form now builds a key a column at a time (the entity-shaped columns
+first, but any column can be added, up to five), the request carries `group_columns`, and the rows with
+the same combination of values stay on one side of every split and every fold. Every column in the key
+is withheld from the inputs, a blank in any of them is refused with the column named, the answer
+itself cannot be part of the key, and a single-column request behaves exactly as it always did (a
+test checks identical metrics). The key is a column named after its parts ("store + region") so the
+result, the card and the error messages read naturally, `split.group_columns` lists the parts, a sealed
+holdout is re-split from them when it is opened, and the exported script copies the app's key function
+so it builds exactly the same groups. A composite key is a departure from a single-column
+recommendation, and is recorded as one.
+
 **A date split can leave a gap.** When the answer is defined over a future window ("cancelled within
 30 days"), a row just before the cut has an answer partly decided by what happens in the test period,
 so a model trained on it has been shown something about that period. The plan offers an optional gap in

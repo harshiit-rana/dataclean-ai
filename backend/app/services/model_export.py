@@ -107,16 +107,19 @@ def _split_block(split: dict, task: str) -> str:
     script reproduces all three partitions. The sealed rows are set aside and never touched
     here; opening them is an explicit act in the app.
     """
+    prelude = _group_key_lines(split)
     if not split.get("sealed"):
         # The fraction the run asked for, so a file that held back 30% is cut the same way here.
-        return _ordinary_split_block(split, task, split.get("requested_test_size") or DEFAULT_TEST_SIZE)
+        return prelude + _ordinary_split_block(
+            split, task, split.get("requested_test_size") or DEFAULT_TEST_SIZE
+        )
 
     copies = bool(split.get("seal_key_columns"))
     strategy = split.get("strategy") or "random"
     helper = (
         _function_source(modeling.split_keeping_identical_rows_together) + "\n\n" if copies else ""
     )
-    seal = f"""{helper}{_function_source(modeling.sealed_holdout_rows)}
+    seal = f"""{prelude}{helper}{_function_source(modeling.sealed_holdout_rows)}
 
 # A sealed final holdout, taken out before anything else happens to the rows. It depends only on
 # the data, the seed and how the rows are divided -- not on which columns are used or which
@@ -136,6 +139,24 @@ print(f"Sealed {{len(final_index)}} rows as a final holdout; they are not used b
     return seal + "\n" + _ordinary_split_block(
         split, task, SEALED_DEV_SIZE / (1 - SEALED_FINAL_SIZE), helper_defined=copies
     )
+
+
+def _group_key_lines(split: dict) -> str:
+    """For a grouped split on more than one column: the app's own key function, copied by source,
+    and the key column it makes. The order of the labels decides which groups land where, so the
+    script has to build exactly the same strings."""
+    columns = split.get("group_columns") or []
+    if split.get("strategy") != "group" or len(columns) < 2:
+        return ""
+    return f"""{_function_source(modeling.composite_group_key)}
+
+
+# The rows of one entity are named by several columns together, so the groups are their
+# combinations: a store within a region, a patient at a site.
+GROUP_COLUMNS = {_literal(list(columns))}
+labelled = labelled.assign(**{{{_literal(split["group_column"])}: composite_group_key(labelled, GROUP_COLUMNS)}})
+
+"""
 
 
 def _gap_lines(split: dict) -> str:

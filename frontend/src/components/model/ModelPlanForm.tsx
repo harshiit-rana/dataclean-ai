@@ -75,15 +75,30 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
   const [timeColumn, setTimeColumn] = useState<string>(
     (usableAdvice?.strategy === "time" ? usableAdvice.column : null) ?? plan.date_columns[0] ?? ""
   );
-  // Defaults to the most-repeated column, which is the one the readiness panel names.
-  const [groupColumn, setGroupColumn] = useState<string>(
-    (usableAdvice?.strategy === "group" ? usableAdvice.column : null) ?? plan.group_columns?.[0] ?? ""
-  );
+  // The columns that together name a group. Starts with the most-repeated column, which is the one
+  // the readiness panel names, or the recommended one; more can be added for an entity that one
+  // column does not name (a store within a region).
+  const [groupColumns, setGroupColumns] = useState<string[]>(() => {
+    const first =
+      (usableAdvice?.strategy === "group" ? usableAdvice.column : null) ?? plan.group_columns?.[0];
+    return first ? [first] : [];
+  });
+  // Entity-shaped columns first, then everything else, so a key can be built from columns that
+  // only name an entity together.
+  const groupOptions = [
+    ...(plan.group_columns ?? []),
+    ...(plan.group_column_options ?? []).filter((c) => !(plan.group_columns ?? []).includes(c)),
+  ];
   const chosenColumn =
-    splitStrategy === "time" ? timeColumn : splitStrategy === "group" ? groupColumn : null;
+    splitStrategy === "time"
+      ? timeColumn
+      : splitStrategy === "group"
+        ? groupColumns.join(" + ")
+        : null;
   const overrides =
     usableAdvice != null &&
     (splitStrategy !== usableAdvice.strategy || chosenColumn !== (usableAdvice.column ?? null));
+  const groupReady = splitStrategy !== "group" || groupColumns.length > 0;
   // Only a two-class target has a line to draw. Regression has no cut-off, and with three
   // or more answers "flag it or don't" stops being the question.
   const twoClass = plan.task_type === "classification" && (plan.class_labels?.length ?? 0) === 2;
@@ -235,7 +250,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
           {plan.split_options.map((option) => {
             const disabled =
               (option.value === "time" && plan.date_columns.length === 0) ||
-              (option.value === "group" && (plan.group_columns?.length ?? 0) === 0);
+              (option.value === "group" && groupOptions.length === 0);
             return (
               <label
                 key={option.value}
@@ -264,7 +279,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
                       ? option.description
                       : option.value === "time"
                         ? "No date column in this data to order the rows by."
-                        : "No column in this data looks like one thing appearing in many rows."}
+                        : "There is no column to group on."}
                   </span>
                 </span>
               </label>
@@ -399,22 +414,68 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
             </label>
           )}
 
-          {splitStrategy === "group" && (plan.group_columns?.length ?? 0) > 0 && (
-            <div className="flex flex-col gap-1">
-              <Select value={groupColumn} onChange={(e) => setGroupColumn(e.target.value)}>
-                {plan.group_columns.map((column) => (
-                  <option key={column} value={column}>
-                    Group by {column}
-                  </option>
+          {splitStrategy === "group" && groupOptions.length > 0 && (
+            <div className="flex flex-col gap-2" data-testid="group-key">
+              {(plan.group_columns?.length ?? 0) === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  No single column looks like one thing appearing in many rows. If an entity is named
+                  by several columns together (a store within a region), choose all of them.
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {groupColumns.map((column) => (
+                  <span
+                    key={column}
+                    className="inline-flex items-center gap-1 rounded-md border border-border bg-muted px-2 py-1 text-sm"
+                  >
+                    {column}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${column} from the group key`}
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => setGroupColumns((cols) => cols.filter((c) => c !== column))}
+                    >
+                      ×
+                    </button>
+                  </span>
                 ))}
-              </Select>
-              {/* Said here because it is a consequence of the choice, not of the column
-                  picker above it -- and finding out afterwards that an input silently
-                  vanished is the kind of surprise this whole page exists to avoid. */}
-              <p className="text-xs text-muted-foreground">
-                {groupColumn} won&apos;t be used as an input. Every group in the test set is
-                one the model has never seen, so it could only ever memorise them.
-              </p>
+                {groupColumns.length < 5 && groupOptions.some((c) => !groupColumns.includes(c)) && (
+                  <Select
+                    aria-label="Add a column to the group key"
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) setGroupColumns((cols) => [...cols, e.target.value]);
+                    }}
+                  >
+                    <option value="">
+                      {groupColumns.length === 0
+                        ? "Choose the column that names the group..."
+                        : "Add another column to the key..."}
+                    </option>
+                    {groupOptions
+                      .filter((c) => !groupColumns.includes(c))
+                      .map((column) => (
+                        <option key={column} value={column}>
+                          {column}
+                        </option>
+                      ))}
+                  </Select>
+                )}
+              </div>
+              {groupColumns.length === 0 ? (
+                <p className="text-xs text-destructive">Choose at least one column to group on.</p>
+              ) : (
+                /* Said here because it is a consequence of the choice, not of the column picker
+                   above it -- and finding out afterwards that an input silently vanished is the
+                   kind of surprise this whole page exists to avoid. */
+                <p className="text-xs text-muted-foreground">
+                  {groupColumns.length === 1
+                    ? `${groupColumns[0]} won't be used as an input.`
+                    : `${groupColumns.join(", ")} won't be used as inputs, and rows with the same combination of them stay together.`}{" "}
+                  Every group in the test set is one the model has never seen, so it could only ever
+                  memorise them.
+                </p>
+              )}
             </div>
           )}
         </CardContent>
@@ -471,7 +532,8 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
               model_names: models,
               split_strategy: splitStrategy,
               time_column: splitStrategy === "time" ? timeColumn : null,
-              group_column: splitStrategy === "group" ? groupColumn : null,
+              group_column: splitStrategy === "group" ? (groupColumns[0] ?? null) : null,
+              group_columns: splitStrategy === "group" ? groupColumns : [],
               include_deep_diagnostics: true,
               operating_point: twoClass ? operatingPoint : null,
               feature_recipes: liveRecipes,
@@ -483,7 +545,7 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
               time_gap_days: splitStrategy === "time" && gapValid && gap > 0 ? gap : null,
             })
           }
-          disabled={training || models.length === 0 || blocked || !tradeOffReady || !gapValid}
+          disabled={training || models.length === 0 || blocked || !tradeOffReady || !gapValid || !groupReady}
         >
           {training ? "Training..." : `Train ${models.length} model${models.length === 1 ? "" : "s"}`}
         </Button>

@@ -324,6 +324,71 @@ def classify_features(
 
 # --- splitting ----------------------------------------------------------------------------
 
+# More columns than this is not an entity, it is a row.
+MAX_GROUP_COLUMNS = 5
+
+
+def composite_group_key(frame: pd.DataFrame, columns: list[str]) -> pd.Series:
+    """One label per distinct combination of values in `columns`.
+
+    An entity is sometimes named by more than one column -- a store within a region, a patient
+    at a site -- and grouping on either alone puts the same entity on both sides of a split.
+    The values are joined with a separator that does not occur in ordinary text, so ("a b", "c")
+    and ("a", "b c") stay different. Self-contained: `model_export` copies this function's source,
+    because the groups are not just membership -- the order of the labels decides which groups
+    land in which fold, so the script has to build exactly the same strings.
+    """
+    key = frame[columns[0]].astype(str)
+    for column in columns[1:]:
+        key = key + "\x1f" + frame[column].astype(str)
+    return key
+
+
+def resolve_group_columns(group_column: str | None, group_columns: list[str] | None) -> list[str]:
+    """The columns a grouped split is on, in the order given and without repeats. `group_columns`
+    wins; `group_column` alone is the single-column request every earlier client sends."""
+    wanted = [str(c) for c in (group_columns or [])] or ([str(group_column)] if group_column else [])
+    return list(dict.fromkeys(wanted))
+
+
+def with_group_key(df: pd.DataFrame, columns: list[str], target_column: str) -> tuple[pd.DataFrame, str, list[str]]:
+    """The frame to split on, the name of the column that holds the groups, and the columns the
+    model must not use as inputs.
+
+    One column is used as it is -- exactly the behaviour before composite keys. Several are
+    combined into a key column named after them ("store_id + region"), so error messages, the
+    result and the card read naturally. For several, it refuses a column that is missing, the
+    answer itself, too many columns, or a blank in any of them: a blank cannot be assigned to a
+    group, and stringifying it would quietly make "no value" a group of its own. (A single column
+    is left to the split, which has always checked it.)
+    """
+    if not columns:
+        raise ModelingError("A grouped split needs the column that says which rows belong to the same thing.")
+    if len(columns) == 1:
+        # Exactly as it always was: the split itself checks the column and says what is wrong.
+        return df, columns[0], list(columns)
+    missing = [c for c in columns if c not in df.columns]
+    if missing:
+        raise ModelingError(f"The grouping column{'s' if len(missing) > 1 else ''} {', '.join(repr(c) for c in missing)} "
+                            f"{'are' if len(missing) > 1 else 'is'} not in the data.")
+    if target_column in columns:
+        raise ModelingError(f"'{target_column}' is the answer, so rows cannot be grouped by it.")
+    if len(columns) > MAX_GROUP_COLUMNS:
+        raise ModelingError(
+            f"A group key of {len(columns)} columns is not an entity any more; use at most {MAX_GROUP_COLUMNS}."
+        )
+    labelled = df[df[target_column].notna()]
+    for column in columns:
+        if labelled[column].isna().any():
+            raise ModelingError(
+                f"'{column}' is blank on some rows, so they cannot be assigned to a group. "
+                f"Fill or drop those rows before splitting on it."
+            )
+    name = " + ".join(columns)
+    if name in df.columns:
+        name += " (group key)"
+    return df.assign(**{name: composite_group_key(df, columns)}), name, [*columns, name]
+
 
 def time_cut(times: pd.Series, test_size: float, column: str = "the date column") -> int:
     """Where to cut rows already sorted by time, so no timestamp is on both sides.
@@ -589,6 +654,11 @@ def split_data(
     time_gap_days: int = 0,
 ):
     """Holds out a test set. Returns (X_train, X_test, y_train, y_test).
+
+    `group_columns` (grouped split only) is the key an entity is named by when one column is not
+    enough -- a store within a region. Every column in it is withheld from the inputs, and the
+    rows with the same combination of values stay on one side of every split. `group_column`
+    alone is the single-column request, and behaves exactly as it always did.
 
     `time_gap_days` (date split only) leaves an embargo between the training and test periods:
     training rows less than that many days before the first test row are dropped. It is for a
@@ -1667,6 +1737,7 @@ def train_candidates(
     calibration: str = "none",
     test_size: float | None = None,
     time_gap_days: int | None = None,
+    group_columns: list[str] | None = None,
 ) -> dict:
     """Trains each requested model on the same split and returns everything needed to compare
     them. A model that fails to fit is reported rather than aborting the others.
@@ -1715,8 +1786,12 @@ def train_candidates(
     # unseen categories -- and if it did carry signal, that signal would be the memorisation
     # the grouped split exists to prevent.
     withheld = list(excluded_columns or [])
-    if split_strategy == "group" and group_column and group_column not in withheld:
-        withheld.append(group_column)
+    group_parts: list[str] = []
+    if split_strategy == "group":
+        group_parts = resolve_group_columns(group_column, group_columns)
+        if group_parts:
+            df, group_column, to_withhold = with_group_key(df, group_parts, target_column)
+            withheld += [c for c in to_withhold if c not in withheld]
 
     recipes = feature_recipes.select(df, target_column, withheld, feature_recipes_wanted)
     # What the sealed rows are judged on when copies are kept together: the file's own columns,
@@ -2040,6 +2115,9 @@ def train_candidates(
             "strategy": split_strategy,
             "time_column": time_column if split_strategy == "time" else None,
             "group_column": group_column if split_strategy == "group" else None,
+            # The columns the key is made of, when there is more than one; "group_column" is then
+            # their joined name. A plain single-column run has a list of one.
+            "group_columns": group_parts or None,
             "train_rows": int(len(X_train)),
             "test_rows": int(len(X_test)),
             # The rule that held the rows out, as requested: what the test-set ledger keys a

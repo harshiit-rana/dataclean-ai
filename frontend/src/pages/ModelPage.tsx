@@ -43,7 +43,8 @@ export function requestFromResult(result: ModelResult): TrainRequest {
     model_names: [],
     split_strategy: result.split.strategy,
     time_column: result.split.time_column,
-    group_column: result.split.group_column,
+    group_column: result.split.group_columns?.[0] ?? result.split.group_column,
+    group_columns: result.split.group_columns ?? [],
     include_deep_diagnostics: true,
     operating_point:
       point && point.objective !== "default"

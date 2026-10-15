@@ -113,6 +113,7 @@ def improve(
     sealed_holdout: bool = False,
     test_size: float | None = None,
     time_gap_days: int | None = None,
+    group_columns: list[str] | None = None,
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
 
@@ -137,8 +138,11 @@ def improve(
     # loop would be searching for settings that exploit the very memorisation the grouped
     # split exists to prevent.
     withheld = list(excluded_columns or [])
-    if split_strategy == "group" and group_column and group_column not in withheld:
-        withheld.append(group_column)
+    if split_strategy == "group":
+        group_parts = modeling.resolve_group_columns(group_column, group_columns)
+        if group_parts:
+            df, group_column, to_withhold = modeling.with_group_key(df, group_parts, target_column)
+            withheld += [c for c in to_withhold if c not in withheld]
 
     # The derived inputs in force, and the alternative the fourth round will try. Both frames
     # are built up front because the split is by index and the recipes only ever add columns,

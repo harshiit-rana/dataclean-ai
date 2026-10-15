@@ -291,6 +291,9 @@ export interface ModelPlan {
   recommended_split?: RecommendedSplit | null;
   /** Candidates for a grouped split, most repeated first. */
   group_columns: string[];
+  /** Every column that could be part of a group key, for an entity that one column does not name
+   * (a store within a region). Wider than `group_columns`, which look like an entity alone. */
+  group_column_options?: string[];
   blockers: string[];
   warnings: string[];
   trained: boolean;
@@ -516,6 +519,9 @@ export interface TrainRequest {
   time_column: string | null;
   /** The column saying which rows belong to the same entity, for a grouped split. */
   group_column?: string | null;
+  /** The columns that together name an entity, when one is not enough. Takes precedence over
+   * `group_column`, which stays for a single column. */
+  group_columns?: string[];
   include_deep_diagnostics: boolean;
   /** Two-class targets only; ignored otherwise. */
   operating_point?: OperatingPointRequest | null;
@@ -748,6 +754,8 @@ export interface ModelResult {
     test_rows: number;
     /** The fraction asked for, not the one a date split ended up with. */
     requested_test_size?: number;
+    /** The columns a grouped split's key was made of; `group_column` is then their joined name. */
+    group_columns?: string[] | null;
     /** The embargo between training and test, in days, and the labelled rows it cost. */
     gap_days?: number;
     gap_rows_dropped?: number;

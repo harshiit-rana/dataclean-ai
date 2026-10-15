@@ -603,7 +603,9 @@ export function ModelResults({
                     : ""
                 }.`
               : result.split.strategy === "group"
-                ? `, kept whole by ${result.split.group_column}.`
+                ? `, kept whole by ${result.split.group_column}${
+                    (result.split.group_columns?.length ?? 0) > 1 ? " (together)" : ""
+                  }.`
                 : ", split at random."}
           </p>
           {/* The entity counts, not just the rows. 800 training rows drawn from 4 customers

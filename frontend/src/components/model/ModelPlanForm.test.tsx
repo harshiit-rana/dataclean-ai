@@ -79,14 +79,15 @@ describe("ModelPlanForm — grouped split", () => {
       group_columns: [],
     });
     expect(screen.getByRole("radio", { name: /Keep related rows together/ })).toBeDisabled();
-    expect(screen.getByText(/No column in this data looks like one thing/)).toBeInTheDocument();
+    expect(screen.getByText(/There is no column to group on/)).toBeInTheDocument();
   });
 
   it("offers the repeating columns once grouping is chosen", () => {
     renderForm(GROUPED);
     fireEvent.click(screen.getByRole("radio", { name: /Keep related rows together/ }));
-    expect(screen.getByRole("option", { name: /Group by customer_id/ })).toBeInTheDocument();
-    expect(screen.getByRole("option", { name: /Group by site/ })).toBeInTheDocument();
+    // The first is chosen already; the other can be added to the key.
+    expect(screen.getByTestId("group-key")).toHaveTextContent("customer_id");
+    expect(screen.getByRole("option", { name: "site" })).toBeInTheDocument();
   });
 
   it("warns that the grouping column stops being an input", () => {
@@ -100,7 +101,7 @@ describe("ModelPlanForm — grouped split", () => {
     fireEvent.click(screen.getByRole("radio", { name: /Keep related rows together/ }));
     fireEvent.click(screen.getByRole("button", { name: /Train/ }));
     expect(onTrain).toHaveBeenCalledWith(
-      expect.objectContaining({ split_strategy: "group", group_column: "customer_id" })
+      expect.objectContaining({ split_strategy: "group", group_column: "customer_id", group_columns: ["customer_id"] })
     );
   });
 
@@ -108,7 +109,7 @@ describe("ModelPlanForm — grouped split", () => {
     const onTrain = renderForm(GROUPED);
     fireEvent.click(screen.getByRole("button", { name: /Train/ }));
     expect(onTrain).toHaveBeenCalledWith(
-      expect.objectContaining({ split_strategy: "random", group_column: null })
+      expect.objectContaining({ split_strategy: "random", group_column: null, group_columns: [] })
     );
   });
 });
@@ -365,7 +366,7 @@ describe("ModelPlanForm — a recommended way to split (#43)", () => {
     renderForm(GROUP_PLAN);
     expect(radio(/Keep related rows together/).checked).toBe(true);
     expect(radio(/Random split/).checked).toBe(false);
-    expect((screen.getByDisplayValue(/customer_id/) as HTMLSelectElement).value).toBe("customer_id");
+    expect(screen.getByTestId("group-key")).toHaveTextContent("customer_id");
   });
 
   it("shows the reason with its evidence and the confidence", () => {
@@ -526,5 +527,132 @@ describe("requestFromResult — the gap (#20)", () => {
   it("carries none when there was none, or for a split that is not by date", () => {
     expect(requestFromResult(stored({ gap_days: 0 })).time_gap_days).toBeNull();
     expect(requestFromResult(stored({ strategy: "random", gap_days: 30 })).time_gap_days).toBeNull();
+  });
+});
+
+
+describe("ModelPlanForm — a group key of several columns (#22)", () => {
+  const KEYED: Partial<ModelPlan> = {
+    group_columns: [],
+    group_column_options: ["store", "region", "visits"],
+    split_options: [
+      { value: "random", label: "Random split", description: "" },
+      { value: "group", label: "Keep related rows together", description: "" },
+    ],
+  };
+  const chooseGrouping = () => fireEvent.click(screen.getByRole("radio", { name: /Keep related rows together/ }));
+  const add = (column: string) =>
+    fireEvent.change(screen.getByLabelText("Add a column to the group key"), { target: { value: column } });
+
+  it("lets grouping be chosen when no single column looks like an entity but columns could name one together", () => {
+    renderForm(KEYED);
+    expect(screen.getByRole("radio", { name: /Keep related rows together/ })).toBeEnabled();
+    chooseGrouping();
+    expect(screen.getByText(/No single column looks like one thing appearing in many rows/)).toBeInTheDocument();
+    expect(screen.getByText(/choose all of them/)).toBeInTheDocument();
+  });
+
+  it("builds a key one column at a time", () => {
+    renderForm(KEYED);
+    chooseGrouping();
+    add("store");
+    add("region");
+    const key = screen.getByTestId("group-key");
+    expect(key).toHaveTextContent("store");
+    expect(key).toHaveTextContent("region");
+    expect(screen.queryByRole("option", { name: "store" })).not.toBeInTheDocument(); // already in the key
+  });
+
+  it("says every column in the key stops being an input, and what the combination means", () => {
+    renderForm(KEYED);
+    chooseGrouping();
+    add("store");
+    add("region");
+    expect(screen.getByText(/store, region won't be used as inputs, and rows with the same combination of them stay together/)).toBeInTheDocument();
+  });
+
+  it("sends the whole key", () => {
+    const onTrain = renderForm(KEYED);
+    chooseGrouping();
+    add("store");
+    add("region");
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0]).toMatchObject({
+      split_strategy: "group",
+      group_column: "store",
+      group_columns: ["store", "region"],
+    });
+  });
+
+  it("lets a column be taken back out", () => {
+    const onTrain = renderForm(KEYED);
+    chooseGrouping();
+    add("store");
+    add("region");
+    fireEvent.click(screen.getByRole("button", { name: "Remove store from the group key" }));
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].group_columns).toEqual(["region"]);
+  });
+
+  it("will not train a grouped split with nothing to group on", () => {
+    renderForm(KEYED);
+    chooseGrouping();
+    expect(screen.getByText(/Choose at least one column to group on/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Train/ })).toBeDisabled();
+    add("store");
+    expect(screen.getByRole("button", { name: /Train/ })).toBeEnabled();
+  });
+
+  it("starts from the recommended entity column and offers the others as additions", () => {
+    renderForm({
+      ...KEYED,
+      group_columns: ["customer_id"],
+      group_column_options: ["customer_id", "store", "region"],
+      recommended_split: { strategy: "group", column: "customer_id", reasons: ["x"], confidence: "high" },
+    });
+    expect(screen.getByTestId("group-key")).toHaveTextContent("customer_id");
+    expect(screen.getByRole("option", { name: "store" })).toBeInTheDocument();
+  });
+
+  it("counts a key of several columns as departing from a single-column recommendation", () => {
+    renderForm({
+      ...KEYED,
+      group_columns: ["customer_id"],
+      group_column_options: ["customer_id", "store"],
+      recommended_split: { strategy: "group", column: "customer_id", reasons: ["x"], confidence: "high" },
+    });
+    add("store");
+    expect(screen.getByTestId("split-recommendation")).toHaveTextContent("instead of the recommendation");
+  });
+
+  it("is still disabled when there is nothing at all to group on", () => {
+    renderForm({ ...KEYED, group_column_options: [], group_columns: [] });
+    expect(screen.getByRole("radio", { name: /Keep related rows together/ })).toBeDisabled();
+  });
+});
+
+describe("requestFromResult — a group key (#22)", () => {
+  const stored = (split: Record<string, unknown>) =>
+    ({
+      task: "classification",
+      features: { numeric: [], categorical: [], dropped: [], excluded: [] },
+      split: { strategy: "group", time_column: null, group_column: "store + region", train_rows: 1, test_rows: 1, ...split },
+    }) as unknown as ModelResult;
+
+  it("carries every column of the key, so improving or calibrating keeps it", () => {
+    const request = requestFromResult(stored({ group_columns: ["store", "region"] }));
+    expect(request.group_columns).toEqual(["store", "region"]);
+    expect(request.group_column).toBe("store");
+  });
+
+  it("carries a single column as a list of one", () => {
+    const request = requestFromResult(stored({ group_column: "customer_id", group_columns: ["customer_id"] }));
+    expect(request.group_columns).toEqual(["customer_id"]);
+  });
+
+  it("copes with a result from before keys had several columns", () => {
+    const request = requestFromResult(stored({ group_column: "customer_id" }));
+    expect(request.group_column).toBe("customer_id");
+    expect(request.group_columns).toEqual([]);
   });
 });
