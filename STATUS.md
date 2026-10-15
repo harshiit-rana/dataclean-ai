@@ -797,6 +797,15 @@ most interesting comparison available — it just has to be labelled, so each ru
 fingerprint of the data it trained on and anything older is marked *trained before the data
 changed* and excluded from the arithmetic.
 
+A run from before a cleaning change can show what changed since (#71). Each dataset version now keeps the applied fixes
+behind it, so `GET /api/session/{id}/versions/diff?from=&to=` rebuilds both versions from the upload by replaying those
+fixes and compares them. Replay keeps each row's position in the upload as its label through every row it drops, so the
+two versions line up row by row even after rows were removed: the diff gives rows removed and added, columns added and
+removed, changed cells per column on the rows both have, and the fixes applied and undone in between. A rebuild is
+checked against the version's fingerprint, and the diff says when it does not match. Above five million cells the
+per-column counts are skipped and the summary stays exact. A version recorded before versions kept their fixes gives
+counts only. In the history table, a run trained before the data changed offers *What changed since*.
+
 Each run's model is kept too (#66). A run writes its result and fitted pipeline to its own folder, `runs/<run_id>/`,
 and `current.json` names the one in use; every route reads through that pointer, so nothing about the API changed. A
 cleaning change no longer deletes models: it unsets the pointer and marks each stored run as trained on data that has

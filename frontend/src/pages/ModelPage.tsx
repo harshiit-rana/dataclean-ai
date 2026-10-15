@@ -18,6 +18,7 @@ import {
   fetchModelPlan,
   fetchModelResult,
   finaliseModel,
+  fetchVersionDiff,
   restoreRun,
   trainModel,
 } from "@/api/client";
@@ -548,6 +549,8 @@ export function ModelPage() {
           olderCount={history.older_count ?? 0}
           onLoadOlder={handleLoadOlder}
           loadingOlder={loadingOlder}
+          currentDatasetVersion={history.current_dataset_version ?? null}
+          fetchDiff={sessionId ? (from, to) => fetchVersionDiff(sessionId, from, to) : undefined}
         />
       )}
 

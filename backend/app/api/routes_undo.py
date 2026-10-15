@@ -73,7 +73,7 @@ async def undo(
 
     await graph.aupdate_state(config, {"action_log": updated_log})
     await asyncio.to_thread(
-        record_dataset_version_in, directory, f"undo:{action_id}"
+        record_dataset_version_in, directory, f"undo:{action_id}", None, updated_log
     )
 
     # The data just changed, so any trained model was evaluated against rows that no longer

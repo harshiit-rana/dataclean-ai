@@ -83,7 +83,7 @@ def _current_data_path(directory: Path) -> Path:
     return cleaned if cleaned.exists() else directory / "original.csv"
 
 
-def record_dataset_version_in(directory: Path, event: str, frame=None) -> Optional[dict]:
+def record_dataset_version_in(directory: Path, event: str, frame=None, actions=None) -> Optional[dict]:
     """Appends a dataset version to the session's meta when its working data has changed.
 
     The session's data is rewritten in place -- by the cleaning run, by undo, by a chat
@@ -99,6 +99,10 @@ def record_dataset_version_in(directory: Path, event: str, frame=None) -> Option
     Never raises. A version is bookkeeping about work already done, and failing the cleaning
     run, the undo or the chat instruction over it would lose something that exists. Returns the
     entry appended, or None.
+
+    `actions` is the action log as it stands after the change. Its applied entries are kept on the
+    version, so the version can be rebuilt from the upload by replaying them (version_diff.py) and
+    compared with another.
     """
     try:
         from app.services import model_store
@@ -135,6 +139,10 @@ def record_dataset_version_in(directory: Path, event: str, frame=None) -> Option
                 (versions[-1]["version"] + 1) if versions else 1, frame, model_store, event
             )
             entry["fingerprint"] = fingerprint
+            if actions is not None:
+                from app.services.run_metadata import applied_actions
+
+                entry["actions"] = applied_actions(list(actions))
             versions.append(entry)
 
             if len(versions) > MAX_DATASET_VERSIONS:
@@ -163,9 +171,9 @@ def _version_entry(version: int, frame, model_store, event: str) -> dict:
     }
 
 
-def record_dataset_version(upload_dir: str, session_id: str, event: str, frame=None):
+def record_dataset_version(upload_dir: str, session_id: str, event: str, frame=None, actions=None):
     """`record_dataset_version_in` for a session addressed the way the routes address it."""
-    return record_dataset_version_in(Path(upload_dir) / session_id, event, frame)
+    return record_dataset_version_in(Path(upload_dir) / session_id, event, frame, actions)
 
 
 def dataset_versions(upload_dir: str, session_id: str) -> list[dict]:

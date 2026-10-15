@@ -11,6 +11,7 @@ import type {
   GoalContextResponse,
   ImproveRequest,
   ModelHistory,
+  VersionDiff,
   ModelPlan,
   ModelResult,
   PreviewResponse,
@@ -227,6 +228,15 @@ export async function restoreRun(sessionId: string, runId: string): Promise<Mode
     { method: "POST" }
   );
   return handleResponse<ModelResult>(response);
+}
+
+/** What changed between two versions of the session's data. */
+export async function fetchVersionDiff(sessionId: string, from: number, to: number): Promise<VersionDiff> {
+  const response = await sessionFetch(
+    sessionId,
+    `/api/session/${sessionId}/versions/diff?from=${from}&to=${to}`
+  );
+  return handleResponse<VersionDiff>(response);
 }
 
 export async function fetchModelCard(sessionId: string): Promise<string> {

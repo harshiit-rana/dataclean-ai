@@ -175,7 +175,7 @@ async def send_chat_message(
         source="conversational",
     )
     updated_log = list(values.get("action_log", [])) + [entry.model_dump()]
-    await asyncio.to_thread(record_dataset_version_in, directory, f"chat:{entry.action_id}")
+    await asyncio.to_thread(record_dataset_version_in, directory, f"chat:{entry.action_id}", None, updated_log)
 
     await graph.aupdate_state(
         config,

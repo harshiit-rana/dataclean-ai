@@ -1,7 +1,8 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScoreLabel } from "@/components/model/ScoreLabel";
 import { cn } from "@/lib/utils";
-import type { ModelRun, RunComparison } from "@/api/types";
+import type { ModelRun, RunComparison, VersionDiff } from "@/api/types";
 
 /** What has been tried in this session, and whether it helped.
  *
@@ -140,6 +141,71 @@ function Provenance({ run }: { run: ModelRun }) {
   );
 }
 
+/** The diff as a few lines a reader can take in at once. */
+export function describeDiff(diff: VersionDiff): string[] {
+  const lines: string[] = [];
+  const rows = diff.rows;
+  if (rows.removed || rows.added) {
+    const parts = [rows.removed ? `${rows.removed.toLocaleString()} removed` : "", rows.added ? `${rows.added.toLocaleString()} added` : ""].filter(Boolean);
+    lines.push(`Rows: ${rows.from.toLocaleString()} → ${rows.to.toLocaleString()} (${parts.join(", ")})`);
+  } else if (rows.change) {
+    lines.push(`Rows: ${rows.from.toLocaleString()} → ${rows.to.toLocaleString()}`);
+  } else {
+    lines.push("Rows: no change");
+  }
+  if (diff.columns?.removed.length) lines.push(`Columns removed: ${diff.columns.removed.join(", ")}`);
+  if (diff.columns?.added.length) lines.push(`Columns added: ${diff.columns.added.join(", ")}`);
+  if (diff.cells) {
+    const changed = Object.entries(diff.cells);
+    lines.push(
+      changed.length
+        ? `Values changed: ${changed.map(([column, count]) => `${column} (${count.toLocaleString()})`).join(", ")}`
+        : "Values changed: none on the rows both versions have"
+    );
+  }
+  const label = (a: { operation: string; column_name: string | null }) =>
+    `${a.operation.replace(/_/g, " ")}${a.column_name && a.column_name !== "DATASET" ? ` on ${a.column_name}` : ""}`;
+  if (diff.actions?.applied.length) lines.push(`Fixes applied since: ${diff.actions.applied.map(label).join("; ")}`);
+  if (diff.actions?.undone.length) lines.push(`Fixes undone since: ${diff.actions.undone.map(label).join("; ")}`);
+  return [...lines, ...diff.notes];
+}
+
+/** "What changed" for a run trained on an earlier version of the data, fetched when asked for. */
+function WhatChanged({ from, to, fetchDiff }: { from: number; to: number; fetchDiff: (from: number, to: number) => Promise<VersionDiff> }) {
+  const [lines, setLines] = useState<string[] | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  if (lines) {
+    return (
+      <ul className="mt-1 space-y-0.5 text-muted-foreground">
+        {lines.map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <button
+      type="button"
+      className="mt-0.5 block text-xs text-primary underline underline-offset-2 disabled:opacity-50"
+      disabled={loading}
+      onClick={async () => {
+        setLoading(true);
+        setFailed(false);
+        try {
+          setLines(describeDiff(await fetchDiff(from, to)));
+        } catch {
+          setFailed(true);
+        } finally {
+          setLoading(false);
+        }
+      }}
+    >
+      {loading ? "Comparing the data…" : failed ? "Could not compare; try again" : `What changed since (version ${from} → ${to})`}
+    </button>
+  );
+}
+
 /** A refused or failed attempt, or a model brought back, in sequence with the runs. */
 function EventRow({ run, latest }: { run: ModelRun; latest: boolean }) {
   const restored = run.status === "restored";
@@ -187,6 +253,8 @@ export function RunHistory({
   olderCount = 0,
   onLoadOlder,
   loadingOlder = false,
+  currentDatasetVersion = null,
+  fetchDiff,
 }: {
   runs: ModelRun[];
   currentFingerprint: string;
@@ -205,6 +273,9 @@ export function RunHistory({
   olderCount?: number;
   onLoadOlder?: () => void;
   loadingOlder?: boolean;
+  /** The data's version now; with `fetchDiff`, a run on an earlier one can show what changed. */
+  currentDatasetVersion?: number | null;
+  fetchDiff?: (from: number, to: number) => Promise<VersionDiff>;
 }) {
   // One run is not a comparison, and a table of one row implies there is something to compare.
   if (runs.length < 2) return null;
@@ -290,6 +361,17 @@ export function RunHistory({
                           trained before the data changed
                         </span>
                       )}
+                      {stale &&
+                        fetchDiff &&
+                        currentDatasetVersion != null &&
+                        run.dataset_version?.version != null &&
+                        run.dataset_version.version !== currentDatasetVersion && (
+                          <WhatChanged
+                            from={run.dataset_version.version}
+                            to={currentDatasetVersion}
+                            fetchDiff={fetchDiff}
+                          />
+                        )}
                     </td>
                     <td className="py-2 pr-3 tabular-nums">
                       {score == null ? "—" : score.toFixed(4)}

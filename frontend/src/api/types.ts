@@ -545,6 +545,23 @@ export interface ModelRun {
   } | null;
 }
 
+/** What changed between two versions of a session's data. */
+export interface VersionDiff {
+  from: { version: number; rows: number; columns: number; event: string; at: string };
+  to: { version: number; rows: number; columns: number; event: string; at: string };
+  rebuilt: { from: string; to: string };
+  rows: { from: number; to: number; change: number; removed?: number; added?: number };
+  columns: { added: string[]; removed: string[] } | null;
+  /** Changed cells per column, on the rows both versions have; null when not compared. */
+  cells: Record<string, number> | null;
+  /** The fixes applied and undone between the two; null when one version has no record. */
+  actions: {
+    applied: { action_id: string; operation: string; column_name: string | null }[];
+    undone: { action_id: string; operation: string; column_name: string | null }[];
+  } | null;
+  notes: string[];
+}
+
 export interface RunEnvironment {
   python: string;
   scikit_learn: string | null;
@@ -575,6 +592,8 @@ export interface ModelHistory {
   current_run_id?: string | null;
   /** Runs whose model is still stored and so can be brought back. */
   stored_run_ids?: string[];
+  /** The data's version now, for linking a run on an earlier one to what changed since. */
+  current_dataset_version?: number | null;
   /** Every entry in the history, and how many are older than this page. */
   total?: number;
   older_count?: number;

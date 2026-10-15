@@ -1,7 +1,7 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { RunHistory, describeProvenance } from "./RunHistory";
-import type { ModelRun } from "@/api/types";
+import { RunHistory, describeDiff, describeProvenance } from "./RunHistory";
+import type { ModelRun, VersionDiff } from "@/api/types";
 
 function run(overrides: Partial<ModelRun> = {}): ModelRun {
   return {
@@ -428,5 +428,48 @@ describe("RunHistory — older runs are said, never cut silently (#70)", () => {
   it("says nothing when the whole history is shown", () => {
     renderHistory([run(), run()]);
     expect(screen.queryByText(/older entr/)).not.toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — what changed in the data since a run (#71)", () => {
+  const DIFF: VersionDiff = {
+    from: { version: 2, rows: 300, columns: 4, event: "cleaning_run", at: "t" },
+    to: { version: 4, rows: 290, columns: 3, event: "undo:a2", at: "t" },
+    rebuilt: { from: "replayed", to: "replayed" },
+    rows: { from: 300, to: 290, change: -10, removed: 10, added: 0 },
+    columns: { added: [], removed: ["note"] },
+    cells: { spend: 12 },
+    actions: {
+      applied: [{ action_id: "a3", operation: "drop_column", column_name: "note" }],
+      undone: [{ action_id: "a2", operation: "fill_median", column_name: "spend" }],
+    },
+    notes: [],
+  };
+
+  it("describes the rows, columns, values and fixes", () => {
+    expect(describeDiff(DIFF)).toEqual([
+      "Rows: 300 → 290 (10 removed)",
+      "Columns removed: note",
+      "Values changed: spend (12)",
+      "Fixes applied since: drop column on note",
+      "Fixes undone since: fill median on spend",
+    ]);
+  });
+
+  it("offers what changed on a run from an earlier version and shows it when asked", async () => {
+    const fetchDiff = vi.fn().mockResolvedValue(DIFF);
+    const old = run({ data_fingerprint: "old", dataset_version: { version: 2, fingerprint: "f", rows: 300, columns: 4, event: "clean" } });
+    render(
+      <RunHistory runs={[run(), old]} currentFingerprint="aaa" currentDatasetVersion={4} fetchDiff={fetchDiff} />
+    );
+    fireEvent.click(screen.getByRole("button", { name: /What changed since \(version 2 → 4\)/ }));
+    await waitFor(() => expect(screen.getByText("Columns removed: note")).toBeInTheDocument());
+    expect(fetchDiff).toHaveBeenCalledWith(2, 4);
+  });
+
+  it("offers nothing for a run on the current data, or one without a recorded version", () => {
+    const noVersion = run({ data_fingerprint: "old" });
+    render(<RunHistory runs={[run(), noVersion]} currentFingerprint="aaa" currentDatasetVersion={4} fetchDiff={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /What changed/ })).not.toBeInTheDocument();
   });
 });

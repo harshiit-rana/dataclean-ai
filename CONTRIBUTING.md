@@ -139,6 +139,10 @@ are both running locally, you're ready to make changes.
 - **Load a saved model only through `model_store.load_pipeline`.** It checks the file against its `model.json`
   before unpickling; a test fails on any other `joblib.load` in the app. A new artifact that is unpickled needs the
   same treatment: a sidecar written when it is saved and a check before it is read.
+- **A new place that changes the working data records a version with the log.** Call
+  `record_dataset_version_in(directory, event, frame, actions=<the action log after the change>)`, so the version
+  can be rebuilt by replay and diffed. An operation must keep the upload's row labels when it drops rows (no
+  `reset_index`): the version diff lines rows up by them.
 - **A new seed or default that decides results goes in `run_metadata`.** `seeds()` and `constants()` feed
   `config_hash`, so a change to one changes the hash of every run made after it. A seed or default left out
   makes two different experiments look like one. Request fields need nothing: the whole validated request is

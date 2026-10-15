@@ -1573,6 +1573,8 @@ async def get_model_history(
         # The model in use (None when nothing is, after a cleaning change) and the runs whose model is still
         # stored, so the page can offer to bring one back.
         "current_run_id": model_store.current_run_id(directory),
+        # The data's version now, so a run trained on an earlier one can link to what changed since.
+        "current_dataset_version": (current_dataset_version_in(directory) or {}).get("version"),
         "stored_run_ids": model_store.stored_runs(directory),
     }
 

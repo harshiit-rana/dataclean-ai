@@ -178,7 +178,8 @@ async def cleaning_agent(state: GraphState) -> dict:
     df.to_csv(cleaned_path, index=False)
     # A run that applied nothing leaves the data as it was and adds no version.
     await asyncio.to_thread(
-        session_store.record_dataset_version_in, cleaned_path.parent, "cleaning_run"
+        session_store.record_dataset_version_in, cleaned_path.parent, "cleaning_run", None,
+        [entry.model_dump() for entry in action_log],
     )
 
     superseded_count = sum(1 for entry in action_log if entry.status == "superseded")

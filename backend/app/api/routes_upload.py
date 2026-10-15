@@ -57,7 +57,7 @@ async def upload_csv(
     # Version 1 is the upload itself. Everything later -- a cleaning run, an undo, a chat
     # instruction -- appends to this list, and a model or a test-set look names the version it
     # was made on.
-    record_dataset_version(settings.upload_dir, session_id, "upload")
+    record_dataset_version(settings.upload_dir, session_id, "upload", actions=[])
 
     return UploadResponse(
         session_id=session_id,
