@@ -255,3 +255,18 @@ describe("RunHistory — a split nobody recommended is part of the setup (#43)",
     expect(screen.queryByText(/overrode the recommended split/)).not.toBeInTheDocument();
   });
 });
+
+describe("RunHistory — the gap is part of the setup (#20)", () => {
+  const withGap = (gap_days: number | null | undefined) =>
+    run({ split: { strategy: "time", time_column: "day", group_column: null, train_rows: 240, test_rows: 60, gap_days } });
+
+  it("names the embargo, because a different gap holds out different rows", () => {
+    renderHistory([withGap(30), withGap(0)]);
+    expect(screen.getByText(/30-day gap/)).toBeInTheDocument();
+  });
+
+  it("says nothing without one", () => {
+    renderHistory([withGap(0), withGap(undefined)]);
+    expect(screen.queryByText(/-day gap/)).not.toBeInTheDocument();
+  });
+});

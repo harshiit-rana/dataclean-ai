@@ -411,6 +411,8 @@ export interface ModelRun {
     test_rows: number | null;
     /** The fraction asked for to hold back. Absent on runs from before it was recorded. */
     requested_test_size?: number | null;
+    /** The embargo between training and test, in days. Absent on older runs. */
+    gap_days?: number | null;
   };
   feature_count: number;
   excluded_columns: string[];
@@ -531,6 +533,9 @@ export interface TrainRequest {
   /** The fraction of labelled rows to hold back. Left out, the default; ignored with a sealed
    * holdout, whose three parts are fixed. */
   test_size?: number | null;
+  /** Days to leave between the training and test periods of a date split, and between training and
+   * validation in every fold. Ignored by the other splits. */
+  time_gap_days?: number | null;
 }
 
 /** The confusion matrix at one cut-off, as counts and rates. */
@@ -743,6 +748,9 @@ export interface ModelResult {
     test_rows: number;
     /** The fraction asked for, not the one a date split ended up with. */
     requested_test_size?: number;
+    /** The embargo between training and test, in days, and the labelled rows it cost. */
+    gap_days?: number;
+    gap_rows_dropped?: number;
     /** What the app would have recommended for dividing the rows, and whether this run differs. */
     recommended?: { strategy: string; column: string | null; confidence: string } | null;
     overridden?: boolean;

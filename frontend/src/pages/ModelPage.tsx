@@ -62,6 +62,7 @@ export function requestFromResult(result: ModelResult): TrainRequest {
     calibration: result.calibration?.method ?? "none",
     // A sealed holdout has fixed parts, so the fraction is not part of what is rebuilt.
     test_size: result.split.sealed ? null : (result.split.requested_test_size ?? null),
+    time_gap_days: result.split.strategy === "time" ? result.split.gap_days || null : null,
   };
 }
 
@@ -189,6 +190,7 @@ export function ModelPage() {
       sealed_holdout: base?.sealed_holdout ?? plan?.sealed_holdout ?? false,
       calibration: calibration ?? base?.calibration ?? "none",
       test_size: base?.test_size ?? null,
+      time_gap_days: base?.time_gap_days ?? null,
       include_deep_diagnostics: true,
       goal: target,
     };

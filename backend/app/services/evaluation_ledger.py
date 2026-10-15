@@ -79,6 +79,10 @@ def split_key(split: dict | None) -> str:
         "final_fraction": split.get("final_fraction") or 0,
         "keep_duplicates_together": bool(split.get("keep_duplicates_together")),
     }
+    # A different embargo holds out different rows. Added only when there is one, so every key a
+    # run without a gap ever had is unchanged.
+    if strategy == "time" and split.get("gap_days"):
+        fields["gap_days"] = int(split["gap_days"])
     canonical = json.dumps(fields, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
 

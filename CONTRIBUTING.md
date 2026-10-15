@@ -388,6 +388,14 @@ are both running locally, you're ready to make changes.
   place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
   does not need this application's class to load. Nothing may build a fold splitter without the groups -- not even to ask whether folds are possible -- or `test_identical_rows_folds.py` rightly flags it. `TestCalibratingTheProbabilities` in
   `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
+- **A date split's gap is applied in three places that must agree.** `modeling.split_data`
+  (`time_gap_days`) drops the training rows less than the gap before the first test row;
+  `time_folds.TimeFoldRule.gap_days` does the same inside every fold, because
+  `tuning.cv_splitter` hands it to `ForwardInTimeFolds`; and `model_export._gap_lines` writes the cut
+  into `train_model.py` (a test executes the generated block against the app's split) while the
+  calibration folds carry `gap_days` too. `split["gap_days"]` and `["gap_rows_dropped"]` are the record,
+  `evaluation_ledger.split_key` includes the gap only when it is set so earlier keys do not move, and
+  the sealed-holdout opening re-splits with the stored gap or its row-count check would refuse it.
 - **The split recommendation reads the answers only from the training side of the default split.**
   `validation_advice.recommend_split` is pure; its one use of the target, the drift test, is handed
   `training_rows` by `routes_model._recommended_split` and nothing else, and

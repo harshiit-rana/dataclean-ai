@@ -138,6 +138,21 @@ print(f"Sealed {{len(final_index)}} rows as a final holdout; they are not used b
     )
 
 
+def _gap_lines(split: dict) -> str:
+    """The embargo, when the run left one: training rows less than the gap before the first test row
+    are dropped, as `modeling.split_data` does."""
+    gap = int(split.get("gap_days") or 0)
+    if not gap:
+        return ""
+    return f"""
+
+# An embargo of {gap} days: a row just before the cut has an answer partly decided by what happens in
+# the test period, so training stops at least that long before the first test row.
+GAP = pd.Timedelta(days={gap})
+before = (order.loc[ranked[:cut]] <= times.iloc[cut] - GAP).to_numpy()
+X_train, y_train = X_train.loc[ranked[:cut][before]], y_train.loc[ranked[:cut][before]]"""
+
+
 def _ordinary_split_block(
     split: dict, task: str, test_size: float, helper_defined: bool = False
 ) -> str:
@@ -155,7 +170,7 @@ boundaries = [start for start in starts if 0 < start < len(ranked)]
 target = int(len(ranked) * {1 - test_size})
 cut = min(boundaries, key=lambda boundary: (abs(boundary - target), -boundary))
 X_train, X_test = features.loc[ranked[:cut]], features.loc[ranked[cut:]]
-y_train, y_test = labels.loc[ranked[:cut]], labels.loc[ranked[cut:]]'''
+y_train, y_test = labels.loc[ranked[:cut]], labels.loc[ranked[cut:]]''' + _gap_lines(split)
 
     if split.get("strategy") == "group" and split.get("group_column"):
         column = split["group_column"]

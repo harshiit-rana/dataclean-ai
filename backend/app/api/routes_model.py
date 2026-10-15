@@ -835,6 +835,7 @@ async def train_model(
             sealed_holdout=request.sealed_holdout,
             calibration=request.calibration,
             test_size=request.test_size,
+            time_gap_days=request.time_gap_days,
         )
 
     try:
@@ -904,6 +905,7 @@ def _improve_and_save(
         keep_identical_rows_together=request.keep_identical_rows_together,
         sealed_holdout=request.sealed_holdout,
         test_size=request.test_size,
+        time_gap_days=request.time_gap_days,
     )
     best = found["best"]
     # Plain constructor names, not the `model__`-prefixed pipeline paths the search uses.
@@ -941,6 +943,7 @@ def _improve_and_save(
         sealed_holdout=request.sealed_holdout,
         calibration=request.calibration,
         test_size=request.test_size,
+        time_gap_days=request.time_gap_days,
     )
     rebuilt["improvement"] = {
         "rounds": found["rounds"],
@@ -1136,6 +1139,7 @@ def _open_the_sealed_holdout(df, stored: dict, pipeline) -> dict:
         group_column=split.get("group_column"),
         duplicate_columns=used if split.get("keep_duplicates_together") else None,
         copy_columns=split.get("seal_key_columns"),
+        time_gap_days=split.get("gap_days") or 0,
     )
     if modeling.sealed_rows_hash(X_final.index) != split.get("sealed_rows_hash") or len(
         X_train

@@ -192,6 +192,17 @@ inputs, how the data splits, what gets tried. Leaky columns and row identifiers 
 pre-unticked with the reason attached. A time-based split is offered when there are dates,
 because a random split lets a model learn from the future to predict the past.
 
+**A date split can leave a gap.** When the answer is defined over a future window ("cancelled within
+30 days"), a row just before the cut has an answer partly decided by what happens in the test period,
+so a model trained on it has been shown something about that period. The plan offers an optional gap in
+days for a date split: training stops at least that long before the first test row, at the train/test
+cut and inside every forward-in-time fold (model choice, tuning, the improvement loop, the cut-off,
+calibration, the cross-validated spread, the learning curve), the rows inside it are dropped and
+counted on the result, the card says how many, `train_model.py` reproduces it (and the same gap in a
+calibrated model's folds), and it is part of the test-set ledger's key only when there is one. A gap
+longer than the data leaves nothing to train on and is refused with the numbers. With a sealed holdout
+the gap sits between training and development, which is what keeps the sealed rows' later period safe.
+
 **The way to split is recommended, with the reason, and can be overruled.** The form used to default
 to a random split even when the app had already found a column repeating across rows or a clear time
 order, and anyone who does not know what splitting means took the default and got a score the model

@@ -597,7 +597,11 @@ export function ModelResults({
             Trained on {result.split.train_rows.toLocaleString()} rows and scored on{" "}
             {result.split.test_rows.toLocaleString()} it had never seen
             {result.split.strategy === "time"
-              ? `, split by ${result.split.time_column}.`
+              ? `, split by ${result.split.time_column}${
+                  result.split.gap_days
+                    ? `, with a gap of ${result.split.gap_days.toLocaleString()} days between training and test (${(result.split.gap_rows_dropped ?? 0).toLocaleString()} rows inside it dropped)`
+                    : ""
+                }.`
               : result.split.strategy === "group"
                 ? `, kept whole by ${result.split.group_column}.`
                 : ", split at random."}

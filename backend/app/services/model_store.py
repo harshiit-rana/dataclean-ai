@@ -160,6 +160,9 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
                 # What was asked for, not what a date split ended up with. Two runs that held
                 # back different fractions are not the same experiment.
                 "requested_test_size": split.get("requested_test_size"),
+                # The embargo between training and test, in days. Two runs with different gaps hold
+                # out different rows.
+                "gap_days": split.get("gap_days"),
             },
             "feature_count": len(result.get("features", {}).get("numeric", []))
             + len(result.get("features", {}).get("categorical", []))

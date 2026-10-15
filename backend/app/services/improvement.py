@@ -112,6 +112,7 @@ def improve(
     keep_identical_rows_together: bool = False,
     sealed_holdout: bool = False,
     test_size: float | None = None,
+    time_gap_days: int | None = None,
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
 
@@ -166,6 +167,7 @@ def improve(
             "There are no usable columns left to predict from, so there is nothing to improve."
         )
 
+    gap_days = int(time_gap_days or 0) if split_strategy == "time" else 0
     # Split once. Nothing below this line is allowed to look at X_test or y_test.
     duplicate_columns = used if keep_identical_rows_together and split_strategy == "random" else None
     parts = None
@@ -180,6 +182,7 @@ def improve(
                 copy_columns=(
                     [str(c) for c in raw_columns] if keep_identical_rows_together else None
                 ),
+                time_gap_days=gap_days,
             )
             if modeling.sealed_unavailable_reason(parts[4], parts[5], task) is not None:
                 parts = None
@@ -197,6 +200,7 @@ def improve(
             group_column=group_column,
             test_size=test_size if test_size else modeling.DEFAULT_TEST_SIZE,
             duplicate_columns=duplicate_columns,
+            time_gap_days=gap_days,
         )
     # Captured before the frame is narrowed to the model's inputs, and aligned to the training
     # rows -- every round below compares configurations on these folds.
@@ -217,7 +221,9 @@ def improve(
 
     # A date-based split validates every fold forwards in time, here as in the final split.
     # The timestamps every fold is cut by for a date split; False otherwise. See time_folds.
-    ordered = time_folds.time_rule(df, time_column) if split_strategy == "time" and time_column else False
+    ordered = (
+        time_folds.time_rule(df, time_column, gap_days) if split_strategy == "time" and time_column else False
+    )
     if tuning.cv_splitter(task, y_train, groups=train_groups, ordered=ordered) is None:
         raise modeling.ModelingError(
             "There are too few rows in the smallest class to cross-validate, so there is no "

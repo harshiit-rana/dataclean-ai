@@ -485,6 +485,7 @@ def split_with_sealed_holdout(
     copy_columns: list[str] | None = None,
     final_size: float = SEALED_FINAL_SIZE,
     dev_size: float = SEALED_DEV_SIZE,
+    time_gap_days: int = 0,
 ):
     """Training, development and sealed-final partitions.
 
@@ -530,6 +531,7 @@ def split_with_sealed_holdout(
         group_column=group_column,
         test_size=dev_size / (1 - final_size),
         duplicate_columns=duplicate_columns,
+        time_gap_days=time_gap_days,
     )
     final_index = sorted(final_index)
     return (
@@ -584,8 +586,15 @@ def split_data(
     group_column: str | None = None,
     test_size: float = DEFAULT_TEST_SIZE,
     duplicate_columns: list[str] | None = None,
+    time_gap_days: int = 0,
 ):
     """Holds out a test set. Returns (X_train, X_test, y_train, y_test).
+
+    `time_gap_days` (date split only) leaves an embargo between the training and test periods:
+    training rows less than that many days before the first test row are dropped. It is for a
+    target defined over a future window -- "churned within 30 days" -- where a row just before the
+    cut has an answer partly decided by what happens in the test period. The same rule is applied
+    inside every forward-in-time fold (see `time_folds`).
 
     `strategy="time"` sorts by `time_column` and takes the most recent rows as the test set,
     cutting at a timestamp boundary so rows sharing a timestamp stay together (see `time_cut`).
@@ -627,6 +636,17 @@ def split_data(
         ranked = order.sort_values(kind="stable").index
         cut = time_cut(order.loc[ranked], test_size, time_column)
         train_idx, test_idx = ranked[:cut], ranked[cut:]
+        if time_gap_days:
+            # The latest training row has to be at least the gap before the earliest test row.
+            earliest_test = order.loc[test_idx[0]]
+            before = (order.loc[train_idx] <= earliest_test - pd.Timedelta(days=time_gap_days)).to_numpy()
+            train_idx = train_idx[before]
+            if len(train_idx) < MIN_ROWS_TO_TRAIN:
+                raise ModelingError(
+                    f"A gap of {time_gap_days:,} days before the test period leaves only "
+                    f"{len(train_idx):,} rows to train on in '{time_column}', which spans "
+                    f"{(order.max() - order.min()).days:,} days. Use a shorter gap, or none."
+                )
         return (
             features.loc[train_idx],
             features.loc[test_idx],
@@ -1646,6 +1666,7 @@ def train_candidates(
     sealed_holdout: bool = False,
     calibration: str = "none",
     test_size: float | None = None,
+    time_gap_days: int | None = None,
 ) -> dict:
     """Trains each requested model on the same split and returns everything needed to compare
     them. A model that fails to fit is reported rather than aborting the others.
@@ -1653,6 +1674,9 @@ def train_candidates(
     `test_size` is the fraction of the labelled rows held back for testing (the plan recommends
     one from the file's size and class balance; None means `DEFAULT_TEST_SIZE`). It is ignored
     when a sealed holdout is taken, whose three parts are fixed.
+
+    `time_gap_days` (date split only) leaves an embargo of that many days between the training
+    and test periods, and between the training and validation rows of every fold.
 
     `calibration` ("none", "sigmoid" or "isotonic") asks for the chosen model's probabilities to
     be corrected, fitted on cross-validation folds of the training rows -- see calibration.py.
@@ -1712,7 +1736,10 @@ def train_candidates(
     held_back = test_size if test_size else DEFAULT_TEST_SIZE
     # What every fold inside the training rows is cut by, for a date split: the timestamps, so no
     # timestamp straddles a fold. False for the other strategies.
-    fold_order = time_folds.time_rule(df, time_column) if split_strategy == "time" and time_column else False
+    gap_days = int(time_gap_days or 0) if split_strategy == "time" else 0
+    fold_order = (
+        time_folds.time_rule(df, time_column, gap_days) if split_strategy == "time" and time_column else False
+    )
     sealed_info: dict = {"sealed": False}
     parts = None
     if sealed_holdout:
@@ -1721,6 +1748,7 @@ def train_candidates(
                 df, target_column, task, strategy=split_strategy, time_column=time_column,
                 group_column=group_column, duplicate_columns=duplicate_columns,
                 copy_columns=seal_columns if keep_identical_rows_together else None,
+                time_gap_days=gap_days,
             )
             reason = sealed_unavailable_reason(parts[4], parts[5], task)
         except ModelingError as exc:
@@ -1747,6 +1775,7 @@ def train_candidates(
             group_column=group_column,
             test_size=held_back,
             duplicate_columns=duplicate_columns,
+            time_gap_days=gap_days,
         )
     # Whether copies were actually kept together: asking for it on a file with no copies is the
     # ordinary split, and the ledger should key it as one.
@@ -2016,6 +2045,17 @@ def train_candidates(
             # The rule that held the rows out, as requested: what the test-set ledger keys a
             # look on. Not derived from the row counts, which move with the data.
             "requested_test_size": SEALED_DEV_SIZE if sealed_info["sealed"] else held_back,
+            # The embargo asked for, and how many labelled rows it cost: rows between the training
+            # period and the test period that are in neither.
+            "gap_days": gap_days,
+            "gap_rows_dropped": (
+                int(df[target_column].notna().sum())
+                - len(X_train)
+                - len(X_test)
+                - (sealed_info.get("final_rows") or 0)
+                if gap_days
+                else 0
+            ),
             "seed": RANDOM_STATE,
             "keep_duplicates_together": kept_together,
             **sealed_info,

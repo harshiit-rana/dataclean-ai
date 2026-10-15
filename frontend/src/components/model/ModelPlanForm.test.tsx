@@ -1,7 +1,8 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ModelPlanForm } from "./ModelPlanForm";
-import type { ModelPlan } from "@/api/types";
+import { requestFromResult } from "@/pages/ModelPage";
+import type { ModelPlan, ModelResult } from "@/api/types";
 
 /** The plan the RSNA knee dataset produced: a large file, almost none of it labelled, and a
  * verdict the server will refuse to train on. The form used to offer the button anyway and
@@ -446,5 +447,84 @@ describe("ModelPlanForm — a recommended way to split (#43)", () => {
     renderForm();
     expect(radio(/Random split/).checked).toBe(true);
     expect(screen.queryByTestId("split-recommendation")).not.toBeInTheDocument();
+  });
+});
+
+describe("ModelPlanForm — a gap between training and test (#20)", () => {
+  const DATED: Partial<ModelPlan> = {
+    date_columns: ["created_on"],
+    split_options: [
+      { value: "random", label: "Random split", description: "" },
+      { value: "time", label: "Split by date", description: "" },
+    ],
+  };
+  const gapInput = () => screen.getByLabelText("Days to leave between training and test") as HTMLInputElement;
+  const chooseDate = () => fireEvent.click(screen.getByRole("radio", { name: /Split by date/ }));
+
+  it("is offered only for a date split", () => {
+    renderForm(DATED);
+    expect(screen.queryByLabelText("Days to leave between training and test")).not.toBeInTheDocument();
+    chooseDate();
+    expect(gapInput()).toBeInTheDocument();
+  });
+
+  it("explains what it is for", () => {
+    renderForm(DATED);
+    chooseDate();
+    expect(screen.getByText(/cancelled within 30/)).toBeInTheDocument();
+    expect(screen.getByText(/Rows inside the gap are dropped, and the result says how many/)).toBeInTheDocument();
+  });
+
+  it("sends the number of days chosen", () => {
+    const onTrain = renderForm(DATED);
+    chooseDate();
+    fireEvent.change(gapInput(), { target: { value: "30" } });
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0]).toMatchObject({ split_strategy: "time", time_gap_days: 30 });
+  });
+
+  it("sends no gap when none is entered", () => {
+    const onTrain = renderForm(DATED);
+    chooseDate();
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].time_gap_days).toBeNull();
+  });
+
+  it("sends none for a random split even if a number was typed before switching", () => {
+    const onTrain = renderForm(DATED);
+    chooseDate();
+    fireEvent.change(gapInput(), { target: { value: "30" } });
+    fireEvent.click(screen.getByRole("radio", { name: /Random split/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Train/ }));
+    expect(onTrain.mock.calls[0][0].time_gap_days).toBeNull();
+  });
+
+  it("will not train on a gap that is not a sensible number of days", () => {
+    renderForm(DATED);
+    chooseDate();
+    fireEvent.change(gapInput(), { target: { value: "-5" } });
+    expect(screen.getByText(/whole number of days between 0 and 3,650/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Train/ })).toBeDisabled();
+    fireEvent.change(gapInput(), { target: { value: "14" } });
+    expect(screen.getByRole("button", { name: /Train/ })).toBeEnabled();
+  });
+});
+
+
+describe("requestFromResult — the gap (#20)", () => {
+  const stored = (split: Record<string, unknown>) =>
+    ({
+      task: "classification",
+      features: { numeric: [], categorical: [], dropped: [], excluded: [] },
+      split: { strategy: "time", time_column: "day", group_column: null, train_rows: 1, test_rows: 1, ...split },
+    }) as unknown as ModelResult;
+
+  it("carries the gap into a rebuilt request, so improving or calibrating keeps it", () => {
+    expect(requestFromResult(stored({ gap_days: 30 })).time_gap_days).toBe(30);
+  });
+
+  it("carries none when there was none, or for a split that is not by date", () => {
+    expect(requestFromResult(stored({ gap_days: 0 })).time_gap_days).toBeNull();
+    expect(requestFromResult(stored({ strategy: "random", gap_days: 30 })).time_gap_days).toBeNull();
   });
 });

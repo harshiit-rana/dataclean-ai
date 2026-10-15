@@ -674,3 +674,22 @@ describe("ModelResults — a median baseline and a relative error for regression
     expect(screen.getAllByText(/No model at all/).length).toBe(1);
   });
 });
+
+describe("ModelResults — the gap is said where the split is described (#20)", () => {
+  const dated = (gap?: number, dropped?: number): ModelResult => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.split = { ...r.split, strategy: "time", time_column: "day", gap_days: gap, gap_rows_dropped: dropped };
+    return r;
+  };
+
+  it("says how long the gap was and how many rows it cost", () => {
+    render(<ModelResults result={dated(30, 29)} />);
+    expect(screen.getByText(/split by day, with a gap of 30 days between training and test \(29 rows inside it dropped\)/)).toBeInTheDocument();
+  });
+
+  it("says nothing extra for a date split without one", () => {
+    render(<ModelResults result={dated(0, 0)} />);
+    expect(screen.getByText(/split by day\./)).toBeInTheDocument();
+    expect(screen.queryByText(/with a gap/)).not.toBeInTheDocument();
+  });
+});

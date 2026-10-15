@@ -239,6 +239,10 @@ class TrainRequest(BaseModel):
     # recommends one from the file's size and class balance. Ignored with a sealed holdout, whose
     # three parts are fixed.
     test_size: Optional[float] = Field(default=None, ge=0.05, le=0.5)
+    # Days to leave between the training and test periods of a date split (and between training and
+    # validation in every fold), for a target defined over a future window. Ignored by the other
+    # splits. A gap that leaves too little to train on is refused with the numbers.
+    time_gap_days: Optional[int] = Field(default=None, ge=0, le=3650)
 
 
 class ImproveRequest(TrainRequest):

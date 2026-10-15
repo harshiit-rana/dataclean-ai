@@ -68,6 +68,10 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
   const recommended = plan.recommended_test_size ?? null;
   const [testSize, setTestSize] = useState<number>(recommended?.fraction ?? 0.2);
   const sealedOn = Boolean(plan.sealed_holdout_offer?.available) && sealed;
+  // Days to leave between the training and test periods of a date split. Empty means none.
+  const [gapDays, setGapDays] = useState<string>("");
+  const gap = Number.parseInt(gapDays, 10);
+  const gapValid = gapDays.trim() === "" || (Number.isInteger(gap) && gap >= 0 && gap <= 3650);
   const [timeColumn, setTimeColumn] = useState<string>(
     (usableAdvice?.strategy === "time" ? usableAdvice.column : null) ?? plan.date_columns[0] ?? ""
   );
@@ -277,6 +281,38 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
             </Select>
           )}
 
+          {splitStrategy === "time" && plan.date_columns.length > 0 && (
+            <label className="flex flex-col gap-1 rounded-md border border-border p-3 text-sm">
+              <span className="flex flex-wrap items-center gap-3">
+                <span className="font-medium">Leave a gap of</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={3650}
+                  inputMode="numeric"
+                  aria-label="Days to leave between training and test"
+                  className="h-9 w-24 rounded-md border border-border bg-background px-2"
+                  placeholder="0"
+                  value={gapDays}
+                  onChange={(e) => setGapDays(e.target.value)}
+                />
+                <span>days between training and test</span>
+              </span>
+              <span className="text-xs text-muted-foreground">
+                For an answer defined over a future window, such as &ldquo;cancelled within 30
+                days&rdquo;: a row just before the cut has an answer partly decided by what happens in
+                the test period. Training then stops at least this long before the first test row,
+                here and in every fold inside the training rows. Rows inside the gap are dropped, and
+                the result says how many.
+              </span>
+              {!gapValid && (
+                <span className="text-xs text-destructive">
+                  Enter a whole number of days between 0 and 3,650.
+                </span>
+              )}
+            </label>
+          )}
+
           <div className="flex flex-col gap-2 rounded-md border border-border p-3 text-sm">
             <label className="flex flex-wrap items-center gap-3">
               <span className="font-medium">How much to hold back</span>
@@ -444,9 +480,10 @@ export function ModelPlanForm({ plan, onTrain, training }: ModelPlanFormProps) {
                 splitStrategy === "random" && Boolean(plan.identical_rows) && keepCopies,
               sealed_holdout: Boolean(plan.sealed_holdout_offer?.available) && sealed,
               test_size: sealedOn ? null : testSize,
+              time_gap_days: splitStrategy === "time" && gapValid && gap > 0 ? gap : null,
             })
           }
-          disabled={training || models.length === 0 || blocked || !tradeOffReady}
+          disabled={training || models.length === 0 || blocked || !tradeOffReady || !gapValid}
         >
           {training ? "Training..." : `Train ${models.length} model${models.length === 1 ? "" : "s"}`}
         </Button>

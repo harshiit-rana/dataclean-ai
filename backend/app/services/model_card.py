@@ -62,7 +62,15 @@ _METRIC_LABELS = {
 def _split_description(split: dict) -> str:
     strategy = split.get("strategy")
     if strategy == "time":
-        return f"by date, on {split.get('time_column')}"
+        gap = split.get("gap_days")
+        text = f"by date, on {split.get('time_column')}"
+        if gap:
+            dropped = split.get("gap_rows_dropped")
+            text += (
+                f", leaving a gap of {gap:,} days between training and test"
+                + (f" ({dropped:,} rows inside it were dropped)" if dropped is not None else "")
+            )
+        return text
     if strategy == "group":
         return f"keeping every {split.get('group_column')} on one side"
     return "at random"
