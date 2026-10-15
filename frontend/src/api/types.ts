@@ -953,6 +953,8 @@ export interface ImprovementTrail {
   metric: string;
   goal: number | null;
   stopped_because: "goal_reached" | "goal_out_of_reach" | "no_further_gains" | "time_limit";
+  /** What the run reduced to stay within the server's processing limit, if anything. */
+  resource_limits?: ResourceLimits | null;
   /** The limit the run was given, in seconds. Null or absent when it had none. */
   time_limit_seconds?: number | null;
   /** The rounds that did not run because the limit was reached first. */

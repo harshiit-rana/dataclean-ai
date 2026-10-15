@@ -963,7 +963,8 @@ def _improve_and_save(
         target_column=target,
         task=task,
         model_names=[best["model"]],
-        excluded_columns=request.excluded_columns,
+        # The user's exclusions, and the inputs the fifth round found the model does better without.
+        excluded_columns=[*request.excluded_columns, *[r["column"] for r in best.get("removed_columns", [])]],
         split_strategy=request.split_strategy,
         time_column=request.time_column,
         group_column=request.group_column,
@@ -997,6 +998,17 @@ def _improve_and_save(
         "settings": best["params"],
     }
     rebuilt["features"]["excluded"] = list(request.excluded_columns)
+    removed = best.get("removed_columns") or []
+    if removed:
+        # Withheld from the rebuild like an exclusion, but not the user's: say what it was.
+        rebuilt["features"]["removed_by_selection"] = removed
+        by_column = {r["column"]: r for r in removed}
+        for entry in rebuilt["features"].get("dropped", []):
+            if entry["column"] in by_column:
+                entry["reason"] = (
+                    f"Removed by feature selection: shuffling it on validation folds changed the score by "
+                    f"{-by_column[entry['column']]['importance']:+.3f}, so the model did better without it."
+                )
     # One look, however many rounds the search ran: the rounds are scored on training folds and
     # never open the held-out rows. Only this final rebuild does, once.
     return _save_and_record(

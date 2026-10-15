@@ -468,6 +468,24 @@ class TestTheImprovementLoop:
         searched = [r for r in honest["rounds"] if r["detail"].get("rungs")]
         assert searched  # the strategy ran, so there were rungs to protect
 
+    def test_which_inputs_are_removed_never_depends_on_the_test_answers(self, learnable, flipped_test_answers):
+        """The fifth round ranks inputs by shuffling them on validation folds of the training rows. Give the
+        data enough noise columns for it to run, flip every held-out answer, and the importances, the
+        columns removed and every round must be identical."""
+        rng = np.random.default_rng(31)
+        wide = learnable.copy()
+        for index in range(5):
+            wide[f"noise_{index}"] = rng.normal(0, 1, len(wide))
+
+        honest = self._improve(wide)
+        flipped_test_answers()
+        rigged = self._improve(wide)
+
+        assert any(r["name"] == "feature_selection" for r in honest["rounds"])  # the round ran
+        assert self._decisions(rigged) == self._decisions(honest)
+        assert rigged["best"]["removed_columns"] == honest["best"]["removed_columns"]
+        assert rigged["test_metrics"] != honest["test_metrics"]
+
     def test_the_check_on_fresh_folds_never_reads_the_test_set(self, learnable, flipped_test_answers, monkeypatch):
         """A search winner is re-scored with the incumbent on reshuffled training folds. Force a winner that
         clears the first rule so the check always happens, then flip every held-out answer: the fresh-fold

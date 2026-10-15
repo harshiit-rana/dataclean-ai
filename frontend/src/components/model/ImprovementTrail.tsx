@@ -8,6 +8,18 @@ const STRATEGY_LABELS: Record<string, string> = {
   halving: "successive halving",
 };
 
+interface RemovedInput {
+  column: string;
+  importance: number;
+  spread: number;
+}
+
+/** The inputs a feature-selection round took out, with how little each mattered. */
+function removedOf(detail: Record<string, unknown> | undefined): RemovedInput[] {
+  const removed = detail?.removed;
+  return Array.isArray(removed) ? (removed as RemovedInput[]) : [];
+}
+
 interface Rung {
   rung: number;
   settings: number;
@@ -169,6 +181,16 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
                   {STRATEGY_LABELS[String(round.detail.strategy)] ?? String(round.detail.strategy)}:{" "}
                   {round.detail.strategy_reason}.
                 </p>
+              )}
+              {removedOf(round.detail).length > 0 && (
+                <ul className="mt-2 flex flex-col gap-0.5 text-xs text-muted-foreground" aria-label="Removed inputs">
+                  {removedOf(round.detail).map((input) => (
+                    <li key={input.column} className="tabular-nums">
+                      {input.column}: shuffling it changed the score by {(-input.importance).toFixed(3)} (±
+                      {input.spread.toFixed(3)} across folds)
+                    </li>
+                  ))}
+                </ul>
               )}
               {confirmationOf(round.detail) && (
                 <p className="mt-1 text-xs text-muted-foreground">

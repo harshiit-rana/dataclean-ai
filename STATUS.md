@@ -727,6 +727,18 @@ families it was estimated at 42 million, compared on 98,181 of the 160,000 train
 46 seconds on a multi-core laptop. The weights err towards caution (a forest fits in parallel), and the limit is one
 setting if a deployment wants it looser.
 
+**A round that asks whether each input earns its place (#57).** Every usable column is an input, and a weak or noisy one
+adds variance, most of all on a small file. After the other rounds, the loop ranks the inputs by *fold importance*: for each
+validation fold the incumbent, fitted on that fold's training rows, is scored with one input's values shuffled, and the
+drop averaged over the folds is that input's importance. It never touches the held-out test rows, nor any row the model was
+fitted on, which is what makes an importance of zero or below mean something. The inputs that did not matter (at most half
+of them) are removed, the model is re-scored, and the smaller set is kept only if it clears the same gain rule as every
+other round; if not, the lowest-ranked third of them is tried, because correlated inputs share their importance. The trail
+lists each removed input with its importance and spread; the removed inputs are withheld from the rebuilt model and so from
+the exported script, shown on the model card under "Columns not used" with their own reason (not as the user's exclusions),
+and kept apart from the user's exclusions in the result. With fewer than four inputs there is nothing to rank. The round is
+skipped, and says so, when the time limit has passed.
+
 **A record of what you tried.** Results used to overwrite a single file, so retraining
 discarded the previous run — which made the question people actually ask unanswerable: *did the
 thing I just changed help?* Every run is now kept with its settings, its headline number and

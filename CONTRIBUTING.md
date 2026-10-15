@@ -468,6 +468,10 @@ are both running locally, you're ready to make changes.
   with rows times candidates times folds belongs in `estimate_cost`, and anything that reduces a request to fit
   (`plan_within_limit`) must say so in `resource_limits` rather than do it silently, and never touch the test set.
   Tests that take minutes go in `tests/slow`, marked `slow`; the default run leaves them out.
+- **Anything that scores an input's usefulness uses validation folds of the training rows.** `improvement.fold_importance`
+  shuffles an input only on rows the fold's model was not fitted on; computing importance on the fitted rows, or on the
+  test set, would reward memorisation or select on the test set. A round that removes inputs must withhold them from
+  the rebuild (`best["removed_columns"]`) and keep them out of the user's exclusions.
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,

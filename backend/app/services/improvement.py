@@ -25,6 +25,7 @@ import time
 from dataclasses import dataclass, field
 from typing import Callable
 
+import numpy as np
 import pandas as pd
 
 from app.services import features as feature_recipes, modeling, time_folds, tuning
@@ -53,6 +54,9 @@ CONFIRM_SEARCH_WINNERS = True
 # not going to close the gap, and searching it anyway is the single most expensive thing the
 # loop can do for the least return.
 WORTH_TUNING_WITHIN = 0.05
+
+# Fewer inputs than this and there is nothing worth ranking: removing one of three leaves two.
+MIN_INPUTS_TO_SELECT = 4
 
 
 @dataclass
@@ -85,6 +89,56 @@ class Round:
             "outcome": self.outcome,
             "detail": self.detail,
         }
+
+
+def fold_importance(
+    build: Callable[[], object], X: pd.DataFrame, y, task: str, *, groups, ordered, columns: list[str],
+    repeats: int = 2,
+) -> dict[str, tuple[float, float]]:
+    """How much each input matters to the model, measured on validation folds of the training rows.
+
+    For every fold the incumbent is fitted on the fold's training part, scored on its validation part, and
+    scored again with one input's values shuffled there; the drop is that input's importance on that fold.
+    Returns, per column, the mean of the drops over the folds and their spread. The held-out test rows are
+    never touched, and neither is a row the model was fitted on, which is what makes a *negative or zero*
+    importance mean something: shuffling the column on rows the model has not seen did not hurt it.
+    Uses one partition of the folds, not the repeated ones: it is a ranking, not a comparison.
+    """
+    from sklearn.metrics import get_scorer
+
+    splitter = tuning.cv_splitter(task, y, groups=groups, ordered=ordered)
+    if splitter is None:
+        return {}
+    y_in = pd.Series(y).astype(str).reset_index(drop=True) if task == "classification" else pd.Series(y).reset_index(drop=True)
+    frame = X.reset_index(drop=True)
+    group_values = None if groups is None else pd.Series(groups).reset_index(drop=True)
+    scorer = get_scorer(tuning.scoring_for(task, y))
+    rng = np.random.default_rng(modeling.RANDOM_STATE)
+    drops: dict[str, list[float]] = {c: [] for c in columns}
+    for train_idx, val_idx in splitter.split(frame, y_in, group_values):
+        try:
+            model = build().fit(frame.iloc[train_idx], y_in.iloc[train_idx])
+            held, truth = frame.iloc[val_idx], y_in.iloc[val_idx]
+            base = scorer(model, held, truth)
+            for column in columns:
+                lost = []
+                for _ in range(repeats):
+                    shuffled = held.copy()
+                    shuffled[column] = rng.permutation(shuffled[column].to_numpy())
+                    lost.append(base - scorer(model, shuffled, truth))
+                drops[column].append(float(np.mean(lost)))
+        except Exception:  # noqa: BLE001 -- a fold with one answer in it cannot be scored; the others can
+            logger.debug("A fold could not be used for the input importance", exc_info=True)
+    return {c: (float(np.mean(v)), float(np.std(v))) for c, v in drops.items() if v}
+
+
+def _without(features: dict, removed: set[str]) -> dict:
+    """The feature lists with these inputs taken out."""
+    kept = dict(features)
+    for key in ("numeric", "categorical", "frequent", "clipped"):
+        if key in kept and kept[key] is not None:
+            kept[key] = [c for c in kept[key] if c not in removed]
+    return kept
 
 
 def _reached(found: tuning.SearchResult) -> dict:
@@ -807,6 +861,124 @@ def improve(
         if _goal_met(best_score, goal):
             stopped_because = "goal_reached"
 
+    # --- Round 5: which of the inputs earn their place ----------------------------------
+    #
+    # Every usable column is an input, and a weak or noisy one adds variance, most of all on a small file.
+    # Rank the inputs by how much shuffling each hurts the incumbent on validation folds, and see whether
+    # the model does better without the ones that did not matter. It is kept only if it clears the same
+    # gain rule as every other round; correlated inputs share their importance, so a group is removed
+    # and re-scored, and if that fails a smaller one is tried.
+    removed_columns: list[dict] = []
+    if not stopped_because and out_of_time():
+        stopped_because = "time_limit"
+    if (
+        stopped_because == "time_limit"
+        and "feature_selection" not in skipped_for_time
+        and len(used) >= MIN_INPUTS_TO_SELECT  # a round that was never going to run was not skipped
+    ):
+        skip_for_time(
+            "feature_selection", "Inputs that earn their place",
+            "Checked whether the model does better without the inputs that matter least.",
+        )
+    if not stopped_because and len(used) >= MIN_INPUTS_TO_SELECT:
+        starting("feature_selection", "Checking which inputs earn their place.")
+        importance = fold_importance(
+            build_for(best_name, best_params, features), X_train, y_train, task,
+            groups=train_groups, ordered=ordered, columns=used,
+        )
+        ranked_inputs = sorted(importance, key=lambda c: (importance[c][0], c))
+        useless = [c for c in ranked_inputs if importance[c][0] <= 0.0]
+        # Never every input, and never more than half: removing most of the columns is a different model.
+        useless = useless[: max(len(used) // 2, 0)]
+        what = (
+            f"Shuffled each of the {len(used)} inputs on validation folds to see which ones the model "
+            f"does not miss, and re-scored it without them."
+        )
+        if not useless:
+            emit(
+                Round(
+                    name="feature_selection",
+                    label="Inputs that earn their place",
+                    what_it_tried=what,
+                    accepted=False,
+                    outcome="Every input is missed when it is shuffled, so none was removed.",
+                    detail={"importance": {c: round(importance[c][0], 4) for c in ranked_inputs[:10]}},
+                )
+            )
+        else:
+            tried_sets = [useless]
+            if len(useless) >= 3:
+                tried_sets.append(useless[: -(-len(useless) // 3)])  # the lowest-ranked third
+            winner = None  # (group, scored) once a smaller set clears the gain rule
+            last_scored = None
+            shown: dict = {}
+            for group in tried_sets:
+                reduced = _without(features, set(group))
+                reduced_used = [c for c in used if c not in set(group)]
+                if not reduced_used:
+                    continue
+                if out_of_time():
+                    cut_short = True
+                    break
+                last_scored = tuning.score_config(
+                    build_for(best_name, best_params, reduced),
+                    X_train[reduced_used], y_train, task, groups=train_groups, ordered=ordered,
+                )
+                shown = {
+                    "tried": len(group),
+                    "removed": [
+                        {"column": c, "importance": round(importance[c][0], 4), "spread": round(importance[c][1], 4)}
+                        for c in group
+                    ],
+                }
+                if last_scored is not None and _is_real_gain(last_scored.score, best_score, last_scored.std):
+                    winner = (group, last_scored, reduced, reduced_used)
+                    break
+
+            if winner is not None:
+                group, scored, reduced, reduced_used = winner
+                gain = round(scored.score - best_score, 4)
+                best_score, best_std = scored.score, scored.std
+                features, used = reduced, reduced_used
+                X_train, X_test = X_train[used], X_test[used]
+                removed_columns = shown["removed"]
+                emit(
+                    Round(
+                        name="feature_selection",
+                        label="Inputs that earn their place",
+                        what_it_tried=what,
+                        score=scored.score,
+                        std=scored.std,
+                        gain=gain,
+                        accepted=True,
+                        outcome=f"The model does better without {len(group)} of its inputs: "
+                        f"{metric_label} up {gain:+.3f}. They were removed.",
+                        detail=shown,
+                    )
+                )
+            else:
+                emit(
+                    Round(
+                        name="feature_selection",
+                        label="Inputs that earn their place",
+                        what_it_tried=what,
+                        score=None if last_scored is None else last_scored.score,
+                        std=None if last_scored is None else last_scored.std,
+                        gain=None if last_scored is None else round(last_scored.score - best_score, 4),
+                        accepted=False,
+                        outcome=(
+                            "The time limit came before the model could be re-scored without them, so all "
+                            "of the inputs stayed."
+                            if last_scored is None
+                            else "The model did not do better by more than the folds disagree without the "
+                            "inputs that matter least, so all of them stayed."
+                        ),
+                        detail=shown,
+                    )
+                )
+        if _goal_met(best_score, goal):
+            stopped_because = "goal_reached"
+
     if not stopped_because:
         stopped_because = (
             "goal_reached" if _goal_met(best_score, goal)
@@ -838,6 +1010,9 @@ def improve(
             "cv_std": best_std,
             # The derived inputs the winner uses, as ids, so the caller rebuilds it the same way.
             "feature_recipes": [r.id for r in recipes],
+            # Inputs the fifth round removed because the model did better without them, with how little
+            # each mattered; the caller withholds them from the rebuild.
+            "removed_columns": removed_columns,
         },
         "test_metrics": test_metrics,
         "pipeline": final_pipeline,

@@ -197,3 +197,36 @@ describe("ImprovementTrail — the check on fresh folds (#51)", () => {
     expect(screen.queryByText(/Checked on fresh folds/)).not.toBeInTheDocument();
   });
 });
+
+describe("ImprovementTrail — inputs removed by selection (#57)", () => {
+  const selection = (accepted: boolean) => ({
+    name: "feature_selection", label: "Inputs that earn their place", what_it_tried: "Shuffled each of the 7 inputs.",
+    score: 0.83, std: 0.02, gain: 0.02, accepted,
+    outcome: accepted ? "The model does better without 2 of its inputs: AUC up +0.020. They were removed." : "All stayed.",
+    detail: {
+      tried: 2,
+      removed: [
+        { column: "noise_a", importance: -0.004, spread: 0.01 },
+        { column: "noise_b", importance: 0.0, spread: 0.008 },
+      ],
+    },
+  });
+
+  it("lists each removed input with how little it mattered", () => {
+    render(<ImprovementTrail trail={trail({ rounds: [selection(true)] })} />);
+    const list = screen.getByRole("list", { name: "Removed inputs" });
+    expect(list).toHaveTextContent("noise_a: shuffling it changed the score by 0.004 (±0.010 across folds)");
+    expect(list).toHaveTextContent("noise_b: shuffling it changed the score by 0.000");
+  });
+
+  it("shows what was tried even when it was not kept", () => {
+    render(<ImprovementTrail trail={trail({ rounds: [selection(false)] })} />);
+    expect(screen.getByRole("list", { name: "Removed inputs" })).toBeInTheDocument();
+    expect(screen.getByText("All stayed.")).toBeInTheDocument();
+  });
+
+  it("shows no list for a round that removed nothing", () => {
+    render(<ImprovementTrail trail={trail()} />);
+    expect(screen.queryByRole("list", { name: "Removed inputs" })).not.toBeInTheDocument();
+  });
+});
