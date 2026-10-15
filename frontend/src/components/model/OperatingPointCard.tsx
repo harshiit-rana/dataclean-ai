@@ -14,9 +14,12 @@ const pct = (v: number | null | undefined) => (typeof v === "number" ? `${Math.r
 export function OperatingPointCard({
   point,
   evaluation,
+  trainedWithCosts = false,
 }: {
   point: OperatingPointResult;
   evaluation?: EvaluationStatus;
+  /** The model was also trained with the stated costs as row weights, not only cut with them. */
+  trainedWithCosts?: boolean;
 }) {
   if (point.objective === "default") return null;
 
@@ -69,6 +72,13 @@ export function OperatingPointCard({
             The probabilities were calibrated ({point.calibrated_with}), so this line is on
             calibrated probabilities: {point.threshold.toFixed(2)} means the model says it is{" "}
             {Math.round(point.threshold * 100)}% likely, and means it.
+          </p>
+        )}
+        {point.objective === "cost" && (
+          <p className="text-sm text-muted-foreground">
+            {trainedWithCosts
+              ? "The model was also trained with your costs: each row counted by the cost of getting it wrong, because on the training folds that lowered the expected cost by more than the folds disagree."
+              : "The model was trained without your costs; only this line uses them."}
           </p>
         )}
       </CardHeader>

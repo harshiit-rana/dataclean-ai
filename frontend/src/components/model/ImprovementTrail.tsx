@@ -124,7 +124,10 @@ function formatScore(value: number | null, metric: string): string {
 export function ImprovementTrail({ trail }: { trail: Trail }) {
   const metric = METRIC_LABELS[trail.metric] ?? trail.metric;
   const stopped = STOPPED[trail.stopped_because];
-  const settings = Object.entries(trail.settings);
+  // Members of an ensemble and cost weights are described by their own rounds; the list is the plain settings.
+  const settings = Object.entries(trail.settings).filter(
+    ([key, value]) => key !== "members" && key !== "cost_weighting" && (value === null || typeof value !== "object")
+  );
 
   return (
     <Card>

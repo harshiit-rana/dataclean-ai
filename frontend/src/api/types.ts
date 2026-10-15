@@ -782,6 +782,11 @@ export interface CandidateResult {
   /** 95% intervals for the headline held-out metrics. Present for the chosen model only, and
    * absent when the test set is too small for an interval to mean anything. */
   metrics_intervals?: MetricIntervals | null;
+  /** The settings the model was built with. `cost_weighting` is present when it was trained
+   * with the stated mistake costs as row weights, and `members` when it is an average. */
+  tuned_params?: Record<string, unknown> & {
+    cost_weighting?: { positive_label: string; cost_of_missing: number; cost_of_false_alarm: number };
+  };
 }
 
 /** How the winning model was chosen. The held-out rows are never part of it. */

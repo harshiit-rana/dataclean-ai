@@ -28,7 +28,7 @@ from typing import Callable
 import numpy as np
 import pandas as pd
 
-from app.services import features as feature_recipes, modeling, time_folds, tuning
+from app.services import features as feature_recipes, modeling, operating_point, time_folds, tuning
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +138,42 @@ def fold_importance(
     return {c: (float(np.mean(v)), float(np.std(v))) for c, v in drops.items() if v}
 
 
+def fold_expected_costs(
+    build: Callable[[], object], X: pd.DataFrame, y, *, positive_label: str, cost_of_missing: float,
+    cost_of_false_alarm: float, groups=None, ordered=False,
+) -> list[float] | None:
+    """The stated expected cost per row on each validation fold, at the cut-off that minimises it.
+
+    Out-of-fold probabilities for every training row (each from a model that did not train on it), the cut-off
+    chosen on all of them the way the app chooses it, then the cost of the misses and false alarms on each
+    fold's rows at that cut-off. Fold by fold, so two ways of training can be compared on the same folds.
+    Returns None when the folds cannot be made or scored.
+    """
+    point = operating_point.OperatingPoint(
+        objective="cost", cost_of_missing=float(cost_of_missing), cost_of_false_alarm=float(cost_of_false_alarm),
+        positive_label=positive_label,
+    )
+    scores, _ = operating_point.out_of_fold_scores(build, X, y, positive_label, groups, ordered)
+    if scores is None:
+        return None
+    labels = pd.Series(y).astype(str).reset_index(drop=True)
+    binary = (labels == str(positive_label)).to_numpy().astype(int)
+    covered = ~np.isnan(scores)
+    if not covered.any() or binary[covered].min() == binary[covered].max():
+        return None
+    threshold = operating_point.choose_threshold(binary[covered], scores[covered], point)["threshold"]
+    splitter = tuning.cv_splitter("classification", labels, groups=groups, ordered=ordered)
+    group_values = None if groups is None else pd.Series(groups).reset_index(drop=True)
+    costs = []
+    for _, held in splitter.split(X.reset_index(drop=True), labels, group_values):
+        held = held[covered[held]]
+        if len(held) == 0:
+            continue
+        at = operating_point.metrics_at(binary[held], scores[held], threshold)
+        costs.append((cost_of_missing * at["missed"] + cost_of_false_alarm * at["false_alarms"]) / len(held))
+    return costs or None
+
+
 def _without(features: dict, removed: set[str]) -> dict:
     """The feature lists with these inputs taken out."""
     kept = dict(features)
@@ -218,8 +254,13 @@ def improve(
     time_limit_seconds: float | None = None,
     search_strategy: str = "auto",
     cost_limit: int | None = None,
+    stated_costs: dict | None = None,
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
+
+    `stated_costs` is the user's cost objective for the cut-off, `{"cost_of_missing", "cost_of_false_alarm",
+    "positive_label"}`, when they gave one. For a two-answer target the last round then asks whether training
+    with those costs as row weights lowers the expected cost, fold by fold, beyond the folds' disagreement.
 
     `cost_limit` is the processing limit (see `modeling.plan_within_limit`): over it, the most expensive
     families are not tried and the settings searches get a smaller budget, and what was reduced is in the
@@ -430,6 +471,8 @@ def improve(
     strategies_used: set[str] = set()
     # The best settings each family's search found, accepted or not, for the members of an ensemble.
     searched_settings: dict[str, dict] = {}
+    # The stated costs as row weights, once the last round has shown they lower the expected cost.
+    training_weights: dict | None = None
 
     def strategy_for(model: str) -> tuple[str, str]:
         """The strategy for this model's settings search, and the reason, for the trail."""
@@ -502,24 +545,33 @@ def improve(
         return f" The time limit stopped it after {found.tried} of {found.planned} settings."
 
     def build_for(
-        name: str, params: dict | None = None, with_features: dict | None = None
+        name: str, params: dict | None = None, with_features: dict | None = None, weighting: dict | None = None,
     ) -> Callable[[], object]:
         feats = with_features or features
+        weighting = weighting or training_weights
 
         def factory():
             ensemble = modeling.MODELS[name].ensemble
+            # A cost-weighted model wraps the one that is tuned, so its searched values are passed to the
+            # constructor rather than set on the pipeline's model step.
+            as_settings = ensemble or bool(weighting)
+            settings = (
+                {k.replace("model__", ""): v for k, v in (params or {}).items()} if as_settings else None
+            )
+            if weighting:
+                settings = {**(settings or {}), "cost_weighting": weighting}
             pipeline = modeling.build_pipeline(
                 name,
                 feats["numeric"],
                 feats["categorical"],
                 # An ensemble's settings are its members, which are built with it; everything else is tuned by
                 # setting the searched values on the pipeline's model step.
-                model_params=params if ensemble else None,
+                model_params=settings,
                 frequent=feats["frequent"],
                 target_encoded=feats.get("target_encoded"),
                 clip=feats.get("clipped"),
             )
-            if params and not ensemble:
+            if params and not as_settings:
                 pipeline.set_params(**params)
             return pipeline
 
@@ -1276,6 +1328,81 @@ def improve(
         if _goal_met(best_score, goal):
             stopped_because = "goal_reached"
 
+    # --- Round 8: training with the stated costs ------------------------------------------
+    #
+    # The user said a missed case costs N times a false alarm. Until now that only moved the cut-off, after a
+    # model fitted with balanced class weights -- a different trade-off -- had been chosen. Train the incumbent
+    # again with each row weighted by the cost of getting it wrong, and compare the expected cost per row at the
+    # best cut-off, fold by fold on the same folds. Kept only when it is lower by more than the folds disagree.
+    two_answers = task == "classification" and pd.Series(y_train).nunique() == 2
+    if stated_costs and two_answers and not stopped_because and out_of_time():
+        stopped_because = "time_limit"
+    if stopped_because == "time_limit" and stated_costs and two_answers and "cost_weighting" not in skipped_for_time:
+        skip_for_time("cost_weighting", "Training with your costs", "Trained with the stated costs as row weights.")
+    if stated_costs and two_answers and not stopped_because:
+        starting("cost_weighting", "Training with the costs you stated.")
+        positive = str(
+            stated_costs.get("positive_label") or sorted(pd.Series(y_train).astype(str).unique())[-1]
+        )
+        weights = {
+            "positive_label": positive,
+            "cost_of_missing": float(stated_costs.get("cost_of_missing") or 1.0),
+            "cost_of_false_alarm": float(stated_costs.get("cost_of_false_alarm") or 1.0),
+        }
+        costs = dict(
+            positive_label=positive, cost_of_missing=weights["cost_of_missing"],
+            cost_of_false_alarm=weights["cost_of_false_alarm"], groups=train_groups, ordered=ordered,
+        )
+        plain = fold_expected_costs(build_for(best_name, best_params), X_train, y_train, **costs)
+        weighted = fold_expected_costs(build_for(best_name, best_params, weighting=weights), X_train, y_train, **costs)
+        what = (
+            f"Trained {modeling.MODELS[best_name].label.lower()} again with each row weighted by the cost you "
+            f"stated for getting it wrong (a missed case {weights['cost_of_missing']:g}, a false alarm "
+            f"{weights['cost_of_false_alarm']:g}), and compared the expected cost per row at the best cut-off on "
+            f"the same folds."
+        )
+        gap = None
+        if plain and weighted and len(plain) == len(weighted):
+            from app.services import uncertainty
+
+            folds = len(plain)
+            # Lower cost is better, so compare the negatives: a positive difference means weighting helped.
+            gap = uncertainty.fold_difference(
+                [-c for c in weighted], [-c for c in plain],
+                test_train_ratio=1 / (folds - 1) if folds > 1 else None,
+            )
+        detail = {
+            "weights": weights,
+            "expected_cost": {
+                "without": None if not plain else round(float(np.mean(plain)), 4),
+                "with": None if not weighted else round(float(np.mean(weighted)), 4),
+            },
+            "paired_difference": gap,
+        }
+        helped = gap is not None and gap["low"] > 0
+        if helped:
+            training_weights = weights
+        emit(
+            Round(
+                name="cost_weighting",
+                label="Training with your costs",
+                what_it_tried=what,
+                accepted=helped,
+                outcome=(
+                    f"Training with your costs lowers the expected cost per row from "
+                    f"{detail['expected_cost']['without']:.3f} to {detail['expected_cost']['with']:.3f}, by more than "
+                    f"the folds disagree, so the model is trained with them."
+                    if helped
+                    else "The folds could not be compared, so the model is trained as it was."
+                    if gap is None
+                    else f"Training with your costs changed the expected cost per row from "
+                    f"{detail['expected_cost']['without']:.3f} to {detail['expected_cost']['with']:.3f}, not by more "
+                    f"than the folds disagree, so the model is trained as it was; the cut-off still uses your costs."
+                ),
+                detail=detail,
+            )
+        )
+
     if not stopped_because:
         stopped_because = (
             "goal_reached" if _goal_met(best_score, goal)
@@ -1302,7 +1429,11 @@ def improve(
         "best": {
             "model": best_name,
             "label": modeling.MODELS[best_name].label,
-            "params": {k.replace("model__", ""): v for k, v in best_params.items()},
+            "params": {
+                **{k.replace("model__", ""): v for k, v in best_params.items()},
+                # Rebuilt with the weighting when the last round kept it.
+                **({"cost_weighting": training_weights} if training_weights else {}),
+            },
             "cv_score": best_score,
             "cv_std": best_std,
             # The derived inputs the winner uses, as ids, so the caller rebuilds it the same way.

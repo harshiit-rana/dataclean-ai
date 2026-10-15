@@ -465,9 +465,12 @@ def build_training_script(result: dict, *, file_name: str = "cleaned.csv") -> st
 
     needs_time_folds = _uses_time_folds(result, calibrated)
     clipper_imports = "import numpy as np\n" if (clipped or needs_time_folds) else ""
-    base_import = (
-        "from sklearn.base import BaseEstimator, TransformerMixin\n" if clipped else ""
-    )
+    tuned = dict(best.get("tuned_params") or {})
+    weighting = tuned.pop("cost_weighting", None) if task == "classification" else None
+    plain_settings = tuned
+    base_names = [*(["BaseEstimator"] if (clipped or weighting) else []), *(["ClassifierMixin"] if weighting else []),
+                  *(["TransformerMixin"] if clipped else [])]
+    base_import = f"from sklearn.base import {', '.join(base_names)}\n" if base_names else ""
     one_hot = bool(categorical or [c for c in frequent if c not in set(target_encoded)])
     encoders = sorted(
         [*(["OneHotEncoder"] if one_hot else []), *(["StandardScaler"] if numeric else []),
@@ -521,7 +524,7 @@ from sklearn.impute import SimpleImputer
 {encoder_import}{split_import}
 from sklearn.pipeline import Pipeline
 {_metric_imports(task, brier)}
-{_calibration_imports(result, calibrated) + chr(10) if calibrated else ""}{spec.import_lines(best.get("tuned_params"))}
+{_calibration_imports(result, calibrated) + chr(10) if calibrated else ""}{spec.import_lines(plain_settings)}{_cost_weighting_block(weighting)}
 {_clipper_block(clipped)}{_time_folds_block() if needs_time_folds else ""}
 TARGET = {_literal(target)}
 NUMERIC_FEATURES = {_literal(numeric)}
@@ -546,7 +549,7 @@ labels = labelled[TARGET]
     ("prepare", ColumnTransformer([
 {chr(10).join(entries)}
     ])),
-    ("model", {spec.constructor_source(best.get("tuned_params"))}),
+    ("model", {_model_constructor(spec, plain_settings, weighting)}),
 ])
 {_calibration_block(result, calibrated) if calibrated else ""}
 pipeline.fit(X_train, y_train)
@@ -557,6 +560,36 @@ joblib.dump(pipeline, "model.joblib")
 print("\\nSaved the fitted pipeline to model.joblib")
 print("Load it later with: pipeline = joblib.load('model.joblib')"){_clipper_load_note(clipped)}
 '''
+
+
+def _model_constructor(spec, settings: dict, weighting: dict | None) -> str:
+    """The model step's source: the spec's constructor, wrapped in CostWeighted when it was trained with costs."""
+    constructor = spec.constructor_source(settings)
+    if not weighting:
+        return constructor
+    return (
+        f"CostWeighted({constructor}, positive_label={str(weighting['positive_label'])!r}, "
+        f"cost_of_missing={float(weighting['cost_of_missing'])!r}, "
+        f"cost_of_false_alarm={float(weighting['cost_of_false_alarm'])!r})"
+    )
+
+
+def _cost_weighting_block(weighting: dict | None) -> str:
+    """The cost-weighting wrapper as source, when the model was trained with the stated costs. Copied from the
+    class itself so the script cannot drift from the app."""
+    if not weighting:
+        return ""
+    from app.services import cost_weighting
+
+    return (
+        "\nimport numpy as np\n"
+        "\n# --- Training with the stated mistake costs ------------------------------------------\n"
+        f"# A missed case was said to cost {float(weighting['cost_of_missing']):g} and a false alarm "
+        f"{float(weighting['cost_of_false_alarm']):g}; every fit weights each row by\n"
+        "# the cost of getting it wrong. This is the same class the app used.\n\n"
+        + cost_weighting.source().rstrip()
+        + "\n"
+    )
 
 
 def _clipper_block(clipped: list[str]) -> str:

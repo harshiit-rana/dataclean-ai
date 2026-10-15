@@ -942,6 +942,12 @@ def _improve_and_save(
         time_limit_seconds=request.time_limit_seconds,
         search_strategy=request.search_strategy,
         cost_limit=cost_limit,
+        stated_costs=(
+            {"cost_of_missing": point.cost_of_missing, "cost_of_false_alarm": point.cost_of_false_alarm,
+             "positive_label": point.positive_label}
+            if point is not None and point.objective == "cost"
+            else None
+        ),
         feature_recipes_wanted=request.feature_recipes,
         on_progress=on_progress,
         on_stage=on_stage,

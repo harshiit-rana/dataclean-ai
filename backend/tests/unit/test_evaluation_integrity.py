@@ -508,6 +508,22 @@ class TestTheImprovementLoop:
         assert self._decisions(rigged) == self._decisions(honest)
         assert rigged["test_metrics"] != honest["test_metrics"]
 
+    def test_whether_training_uses_the_stated_costs_never_depends_on_the_test_answers(
+        self, learnable, flipped_test_answers
+    ):
+        """The last round trains the incumbent again with each row weighted by the stated cost of getting it
+        wrong and compares the expected cost per row, fold by fold, on the training folds. Flip every held-out
+        answer: the costs on each side, the paired difference and whether the weighting was kept must not move."""
+        costs = {"cost_of_missing": 8.0, "cost_of_false_alarm": 1.0, "positive_label": "yes"}
+        honest = self._improve(learnable, stated_costs=costs)
+        flipped_test_answers()
+        rigged = self._improve(learnable, stated_costs=costs)
+
+        weighted = next(r for r in honest["rounds"] if r["name"] == "cost_weighting")
+        assert weighted["detail"]["expected_cost"]["with"] is not None  # the round ran
+        assert self._decisions(rigged) == self._decisions(honest)
+        assert rigged["test_metrics"] != honest["test_metrics"]
+
     def test_which_combinations_are_kept_never_depends_on_the_test_answers(self, flipped_test_answers):
         """The sixth round ranks the numeric inputs on validation folds, tries products and ratios of the top
         few, and confirms the winner on fresh folds. Give it data where a product helps, flip every held-out

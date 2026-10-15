@@ -774,6 +774,18 @@ member and writes the `VotingClassifier(estimators=[...])` out in full, and a te
 Ensembles are never ordinary candidates in the plan; they are made by the loop from models it has scored. An ensemble has
 no single importance ranking, so none is shown rather than a misleading one; the card names what it averages.
 
+**Training with the costs you stated (#60).** A cost objective ("a missed case costs 8 times a false alarm") used to move
+only the cut-off, after a model fitted to a different trade-off had been chosen. When the user states costs for a
+two-answer target, the loop's eighth round trains the incumbent again with every row weighted by the cost of getting it
+wrong (`CostWeighted` in `cost_weighting.py`, a wrapper inside the pipeline, so every fit uses it: the folds, calibration,
+the cut-off's out-of-fold scores and the final model). It compares the expected cost per row at the best cut-off, fold by
+fold on the same folds, and keeps the weighting only when the paired difference is clear of the folds' disagreement. Kept
+weights are rebuilt for the final model, copied into the exported script with the class's own source, and stated on the
+cut-off card and the model card; either way the trail shows both costs. Measured on 15 seeds each with random forest and
+gradient boosting: never kept on noise, and on a plain signal never kept either. Once the cut-off is chosen with the
+costs, re-weighting mostly makes the same shift a second time, so the usual finding is "the cut-off is enough", and the
+round says so rather than adding a wrapper that does not pay.
+
 **A record of what you tried.** Results used to overwrite a single file, so retraining
 discarded the previous run — which made the question people actually ask unanswerable: *did the
 thing I just changed help?* Every run is now kept with its settings, its headline number and

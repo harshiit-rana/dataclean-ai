@@ -751,7 +751,11 @@ export function ModelResults({
       <CalibrationCard report={result.calibration} onCalibrate={onCalibrate} busy={calibrating} />
 
       {result.operating_point && (
-        <OperatingPointCard point={result.operating_point} evaluation={result.evaluation} />
+        <OperatingPointCard
+          point={result.operating_point}
+          evaluation={result.evaluation}
+          trainedWithCosts={Boolean(best?.tuned_params?.cost_weighting)}
+        />
       )}
       {!result.operating_point && result.operating_point_not_judged && (
         <Card>

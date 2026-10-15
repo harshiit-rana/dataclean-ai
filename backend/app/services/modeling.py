@@ -1055,9 +1055,16 @@ def build_pipeline(
     if not transformers:
         raise ModelingError("There are no usable columns left to predict from.", code="no_usable_columns")
 
-    return Pipeline(
-        [("prepare", ColumnTransformer(transformers)), ("model", spec.build(model_params))]
-    )
+    # Settings may carry `cost_weighting` -- train with the stated mistake costs as row weights (see
+    # cost_weighting.py) -- which wraps the model rather than being one of its own settings.
+    settings = dict(model_params or {})
+    weighting = settings.pop("cost_weighting", None)
+    model = spec.build(settings or None)
+    if weighting and spec.task == "classification":
+        from app.services.cost_weighting import CostWeighted
+
+        model = CostWeighted(model, **weighting)
+    return Pipeline([("prepare", ColumnTransformer(transformers)), ("model", model)])
 
 
 # --- evaluation ---------------------------------------------------------------------------
@@ -1700,6 +1707,7 @@ def feature_importance(pipeline, top_n: int = 15) -> list[dict]:
     try:
         prepare = pipeline.named_steps["prepare"]
         model = pipeline.named_steps["model"]
+        model = getattr(model, "estimator_", model)  # a cost-weighted model reads through to what it wraps
         names = [str(n) for n in prepare.get_feature_names_out()]
 
         if hasattr(model, "feature_importances_"):

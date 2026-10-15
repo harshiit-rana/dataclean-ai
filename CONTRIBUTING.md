@@ -355,6 +355,11 @@ are both running locally, you're ready to make changes.
   estimators from `members` in `build`, writes them out in `constructor_source` and imports them in `import_lines`, so the
   export cannot drift from the app. Keep ensembles out of `models_for_task`; anything that tunes a model through
   `pipeline.set_params` must pass an ensemble's settings to `build_pipeline` instead (see `improvement.build_for`).
+- **Cost weighting wraps the model; read through `estimator_`.** `model_params["cost_weighting"]` makes
+  `build_pipeline` wrap a classifier in `CostWeighted`, so the model step is no longer the estimator itself. Anything that
+  reads the fitted model's own attributes (`coef_`, `feature_importances_`) must unwrap it first, as `feature_importance`
+  does. Mixins go before `BaseEstimator` (`ClassifierMixin, BaseEstimator`): the other way round scikit-learn does not
+  treat the wrapper as a classifier, and the AUC scorer silently scores every fold as nan.
 - **Recipe ids are re-proposed, never trusted.** `features.select` re-runs `propose` and keeps
   the ids that come back, so a stale id for a column that no longer supports the recipe is
   dropped quietly rather than failing a run, and a recipe naming an excluded column cannot be

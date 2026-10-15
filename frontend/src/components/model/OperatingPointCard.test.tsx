@@ -159,4 +159,19 @@ describe("OperatingPointCard", () => {
     render(<OperatingPointCard point={POINT} />);
     expect(screen.queryByText(/calibrated probabilities/)).not.toBeInTheDocument();
   });
+
+  it("says when the model was also trained with the stated costs", () => {
+    render(<OperatingPointCard point={POINT} trainedWithCosts />);
+    expect(screen.getByText(/The model was also trained with your costs/)).toBeInTheDocument();
+  });
+
+  it("says when only the line uses the costs", () => {
+    render(<OperatingPointCard point={POINT} />);
+    expect(screen.getByText(/trained without your costs; only this line uses them/)).toBeInTheDocument();
+  });
+
+  it("says nothing about training with costs when the line was not set by costs", () => {
+    render(<OperatingPointCard point={{ ...POINT, objective: "min_recall" }} />);
+    expect(screen.queryByText(/your costs/)).not.toBeInTheDocument();
+  });
 });

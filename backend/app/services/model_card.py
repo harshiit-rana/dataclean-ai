@@ -449,6 +449,21 @@ def _operating_point_section(result: dict) -> list[str]:
     ]
     if point.get("note"):
         lines += ["", point["note"]]
+    chosen = next((r for r in result.get("results", []) if r.get("model") == result.get("best_model")), {})
+    weighting = (chosen.get("tuned_params") or {}).get("cost_weighting")
+    if weighting:
+        lines += [
+            "",
+            f"The model was also *trained* with these costs: every row weighted by the cost of getting it wrong (a "
+            f"missed case {float(weighting['cost_of_missing']):g}, a false alarm "
+            f"{float(weighting['cost_of_false_alarm']):g}), because on the training folds that lowered the expected "
+            f"cost by more than the folds disagree.",
+        ]
+    elif point.get("objective") == "cost":
+        lines += [
+            "",
+            "The model was trained without the costs as weights; only the cut-off uses them.",
+        ]
     lines += [
         "",
         "The precision and recall in the comparison table above are at 0.50, so every model "
