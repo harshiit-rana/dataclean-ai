@@ -83,10 +83,12 @@ class Round:
 
 
 def _reached(found: tuning.SearchResult) -> dict:
-    """What a settings search got through, for the trail, only when the time limit cut it short."""
-    if not found.stopped_for_time:
-        return {}
-    return {"tried": found.tried, "planned": found.planned, "stopped_for_time": True}
+    """What a settings search was and how far it got, for the trail: always the strategy, and the
+    settings it reached only when the time limit cut it short."""
+    reached = {"strategy": found.strategy}
+    if found.stopped_for_time:
+        reached |= {"tried": found.tried, "planned": found.planned, "stopped_for_time": True}
+    return reached
 
 
 def _is_real_gain(candidate: float, incumbent: float, std: float | None) -> bool:
@@ -123,6 +125,7 @@ def improve(
     time_gap_days: int | None = None,
     group_columns: list[str] | None = None,
     time_limit_seconds: float | None = None,
+    search_strategy: str = tuning.DEFAULT_STRATEGY,
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
 
@@ -402,6 +405,7 @@ def improve(
         found = tuning.search(
             build_for(best_name), best_name, X_train, y_train, task,
             budget=budget, groups=train_groups, ordered=ordered, deadline=deadline,
+            strategy=search_strategy,
         )
         cut_short = cut_short or bool(found and found.stopped_for_time)
         if found is None:
@@ -479,6 +483,7 @@ def improve(
             found = tuning.search(
                 build_for(name), name, X_train, y_train, task,
                 budget=budget, groups=train_groups, ordered=ordered, deadline=deadline,
+                strategy=search_strategy,
             )
             cut_short = cut_short or bool(found and found.stopped_for_time)
             if found and _is_real_gain(found.score, best_score, found.std):
@@ -670,6 +675,7 @@ def improve(
         "stopped_because": stopped_because,
         "time_limit_seconds": limit,
         "skipped_for_time": skipped_for_time,
+        "search_strategy": search_strategy,
         "best": {
             "model": best_name,
             "label": modeling.MODELS[best_name].label,

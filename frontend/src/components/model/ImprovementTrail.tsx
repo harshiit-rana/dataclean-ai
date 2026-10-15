@@ -3,6 +3,10 @@ import { cn } from "@/lib/utils";
 import { ScoreLabel } from "@/components/model/ScoreLabel";
 import type { ImprovementTrail as Trail } from "@/api/types";
 
+const STRATEGY_LABELS: Record<string, string> = {
+  random: "random search",
+};
+
 const METRIC_LABELS: Record<string, string> = {
   roc_auc: "AUC",
   accuracy: "accuracy",
@@ -117,6 +121,8 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
             Best cross-validated {metric}: {trail.cv_score.toFixed(3)} (±
             {trail.cv_std.toFixed(3)} across folds)
             {trail.goal !== null && ` · your target was ${trail.goal.toFixed(3)}`}
+            {trail.search_strategy &&
+              ` · settings searched by ${STRATEGY_LABELS[trail.search_strategy] ?? trail.search_strategy}`}
           </p>
         </div>
 

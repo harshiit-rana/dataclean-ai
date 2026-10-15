@@ -21,7 +21,7 @@ from __future__ import annotations
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, Protocol
 
 import numpy as np
 import pandas as pd
@@ -117,6 +117,8 @@ class SearchResult:
     tried: int = 0
     planned: int = 0
     stopped_for_time: bool = False
+    # Which search strategy found it (see `SearchStrategy`), so the trail and the run history can say.
+    strategy: str = "random"
 
     @property
     def readable_params(self) -> dict:
@@ -264,6 +266,70 @@ def score_config(
     )
 
 
+class SearchStrategy(Protocol):
+    """How a model's settings are searched: which to try, in what order, and when to stop.
+
+    This interface exists because a second strategy (successive halving) is being built, and it was
+    written with that second implementation rather than before it, so it holds only what random search
+    and halving both need. Nothing speculative: no hooks for strategies that do not exist yet.
+
+    `run` is handed everything already decided -- the unfitted pipeline factory, the space, the data
+    with its target already in the form the scorer wants, the folds, the metric, the budget (a count of
+    settings the strategy may spend, however it spends them) and the deadline -- and returns the best
+    setting it found as a `SearchResult` with its own `name` in `strategy`, or None when nothing could
+    be scored. A strategy must check the deadline between pieces of work and report `stopped_for_time`.
+    """
+
+    name: str
+
+    def run(
+        self,
+        build: Callable[[], Any],
+        space: dict[str, list[Any]],
+        X: pd.DataFrame,
+        y,
+        *,
+        splitter,
+        metric: str,
+        budget: int,
+        deadline: float | None = None,
+        groups=None,
+    ) -> SearchResult | None: ...
+
+
+class RandomSearch:
+    """Settings drawn at random, each scored on every fold, the best kept.
+
+    The settings are drawn exactly as `RandomizedSearchCV` draws them (the same `ParameterSampler` and
+    seed) but scored one at a time, so a search can be stopped part-way: `deadline` is a
+    `time.monotonic()` instant, checked before each setting after the first. A search that runs out of
+    time returns the best of the settings it reached and says so (`stopped_for_time`). Without a deadline
+    the result is the one `RandomizedSearchCV` gave.
+    """
+
+    name = "random"
+
+    def run(
+        self,
+        build: Callable[[], Any],
+        space: dict[str, list[Any]],
+        X: pd.DataFrame,
+        y,
+        *,
+        splitter,
+        metric: str,
+        budget: int,
+        deadline: float | None = None,
+        groups=None,
+    ) -> SearchResult | None:
+        return _random_search(build, space, X, y, splitter, metric, budget, deadline, groups, self.name)
+
+
+# The strategies a search can be asked for by name. Successive halving joins this when it is built.
+STRATEGIES: dict[str, SearchStrategy] = {RandomSearch.name: RandomSearch()}
+DEFAULT_STRATEGY = RandomSearch.name
+
+
 def search(
     build: Callable[[], Any],
     model_name: str,
@@ -276,20 +342,20 @@ def search(
     groups=None,
     ordered: bool = False,
     deadline: float | None = None,
+    strategy: str | SearchStrategy = DEFAULT_STRATEGY,
 ) -> SearchResult | None:
-    """Randomized search over this model's space, cross-validated on the training data.
+    """Searches this model's settings with a strategy, cross-validated on the training data.
 
-    The settings are drawn exactly as `RandomizedSearchCV` draws them (the same `ParameterSampler`
-    and seed) but scored one at a time, so a search can be stopped part-way: `deadline` is a
-    `time.monotonic()` instant, checked before each setting after the first. A search that runs out
-    of time returns the best of the settings it reached and says so (`stopped_for_time`). Without a
-    deadline the result is the one `RandomizedSearchCV` gave.
+    A thin wrapper: it settles what every strategy needs the same way (this model's space, the folds,
+    the metric, the target in the form the scorer wants) and hands the rest to the strategy.
 
     Returns None when there is nothing to search (no space for this model, or too few rows
     per class to fold), which the caller reports as "nothing to try" rather than as a failure.
     """
-    from sklearn.base import clone
-    from sklearn.model_selection import ParameterSampler, cross_val_score
+    if isinstance(strategy, str):
+        if strategy not in STRATEGIES:
+            raise ValueError(f"Unknown search strategy {strategy!r}; known: {sorted(STRATEGIES)}")
+        strategy = STRATEGIES[strategy]
 
     space = SEARCH_SPACES.get(model_name)
     if not space:
@@ -301,6 +367,15 @@ def search(
 
     metric = scoring_for(task, y_train)
     y_input = pd.Series(y_train).astype(str) if task == "classification" else y_train
+    return strategy.run(
+        build, space, X_train, y_input,
+        splitter=splitter, metric=metric, budget=budget, deadline=deadline, groups=groups,
+    )
+
+
+def _random_search(build, space, X_train, y_input, splitter, metric, budget, deadline, groups, strategy_name):
+    from sklearn.base import clone
+    from sklearn.model_selection import ParameterSampler, cross_val_score
 
     # Never sample more candidates than the space actually holds -- otherwise the same
     # configuration gets fitted repeatedly and the budget is spent on duplicates.
@@ -329,7 +404,7 @@ def search(
                 error_score=np.nan,
             )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("Search failed for %s: %s", model_name, exc, exc_info=True)
+            logger.warning("Search failed: %s", exc, exc_info=True)
             return None
         tried += 1
         mean = float(np.mean(scores))
@@ -349,4 +424,5 @@ def search(
         tried=tried,
         planned=len(settings),
         stopped_for_time=stopped_for_time,
+        strategy=strategy_name,
     )

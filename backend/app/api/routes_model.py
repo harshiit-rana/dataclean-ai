@@ -984,6 +984,7 @@ def _improve_and_save(
         "stopped_because": found["stopped_because"],
         "time_limit_seconds": found.get("time_limit_seconds"),
         "skipped_for_time": found.get("skipped_for_time", []),
+        "search_strategy": found.get("search_strategy"),
         "cv_score": best["cv_score"],
         "cv_std": best["cv_std"],
         "settings": best["params"],

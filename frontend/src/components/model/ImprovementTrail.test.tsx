@@ -66,3 +66,20 @@ describe("ImprovementTrail — the time limit (#47)", () => {
     expect(screen.getByText("Starting point")).toBeInTheDocument();
   });
 });
+
+describe("ImprovementTrail — the search strategy (#48)", () => {
+  it("names how the settings were searched", () => {
+    render(<ImprovementTrail trail={trail({ search_strategy: "random" })} />);
+    expect(screen.getByText(/settings searched by random search/)).toBeInTheDocument();
+  });
+
+  it("shows an unfamiliar strategy by its own name rather than hiding it", () => {
+    render(<ImprovementTrail trail={trail({ search_strategy: "halving" })} />);
+    expect(screen.getByText(/settings searched by halving/)).toBeInTheDocument();
+  });
+
+  it("says nothing for a run from before it was recorded", () => {
+    render(<ImprovementTrail trail={trail()} />);
+    expect(screen.queryByText(/settings searched by/)).not.toBeInTheDocument();
+  });
+});

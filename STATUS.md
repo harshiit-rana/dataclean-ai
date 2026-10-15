@@ -665,6 +665,14 @@ that was met still wins over the clock. The final refit and the single scoring o
 limit, so the response takes a little longer than the limit; the limit bounds the search, not the report. The
 integrity suite checks that a limit which bites stops at the same place whatever the held-out answers are.
 
+**A seam for search strategies (#48).** The settings search sits behind a small interface (`tuning.SearchStrategy`:
+`run(build, space, X, y, *, splitter, metric, budget, deadline, groups)`), with random search, the loop that was
+already there, as `RandomSearch`; `tuning.search` settles what every strategy needs the same way and hands the rest
+over. Nothing changed for the user: a test holds it to the previous output. The strategy's name travels with the
+result (`SearchResult.strategy`), into each settings round of the trail, the trail's footer and the run history, so a
+second strategy can be told apart from the first. It was kept to what random search and successive halving both
+need, with no hooks for strategies that do not exist.
+
 **A record of what you tried.** Results used to overwrite a single file, so retraining
 discarded the previous run — which made the question people actually ask unanswerable: *did the
 thing I just changed help?* Every run is now kept with its settings, its headline number and

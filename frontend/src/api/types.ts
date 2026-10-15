@@ -943,6 +943,8 @@ export interface ImprovementTrail {
   time_limit_seconds?: number | null;
   /** The rounds that did not run because the limit was reached first. */
   skipped_for_time?: string[];
+  /** How the model settings were searched: "random" so far. Absent on older runs. */
+  search_strategy?: string | null;
   /** Cross-validated, from the training rows only -- not the headline number, which is
    * measured once on rows nothing was selected against. */
   cv_score: number;
