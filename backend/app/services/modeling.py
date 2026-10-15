@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, replace as dataclasses_replace
 from typing import Any
 
 import numpy as np
@@ -89,6 +89,11 @@ class ModelSpec:
     # simpler of two models the evidence cannot separate, and "simpler" is a decision to make
     # visibly -- a linear model before a forest before boosted trees.
     complexity_rank: int = 1
+    # Whether the fit itself is random, so the seed can change the model: a forest's bootstrap
+    # samples, boosting's validation split and feature sampling. Logistic and ridge regression take
+    # a `random_state` but their fits are deterministic, so checking them against other seeds would
+    # only report a spread of zero and imply it had been worth looking.
+    seeded: bool = False
 
     def settings(self, overrides: dict | None = None) -> dict:
         """Defaults, with anything the tuner found layered on top.
@@ -1589,6 +1594,92 @@ def source_column_importance(importances: list[dict], columns: list[str]) -> lis
     )
 
 
+# The models whose fit depends on the seed (see ModelSpec.seeded). Kept beside the registry so a
+# new random model is one line here.
+_SEEDED_MODELS = {
+    "random_forest_classifier",
+    "gradient_boosting_classifier",
+    "random_forest_regressor",
+    "gradient_boosting_regressor",
+}
+for _name in _SEEDED_MODELS:
+    if _name in MODELS:
+        MODELS[_name] = dataclasses_replace(MODELS[_name], seeded=True)
+
+# Seeds a chosen model is refitted with to see whether its result is the seed's or the data's. The
+# app's own seed first, so its score is the one already measured.
+SEEDS_TO_CHECK = (RANDOM_STATE, 1, 2, 3, 4)
+# Above this many training rows the check is skipped: it costs one cross-validation per extra seed,
+# and on a file this size the seed moves the score by very little.
+SEED_CHECK_MAX_ROWS = 20_000
+
+
+def seed_stability(selection: dict, build_with_seed, X_train, y_train, task: str, *, groups=None, ordered=False) -> dict | None:
+    """Whether the chosen model's lead over its rival survives a different random seed.
+
+    Models with a random fit are built with seed 42 everywhere. A result that only holds for that
+    seed is not a result, so the chosen model is cross-validated again on the same training folds
+    with four more seeds, and the spread of its fold score is compared with the gap to the
+    runner-up. When the spread is at least the gap, which of the two comes out ahead is the seed's
+    doing, and the selection says so. Training rows only: the test set takes no part.
+
+    `build_with_seed(seed)` returns an unfitted pipeline for the chosen model with that seed.
+    Returns None when the model was not chosen on folds.
+    """
+    from app.services import tuning
+
+    if selection.get("method") != "cross_validation":
+        return None
+    chosen = selection["chosen"]
+    spec = MODELS.get(chosen)
+    label = spec.label if spec else chosen
+    if spec is None or not spec.seeded:
+        return {
+            "applicable": False,
+            "reason": f"{label}'s fit has no randomness, so the seed cannot change it.",
+        }
+    if len(X_train) > SEED_CHECK_MAX_ROWS:
+        return {
+            "applicable": False,
+            "reason": f"Skipped on {len(X_train):,} training rows: each seed is another cross-validation, "
+            f"and on this many rows the seed moves the score very little.",
+        }
+
+    scores = selection["scores"]
+    folds = int(scores[chosen].get("folds") or tuning.CV_FOLDS)
+    by_seed = {SEEDS_TO_CHECK[0]: float(scores[chosen]["score"])}
+    for seed in SEEDS_TO_CHECK[1:]:
+        found = tuning.score_config(
+            lambda seed=seed: build_with_seed(seed), X_train, y_train, task, folds=folds, groups=groups, ordered=ordered
+        )
+        if found is not None:
+            by_seed[seed] = float(found.score)
+    values = list(by_seed.values())
+    spread = round(max(values) - min(values), 4)
+
+    rival = selection.get("runner_up")
+    gap = round(abs(float(scores[chosen]["score"]) - float(scores[rival]["score"])), 4) if rival in scores else None
+    dependent = gap is not None and spread >= gap
+    note = None
+    if dependent:
+        rival_label = MODELS[rival].label if rival in MODELS else rival
+        note = (
+            f"Refitting {label} with {len(values)} different random seeds moves its fold score by "
+            f"{spread:.3f}, at least the {gap:.3f} that separates it from {rival_label}: which of the "
+            f"two comes out ahead depends on the seed, not on the data."
+        )
+    return {
+        "applicable": True,
+        "seeds": list(by_seed),
+        "scores": [round(v, 4) for v in values],
+        "spread": spread,
+        "runner_up": rival,
+        "gap": gap,
+        "seed_dependent": dependent,
+        "note": note,
+    }
+
+
 # Above this many training rows, selection uses three folds instead of five. It fits every
 # candidate once per fold, and on a large file the extra folds cost more than they tell.
 ROWS_FOR_FEWER_SELECTION_FOLDS = 20_000
@@ -2102,6 +2193,21 @@ def train_candidates(
             features["frequent"],
             clip=features.get("clipped"),
         )
+
+    def build_best_with_seed(seed: int):
+        return build_pipeline(
+            best["model"],
+            features["numeric"],
+            features["categorical"],
+            {**((model_params or {}).get(best["model"]) or {}), "random_state": seed},
+            features["frequent"],
+            clip=features.get("clipped"),
+        )
+
+    # Whether the choice is the data's or the seed's: training folds only, the chosen model only.
+    selection["seed_stability"] = seed_stability(
+        selection, build_best_with_seed, X_train, y_train, task, groups=selection_groups, ordered=fold_order
+    )
     for entry in results:
         scored = selection["scores"].get(entry["model"])
         entry["cv_score"] = scored["score"] if scored else None

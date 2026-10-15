@@ -160,6 +160,17 @@ def _selection_tables(result: dict) -> list[str]:
 
     if selection.get("distinguishable_note"):
         lines += ["", selection["distinguishable_note"]]
+    stability = selection.get("seed_stability") or {}
+    if stability.get("seed_dependent"):
+        lines += ["", stability["note"]]
+    elif stability.get("applicable"):
+        lines += [
+            "",
+            f"Refitted with {len(stability.get('seeds') or [])} random seeds, the chosen model's fold "
+            f"score moved by {stability['spread']:.3f}"
+            + (f", less than the {stability['gap']:.3f} lead over the runner-up, so the choice is not the "
+               f"seed's doing." if stability.get("gap") is not None else "."),
+        ]
 
     lines += ["", "### Held-out evaluation", ""]
     lines.append(

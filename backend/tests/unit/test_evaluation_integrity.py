@@ -328,6 +328,29 @@ class TestRecommendingTheSplit:
         assert seen["index"] and not (seen["index"] & set(test_index))
 
 
+# ------------------------------------------------------------------ the seed check
+
+
+class TestCheckingTheChoiceAgainstOtherSeeds:
+    """Refitting the chosen model with other seeds is done on the training folds. Flip every
+    held-out answer and the seeds, the scores, the spread and the verdict on them must not move."""
+
+    def test_the_seed_check_is_unmoved(self, learnable, flipped_test_answers):
+        def check():
+            return modeling.train_candidates(
+                learnable, target_column="outcome", task="classification",
+                model_names=["random_forest_classifier", "gradient_boosting_classifier"],
+                include_deep_diagnostics=False,
+            )
+
+        honest = check()
+        flipped_test_answers()
+        rigged = check()
+        assert honest["selection"]["seed_stability"]["applicable"] is True
+        assert rigged["selection"]["seed_stability"] == honest["selection"]["seed_stability"]
+        assert _chosen(rigged)["metrics"] != _chosen(honest)["metrics"]  # the report moved
+
+
 # ------------------------------------------------------------------ the improvement loop
 
 

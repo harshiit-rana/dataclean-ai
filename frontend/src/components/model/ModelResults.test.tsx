@@ -728,3 +728,34 @@ describe("ModelResults — the macro AUC for more than two answers (#37)", () =>
     expect(screen.queryByRole("columnheader", { name: "ROC AUC (macro)" })).not.toBeInTheDocument();
   });
 });
+
+describe("ModelResults — whether the choice survives other seeds (#32)", () => {
+  const withStability = (seed_stability: NonNullable<ModelResult["selection"]>["seed_stability"]) => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.selection = { ...r.selection!, seed_stability };
+    return r;
+  };
+
+  it("warns when the seed decides which model comes out ahead", () => {
+    render(
+      <ModelResults
+        result={withStability({
+          applicable: true, seeds: [42, 1, 2, 3, 4], spread: 0.035, gap: 0.02, seed_dependent: true,
+          note: "Refitting Random forest with 5 different random seeds moves its fold score by 0.035, at least the 0.020 that separates it from Gradient boosting: which of the two comes out ahead depends on the seed, not on the data.",
+        })}
+      />
+    );
+    expect(screen.getByText(/depends on the seed, not on the data/)).toHaveClass("bg-amber-500/5");
+  });
+
+  it("says quietly that it was checked when the lead is bigger than the seeds move it", () => {
+    render(<ModelResults result={withStability({ applicable: true, seeds: [42, 1, 2, 3, 4], spread: 0.005, gap: 0.017, seed_dependent: false, note: null })} />);
+    expect(screen.getByText(/Refitted with 5 random seeds, the chosen model's fold score moved by 0.005, less than its 0.017 lead/)).toBeInTheDocument();
+  });
+
+  it("says nothing for a model whose fit has no randomness, or for an older result", () => {
+    render(<ModelResults result={withStability({ applicable: false, reason: "Logistic regression's fit has no randomness, so the seed cannot change it." })} />);
+    expect(screen.queryByText(/random seeds/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/depends on the seed/)).not.toBeInTheDocument();
+  });
+});

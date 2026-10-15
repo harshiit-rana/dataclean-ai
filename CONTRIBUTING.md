@@ -388,6 +388,11 @@ are both running locally, you're ready to make changes.
   place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
   does not need this application's class to load. Nothing may build a fold splitter without the groups -- not even to ask whether folds are possible -- or `test_identical_rows_folds.py` rightly flags it. `TestCalibratingTheProbabilities` in
   `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
+- **A model with a random fit is marked `seeded`.** `ModelSpec.seeded` (set through `_SEEDED_MODELS`)
+  is what makes `modeling.seed_stability` refit the chosen model with `SEEDS_TO_CHECK`; a model that
+  takes a `random_state` but fits deterministically must not be marked, or the check reports a spread of
+  zero as if it had been worth running. The check uses training folds only and is covered by
+  `TestCheckingTheChoiceAgainstOtherSeeds` in the integrity suite.
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,

@@ -239,6 +239,20 @@ export interface SplitOption {
   description: string;
 }
 
+export interface SeedStability {
+  applicable: boolean;
+  /** Why the check does not apply (a deterministic model, or a file too large to bother). */
+  reason?: string;
+  seeds?: number[];
+  scores?: number[];
+  spread?: number;
+  runner_up?: string | null;
+  gap?: number | null;
+  /** True exactly when the spread is at least the gap to the runner-up. */
+  seed_dependent?: boolean;
+  note?: string | null;
+}
+
 export interface RecommendedSplit {
   strategy: "random" | "time" | "group";
   /** The date or entity column the strategy divides on; null for a random split. */
@@ -740,6 +754,9 @@ export interface ModelSelection {
   paired_difference?: { difference: number; low: number; high: number } | null;
   /** Written in code, and present exactly when the two models are within the noise. */
   distinguishable_note?: string | null;
+  /** Whether the choice survives other random seeds: the chosen model refitted with several, on the
+   * same training folds, against the gap to the runner-up. */
+  seed_stability?: SeedStability | null;
 }
 
 export interface ModelResult {

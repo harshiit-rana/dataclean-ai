@@ -361,6 +361,21 @@ function ModelComparison({ result, keys }: { result: ModelResult; keys: string[]
           <p className="text-sm text-muted-foreground">{selection.distinguishable_note}</p>
         )}
 
+        {selection.seed_stability?.seed_dependent && selection.seed_stability.note && (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+            {selection.seed_stability.note}
+          </p>
+        )}
+        {selection.seed_stability?.applicable && !selection.seed_stability.seed_dependent && (
+          <p className="text-xs text-muted-foreground">
+            Refitted with {selection.seed_stability.seeds?.length ?? 0} random seeds, the chosen
+            model&apos;s fold score moved by {(selection.seed_stability.spread ?? 0).toFixed(3)}
+            {selection.seed_stability.gap != null
+              ? `, less than its ${selection.seed_stability.gap.toFixed(3)} lead over the runner-up, so the choice is not the seed's doing.`
+              : "."}
+          </p>
+        )}
+
         {result.results.length > 1 && keys.length > 0 && (
           <div className="text-sm">
             <button

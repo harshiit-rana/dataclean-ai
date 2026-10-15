@@ -476,6 +476,16 @@ script now prints the Brier score of every two-class model, and the prediction s
 probabilities are calibrated and what that does to the default line. Tests run the generated file
 in a subprocess for a plain, a grouped, a dated, a copy-keeping and a sealed run, for both methods.
 
+**Checking the choice against other seeds.** Random forests and boosting are fitted with seed 42
+everywhere, and a result that holds only for that seed is not a result. When one of them is chosen, it
+is cross-validated again on the same training folds with four more seeds and the spread of its fold
+score is set against its lead over the runner-up: when the spread is at least the lead, the page and the
+card say which of the two comes out ahead depends on the seed, not on the data; otherwise a quiet line
+says it was checked. Logistic and ridge regression are marked as having no randomness (they take a seed
+but their fits are deterministic) and report "not applicable"; above 20,000 training rows the check is
+skipped and says why. It reads the training folds only, and a case in the integrity suite flips every
+held-out answer to show it does not move. The price is four more cross-validations of the chosen model.
+
 **Repeated folds when a small file is compared.** With a few hundred training rows one 5-fold
 partition can rank two close candidates one way and another partition the other way round. Below
 2,000 training rows, choosing the model, tuning it and the fold spread shown beside the score now
