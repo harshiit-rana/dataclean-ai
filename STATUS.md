@@ -540,6 +540,17 @@ exhausted holdout), *medium* that the scores are thin or the model is not what w
 every reader should have. No caution in the box comes from the language model. The two notes the verdict card
 used to print itself (copies, whole-file statistics) are now shown only for a result served without the list.
 
+**One way of saying "cannot judge".** The verdict on a small test set, the drift check on a small file, the
+check against a new file's real answers, and a cut-off that could not be chosen each used to decline in their
+own words and styling, and the cut-off simply vanished. They now share a block (`not_judged.not_judged`:
+`{status: "not_judged", what, have, need, unit, sentence}`) and one sentence pattern, "Not enough {what} to
+judge: {have} rows, at least {need} needed." (or "Cannot judge: {reason}." when the obstacle is not a count),
+shown by one component in the same sky treatment, which is deliberately not a failure colour. The cut-off
+card now appears when a cut-off was asked for and could not be chosen, giving the reason (no probabilities,
+too few of the rarer answer or too few groups to make two folds, too few rows to fold by date), as
+`operating_point_not_judged` on the result; `operating_point` itself stays empty so nothing that reads the
+threshold changes. The existing headline still follows the sentence as the explanation.
+
 **Repeated folds when a small file is compared.** With a few hundred training rows one 5-fold
 partition can rank two close candidates one way and another partition the other way round. Below
 2,000 training rows, choosing the model, tuning it and the fold spread shown beside the score now

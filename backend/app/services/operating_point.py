@@ -335,6 +335,30 @@ def apply(
         return None
 
 
+def not_judged_reason(*, pipeline, y_train, groups=None, ordered: bool = False) -> dict:
+    """Why no cut-off could be chosen, in the shared "not judged" shape.
+
+    Called only when a cut-off was asked for and `apply` came back empty, so the page can say why
+    rather than show nothing. It re-derives the cause, cheaply, instead of threading a reason out of
+    `apply`'s several early exits: no probabilities to threshold, too few rows or groups to make two
+    folds, or folds that could not be scored for the positive answer.
+    """
+    from app.services.not_judged import not_judged
+
+    if not hasattr(pipeline, "predict_proba"):
+        return not_judged(because="this model gives no probabilities, so there is nothing to put a cut-off on")
+    y = pd.Series(y_train).astype(str).reset_index(drop=True)
+    if cv_splitter("classification", y, groups=groups, ordered=ordered) is None:
+        if groups is not None:
+            return not_judged("distinct groups in the training rows", have=int(pd.Series(groups).nunique()), need=2, unit="groups")
+        if ordered:
+            return not_judged("training rows to fold by date", have=int(len(y)), need=3)
+        return not_judged(
+            "training rows with the rarer answer", have=int(y.value_counts().min()) if y.nunique() > 1 else 0, need=2
+        )
+    return not_judged(because="the training folds could not be scored for the answer the cut-off is about")
+
+
 def _request_fields(point: OperatingPoint, positive_label: str) -> dict:
     return {
         "objective": point.objective,

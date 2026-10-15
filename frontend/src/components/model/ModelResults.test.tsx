@@ -824,3 +824,40 @@ describe("ModelResults — the cautions under the verdict (#98)", () => {
     expect(screen.getByText(/worked out over every row/)).toBeInTheDocument();
   });
 });
+
+describe("ModelResults — the cannot-judge states (#96)", () => {
+  it("leads a verdict that cannot be made with the shared sentence, then the explanation", () => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.assessment = {
+      verdict: "not_enough_test_data",
+      headline: "There isn't enough held-back data to judge this model.",
+      not_judged: {
+        status: "not_judged", what: "test rows", have: 12, need: 30, unit: "rows", because: null,
+        sentence: "Not enough test rows to judge: 12 rows, at least 30 needed.",
+      },
+    };
+    render(<ModelResults result={r} />);
+    const box = screen.getByRole("status", { name: "Cannot judge" });
+    expect(box).toHaveTextContent("Not enough test rows to judge: 12 rows, at least 30 needed.");
+    expect(box).toHaveTextContent("There isn't enough held-back data to judge this model.");
+  });
+
+  it("says why a requested cut-off was not chosen instead of showing nothing", () => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.operating_point = null;
+    r.operating_point_not_judged = {
+      status: "not_judged", what: "training rows with the rarer answer", have: 1, need: 2, unit: "rows", because: null,
+      sentence: "Not enough training rows with the rarer answer to judge: 1 rows, at least 2 needed.",
+      objective: "min_recall", description: "catch at least 90% of real cases",
+    };
+    render(<ModelResults result={r} />);
+    expect(screen.getByText("Where the cut-off sits")).toBeInTheDocument();
+    expect(screen.getByText("Not enough training rows with the rarer answer to judge: 1 rows, at least 2 needed.")).toBeInTheDocument();
+    expect(screen.getByText(/catch at least 90% of real cases\. None was chosen/)).toBeInTheDocument();
+  });
+
+  it("shows nothing about the cut-off when none was asked for", () => {
+    render(<ModelResults result={result({ evaluation: EVAL(1, "independent") })} />);
+    expect(screen.queryByText("Where the cut-off sits")).not.toBeInTheDocument();
+  });
+});

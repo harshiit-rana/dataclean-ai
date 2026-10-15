@@ -27,6 +27,7 @@ import {
 import { CalibrationCard } from "@/components/model/CalibrationCard";
 import { OperatingPointCard } from "@/components/model/OperatingPointCard";
 import { HeldOutUse, ScoreLabel } from "@/components/model/ScoreLabel";
+import { NotJudged } from "@/components/NotJudged";
 import { BeforeYouRely } from "@/components/model/BeforeYouRely";
 import { WhyThisModel } from "@/components/model/WhyThisModel";
 import type {
@@ -644,7 +645,11 @@ export function ModelResults({
           <ScoreLabel kind="held_out" evaluation={result.evaluation} />
         </CardHeader>
         <CardContent className="text-sm">
-          <p>{result.assessment.headline}</p>
+          {result.assessment.not_judged ? (
+            <NotJudged block={result.assessment.not_judged}>{result.assessment.headline}</NotJudged>
+          ) : (
+            <p>{result.assessment.headline}</p>
+          )}
           <BeforeYouRely cautions={result.cautions} />
           <p className="mt-3 text-muted-foreground">
             Trained on {result.split.train_rows.toLocaleString()} rows and scored on{" "}
@@ -747,6 +752,19 @@ export function ModelResults({
 
       {result.operating_point && (
         <OperatingPointCard point={result.operating_point} evaluation={result.evaluation} />
+      )}
+      {!result.operating_point && result.operating_point_not_judged && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Where the cut-off sits</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <NotJudged block={result.operating_point_not_judged}>
+              You asked for a cut-off so that {result.operating_point_not_judged.description}. None was
+              chosen, so the model answers at the usual 0.50.
+            </NotJudged>
+          </CardContent>
+        </Card>
       )}
 
       <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">

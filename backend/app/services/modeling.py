@@ -28,6 +28,7 @@ from app.services import (
     calibration as calibration_service,
     diagnostics,
     features as feature_recipes,
+    not_judged,
     operating_point,
     time_folds,
     uncertainty,
@@ -1295,7 +1296,7 @@ def _auc_noise_threshold(class_counts: list[int] | None, model_count: int = 2) -
 
 
 def _too_small_to_judge(
-    test_rows: int | None, class_counts: list[int] | None
+    test_rows: int | None, class_counts: list[int] | None, what: str = "test rows"
 ) -> dict | None:
     """Is there enough held-out data to say anything at all?
 
@@ -1318,14 +1319,19 @@ def _too_small_to_judge(
             f"only {rarest} of the {test_rows} test rows carry the rarer answer, and at least "
             f"{MIN_TEST_ROWS_PER_CLASS_TO_JUDGE} are needed before a score means anything"
         )
+        shortfall = not_judged.not_judged(
+            f"{what} with the rarer answer", have=int(rarest), need=MIN_TEST_ROWS_PER_CLASS_TO_JUDGE
+        )
     else:
         detail = (
             f"{test_rows} test rows is below the {MIN_TEST_ROWS_TO_JUDGE} needed before a "
             f"score means anything"
         )
+        shortfall = not_judged.not_judged(what, have=int(test_rows), need=MIN_TEST_ROWS_TO_JUDGE)
 
     return {
         "verdict": "not_enough_test_data",
+        "not_judged": shortfall,
         "headline": f"There isn't enough held-back data to judge this model -- {detail}. "
         f"Whatever it scored, a single row landing differently would move it. This is not a "
         f"statement that the model is bad; it is a statement that nothing here can tell you "
@@ -2477,11 +2483,28 @@ def train_candidates(
                 best["metrics"]["positive_label"], groups=test_groups,
             )
 
+    # A cut-off that was asked for and could not be chosen says why, instead of the card vanishing.
+    cutoff_not_judged = None
+    if (
+        task == "classification"
+        and chosen_point is None
+        and not point.is_default
+        and best["metrics"].get("positive_label") is not None
+    ):
+        cutoff_not_judged = {
+            **operating_point.not_judged_reason(
+                pipeline=best["pipeline"], y_train=y_train, groups=fold_groups, ordered=fold_order
+            ),
+            "objective": point.objective,
+            "description": point.describe(),
+        }
+
     return {
         "task": task,
         "target_column": target_column,
         "features": features,
         "operating_point": chosen_point,
+        "operating_point_not_judged": cutoff_not_judged,
         "calibration": calibration_summary,
         "split": {
             "strategy": split_strategy,

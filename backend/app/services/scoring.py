@@ -125,13 +125,13 @@ def check_against_answers(pipeline, X: pd.DataFrame, y: pd.Series, result: dict)
     task = result.get("task", "classification")
     class_counts = pd.Series(y).astype(str).value_counts().tolist() if task == "classification" else None
 
-    unjudgeable = modeling._too_small_to_judge(int(len(y)), class_counts)
+    unjudgeable = modeling._too_small_to_judge(int(len(y)), class_counts, what="labelled rows in this file")
     best = next((r for r in result.get("results", []) if r.get("model") == result.get("best_model")), {})
     key = result.get("primary_metric")
     reported = (best.get("metrics") or {}).get(key)
     if unjudgeable is not None:
         return {"rows": int(len(y)), "metric": key, "reported": reported, "now": None,
-                "headline": unjudgeable["headline"]}
+                "headline": unjudgeable["headline"], "not_judged": unjudgeable["not_judged"]}
 
     point = result.get("operating_point") or {}
     try:

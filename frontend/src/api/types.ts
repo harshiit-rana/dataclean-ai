@@ -790,6 +790,18 @@ export interface ModelSelection {
   seed_stability?: SeedStability | null;
 }
 
+/** A state the app declines to judge, in the one shape every surface shares: the sentence is written
+ * on the server ("Not enough … to judge: N rows, at least M needed." or "Cannot judge: …"). */
+export interface NotJudgedBlock {
+  status: "not_judged";
+  what: string | null;
+  have: number | null;
+  need: number | null;
+  unit: string;
+  sentence: string;
+  because: string | null;
+}
+
 /** One thing to know before relying on a result, written on the server (the same words the model card
  * prints) and ranked by how much it should weigh. */
 export interface ModelCaution {
@@ -867,6 +879,8 @@ export interface ModelResult {
   assessment: {
     verdict: "useful" | "marginal" | "no_better_than_guessing" | "not_enough_test_data";
     headline: string;
+    /** Present exactly when the verdict is `not_enough_test_data`. */
+    not_judged?: NotJudgedBlock;
     /** True when the headline carries a note that the held-out rows have been reused. */
     qualified_by_reuse?: boolean;
   };
@@ -886,6 +900,8 @@ export interface ModelResult {
   improvement?: ImprovementTrail | null;
   /** Where the cut-off sits, for a two-class model. Null for regression and multi-class. */
   operating_point?: OperatingPointResult | null;
+  /** Why a cut-off that was asked for could not be chosen, instead of the card silently vanishing. */
+  operating_point_not_judged?: (NotJudgedBlock & { objective: string; description: string }) | null;
   /** What was done to the probabilities and what could be: null for anything but two classes. */
   calibration?: CalibrationReport | null;
 }
@@ -1064,6 +1080,8 @@ export interface DriftColumn {
 export interface DriftReport {
   verdict: "similar" | "shifted" | "different" | "not_enough_rows";
   headline: string;
+  /** Present exactly when the verdict is `not_enough_rows`. */
+  not_judged?: NotJudgedBlock;
   columns: DriftColumn[];
 }
 
@@ -1092,6 +1110,8 @@ export interface ApplyResult {
     reported: number | null;
     now: number | null;
     headline: string;
+    /** Present when there were too few labelled rows to judge anything. */
+    not_judged?: NotJudgedBlock;
     /** Labelled rows in the file that the model was built from, left out of the check. */
     overlap_excluded?: number;
     /** True when this file was recorded as a new independent evaluation of the model. */

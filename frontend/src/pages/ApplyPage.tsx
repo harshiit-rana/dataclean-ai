@@ -8,6 +8,7 @@ import { FileDropzone } from "@/components/upload/FileDropzone";
 import { ApiError, applyToNewFile } from "@/api/client";
 import { OPERATION_LABELS } from "@/lib/operations";
 import { cn } from "@/lib/utils";
+import { NotJudged } from "@/components/NotJudged";
 import type { AppliedStep, ApplyResult, DriftColumn, DriftReport } from "@/api/types";
 
 const DRIFT_STYLES: Record<DriftReport["verdict"], { title: string; className: string }> = {
@@ -188,7 +189,11 @@ export function ApplyPage() {
             <Card className={cn("border", drift.className)}>
               <CardHeader>
                 <CardTitle className="text-base">{drift.title}</CardTitle>
-                <p className="text-sm">{result.drift.headline}</p>
+                {result.drift.not_judged ? (
+                  <NotJudged block={result.drift.not_judged}>{result.drift.headline}</NotJudged>
+                ) : (
+                  <p className="text-sm">{result.drift.headline}</p>
+                )}
               </CardHeader>
               {result.drift.columns.length > 0 && (
                 <CardContent className="overflow-x-auto">
@@ -253,7 +258,11 @@ export function ApplyPage() {
                 <ScoreLabel kind="new_data" />
               </CardHeader>
               <CardContent className="flex flex-col gap-2 text-sm">
-                <p>{result.answers.headline}</p>
+                {result.answers.not_judged ? (
+                  <NotJudged block={result.answers.not_judged}>{result.answers.headline}</NotJudged>
+                ) : (
+                  <p>{result.answers.headline}</p>
+                )}
                 {result.answers.counted_as_independent && (
                   <p className="text-xs text-muted-foreground">
                     Recorded as an independent check on this model — these rows did not exist

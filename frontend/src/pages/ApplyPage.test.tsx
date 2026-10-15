@@ -101,6 +101,39 @@ describe("ApplyPage", () => {
     expect(screen.getByText(/median 23.80 in training, 223.80 here; 80% outside the training range/)).toBeInTheDocument();
   });
 
+  it("shows a drift check on too few rows with the shared cannot-judge sentence (#96)", async () => {
+    await runWith({
+      ...RESULT,
+      drift: {
+        verdict: "not_enough_rows",
+        headline: "10 rows is too few to tell whether this data has shifted.",
+        columns: [],
+        not_judged: {
+          status: "not_judged", what: "new rows", have: 10, need: 30, unit: "rows", because: null,
+          sentence: "Not enough new rows to judge: 10 rows, at least 30 needed.",
+        },
+      },
+    });
+    const box = await screen.findByRole("status", { name: "Cannot judge" });
+    expect(box).toHaveTextContent("Not enough new rows to judge: 10 rows, at least 30 needed.");
+    expect(box).toHaveTextContent("10 rows is too few to tell whether this data has shifted.");
+  });
+
+  it("shows a check on too few real answers with the same sentence pattern (#96)", async () => {
+    await runWith({
+      ...RESULT,
+      answers: {
+        rows: 12, metric: "roc_auc", reported: 0.8, now: null,
+        headline: "There isn't enough held-back data to judge this model.",
+        not_judged: {
+          status: "not_judged", what: "labelled rows in this file", have: 12, need: 30, unit: "rows", because: null,
+          sentence: "Not enough labelled rows in this file to judge: 12 rows, at least 30 needed.",
+        },
+      },
+    });
+    expect(await screen.findByText("Not enough labelled rows in this file to judge: 12 rows, at least 30 needed.")).toBeInTheDocument();
+  });
+
   it("shows that the session's learned value was reused", async () => {
     await runWith(RESULT);
     expect(await screen.findByText(/with 23.83, as learned from your original file/)).toBeInTheDocument();

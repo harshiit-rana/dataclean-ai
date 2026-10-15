@@ -423,6 +423,11 @@ are both running locally, you're ready to make changes.
 - **A new caution is added through `caution_items` with an id and a severity.** Decide its severity against the
   definitions beside `SEVERITY_ORDER`, and add a case in `tests/unit/test_cautions_ranking.py`; do not append
   text to the card's cautions list separately, or the results page (which shows the top three) will not have it.
+- **A new place that declines to judge uses `not_judged.not_judged` and the `NotJudged` component.** Give it
+  the counts (`what`, `have`, `need`) so the sentence reads "Not enough … to judge: N rows, at least M needed.",
+  or a `because` when the obstacle is not a count; do not write a one-off sentence or colour it as a failure.
+  Add the block beside the existing headline rather than replacing it, and a case in
+  `tests/unit/test_not_judged.py`.
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,

@@ -34,6 +34,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from app.services import not_judged
+
 PSI_MODERATE = 0.1
 PSI_MAJOR = 0.25
 UNSEEN_MAJOR = 0.2  # share of rows with a category the model never saw
@@ -243,6 +245,7 @@ def compare(
             f"at least {MIN_ROWS_TO_JUDGE} are needed. The predictions are still made; there "
             f"is just no evidence either way about whether they can be trusted.",
             "columns": [],
+            "not_judged": not_judged.not_judged("new rows", have=int(len(new)), need=MIN_ROWS_TO_JUDGE),
         }
 
     sources = blanks_from or {}
