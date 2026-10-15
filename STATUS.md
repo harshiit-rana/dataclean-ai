@@ -703,13 +703,15 @@ reshuffled, one more fold, a weaker guarantee that the code says so), and has to
 re-scored so the comparison is like for like, which costs two cross-validations a round whatever the budget. The trail
 shows the score on the folds it was picked on beside the fresh-fold score and what it would replace; a winner that did
 not hold says so and the incumbent stays; the check is skipped, and the winner refused, if the time limit has passed.
-Measured on pure noise (`backend/scripts/measure_winners_curse.py`), the settings round accepting a setting: logistic
-regression 0 of 25 seeds before and after (its existing gain rule already holds); gradient boosting on 80 rows 9 of 25
-before and 8 of 25 after. The second does not reach the "at most 1 of 25" the issue hoped for, and the reason is not luck:
-every accepted setting scores exactly 0.500 AUC on fresh folds (a model that predicts the same for everyone) while the
-default, which overfits the noise, scores 0.29 to 0.49, so replacing it is a genuine improvement to chance. The check
-refused the one case that was luck. Stopping a loop from "improving" a worse-than-chance default to chance would need a
-rule about chance, not about fold luck; that is a separate decision and is not made here.
+The fresh-fold check alone was not enough. Measured on pure noise (`backend/scripts/measure_winners_curse.py`), the
+settings round accepting a setting: logistic regression 0 of 25 seeds before and after; gradient boosting on 80 rows 9 of 25
+before and still 8 of 25 with the check. Those were not luck: every one scored exactly 0.500 AUC on fresh folds (a model that
+predicts the same for everyone) against a default that overfits the noise to 0.29 to 0.49. So a winner must also be *clear
+of chance*: above what guessing scores (0.5 AUC, the commonest answer's share of accuracy, 0 R-squared) by more than its fold
+spread. A change that only brings a model up to chance is not an improvement: with no signal every setting is chance. With
+both, gradient boosting accepts a setting in **0 of 25** seeds (the issue asked for at most 1), and logistic regression stays
+at 0. The same floor applies to the combinations and ensemble rounds; the trail says "it only brought the model up to
+chance" when it is the reason.
 
 **A processing limit on one request (#62).** Deep diagnostics were already skipped above 20,000 rows, but plain
 training, model choice and the improvement loop had no limit on rows times candidates times folds, so a large upload
