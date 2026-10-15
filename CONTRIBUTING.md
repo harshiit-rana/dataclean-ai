@@ -442,6 +442,11 @@ are both running locally, you're ready to make changes.
   column)` and add the kind to `ACTION_KINDS`, to `actionPath` in `CheckTrail.tsx` and to
   `tests/unit/test_readiness_check_actions.py`. If the place it leads to can be pre-set, pre-set it from the
   address and still leave the decision to the user.
+- **Anything slow that the improvement loop runs checks the deadline.** `improve` takes a `time_limit_seconds` and
+  hands `tuning.search` a `deadline` (a `time.monotonic()` instant); a new round or search strategy checks
+  `out_of_time()` before it starts and records itself as skipped (`skip_for_time`) rather than silently not running.
+  The deadline must be read from `time.monotonic` through the module's `time` so tests can substitute a clock; never
+  compare it with a score.
 - **Only comparisons repeat their folds.** `tuning.cv_splitter(..., repeated=True)` returns a repeated
   splitter below `REPEATED_CV_BELOW_ROWS` for a random split; `score_config`, `search` and the shown
   fold spread ask for it. Anything that needs a partition -- the cut-off's out-of-fold scores,

@@ -29,6 +29,13 @@ const STOPPED: Record<Trail["stopped_because"], { title: string; blurb: string; 
       "each other. Once nothing could, carrying on would only be fitting to the folds.",
     tone: "border-border bg-muted/40",
   },
+  time_limit: {
+    title: "Stopped at your time limit",
+    blurb: "The search ran out of time, so what is shown is the best it found by then, and the " +
+      "rounds marked not run were never tried. A longer limit might find more, or might not. " +
+      "Scoring the result once on the held-out rows still happened afterwards.",
+    tone: "border-sky-500/40 bg-sky-500/5",
+  },
 };
 
 function formatScore(value: number | null, metric: string): string {
@@ -60,16 +67,27 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
         </p>
 
         <ol className="flex flex-col gap-2">
-          {trail.rounds.map((round, index) => (
+          {trail.rounds.map((round, index) => {
+            const notRun = round.detail?.skipped === "time_limit";
+            return (
             <li
               key={`${round.name}-${index}`}
               className={cn(
                 "rounded-md border p-3",
-                round.accepted ? "border-primary/40 bg-primary/5" : "border-border"
+                notRun
+                  ? "border-dashed border-border bg-muted/30 text-muted-foreground"
+                  : round.accepted
+                    ? "border-primary/40 bg-primary/5"
+                    : "border-border"
               )}
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="font-medium">{round.label}</span>
+                <span className="font-medium">
+                  {round.label}
+                  {notRun && (
+                    <span className="ml-2 text-xs uppercase tracking-wide">Not run: time limit</span>
+                  )}
+                </span>
                 <span className="tabular-nums text-muted-foreground">
                   {formatScore(round.score, trail.metric)}
                   {round.gain !== null && round.gain !== undefined && (
@@ -88,7 +106,8 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
               <p className="mt-1 text-xs text-muted-foreground">{round.what_it_tried}</p>
               <p className="mt-1">{round.outcome}</p>
             </li>
-          ))}
+            );
+          })}
         </ol>
 
         <div className={cn("rounded-md border p-3", stopped.tone)}>

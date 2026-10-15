@@ -21,6 +21,7 @@ cross-validated score that won -- which is itself the evidence the loop is behav
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Callable
 
@@ -81,6 +82,13 @@ class Round:
         }
 
 
+def _reached(found: tuning.SearchResult) -> dict:
+    """What a settings search got through, for the trail, only when the time limit cut it short."""
+    if not found.stopped_for_time:
+        return {}
+    return {"tried": found.tried, "planned": found.planned, "stopped_for_time": True}
+
+
 def _is_real_gain(candidate: float, incumbent: float, std: float | None) -> bool:
     """Did this beat the incumbent by more than the measurement is worth?"""
     gain = candidate - incumbent
@@ -114,8 +122,16 @@ def improve(
     test_size: float | None = None,
     time_gap_days: int | None = None,
     group_columns: list[str] | None = None,
+    time_limit_seconds: float | None = None,
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
+
+    `time_limit_seconds` bounds the wall-clock time the search may take, counted from the call. The
+    deadline is checked before each round and before each runner-up family in the third, and the
+    settings search inside a round stops at it, so the call returns within the limit plus the time
+    one setting takes to score. A round that did not run is recorded in the trail as skipped, and
+    `stopped_because` is `time_limit`. The one look at the test set at the end is not skipped: it
+    is what makes the result a result, and it is a single fit.
 
     `goal` is a target for the same metric the rounds are judged on -- AUC for a two-class
     target, accuracy for more, R² for regression. None means "get it as good as you can",
@@ -133,6 +149,9 @@ def improve(
     """
     if target_column not in df.columns:
         raise modeling.ModelingError(f"'{target_column}' is not in the data.")
+
+    limit = float(time_limit_seconds) if time_limit_seconds else None
+    deadline = None if limit is None else time.monotonic() + limit
 
     # Mirrors train_candidates: the column being grouped on cannot also be an input, or the
     # loop would be searching for settings that exploit the very memorisation the grouped
@@ -255,6 +274,33 @@ def improve(
         if on_stage:
             on_stage(name, description)
 
+    def out_of_time() -> bool:
+        return deadline is not None and time.monotonic() >= deadline
+
+    # Set once anything was left undone for want of time, whichever round it happened in.
+    cut_short = False
+    skipped_for_time: list[str] = []
+
+    def skip_for_time(name: str, label: str, what: str) -> None:
+        """Records a round that did not run because the time limit was reached first."""
+        skipped_for_time.append(name)
+        starting(name, "Skipped: the time limit was reached before this round.")
+        emit(
+            Round(
+                name=name,
+                label=label,
+                what_it_tried=what,
+                accepted=False,
+                outcome=f"Not run: the {limit:g}-second time limit was reached first.",
+                detail={"skipped": "time_limit"},
+            )
+        )
+
+    def time_tail(found) -> str:
+        if not found.stopped_for_time:
+            return ""
+        return f" The time limit stopped it after {found.tried} of {found.planned} settings."
+
     def build_for(
         name: str, params: dict | None = None, with_features: dict | None = None
     ) -> Callable[[], object]:
@@ -286,7 +332,12 @@ def improve(
     # moves onto cross-validation here.
     family_scores: dict[str, float] = {}
     scored: dict[str, dict] = {}
+    unscored_for_time: list[str] = []
     for name in candidates:
+        # At least one family is always scored: without it there is nothing to improve.
+        if scored and out_of_time():
+            unscored_for_time.append(name)
+            continue
         result = tuning.score_config(
             build_for(name), X_train, y_train, task, groups=train_groups, ordered=ordered
         )
@@ -315,7 +366,12 @@ def improve(
             label="Starting point",
             what_it_tried=f"Cross-validated {len(family_scores)} model "
             f"{'family' if len(family_scores) == 1 else 'families'} on the training rows and "
-            f"kept the strongest.",
+            f"kept the strongest."
+            + (
+                f" The time limit left {len(unscored_for_time)} more unscored."
+                if unscored_for_time
+                else ""
+            ),
             score=best_score,
             std=best_std,
             gain=None,
@@ -326,21 +382,28 @@ def improve(
                 "chosen": best_name,
                 "rule": pick["rule"],
                 "highest_scorer": pick["highest_scorer"],
+                **({"unscored_for_time": unscored_for_time} if unscored_for_time else {}),
             },
         )
     )
+    cut_short = bool(unscored_for_time)
 
     stopped_because = ""
     if _goal_met(best_score, goal):
         stopped_because = "goal_reached"
 
     # --- Round 2: settings for the leading family ----------------------------------------
+    if not stopped_because and out_of_time():
+        stopped_because = "time_limit"
+    if stopped_because == "time_limit":
+        skip_for_time("hyperparameters", "Model settings", "Searched this model's settings.")
     if not stopped_because:
         starting("hyperparameters", f"Searching the settings of {modeling.MODELS[best_name].label.lower()}.")
         found = tuning.search(
             build_for(best_name), best_name, X_train, y_train, task,
-            budget=budget, groups=train_groups, ordered=ordered,
+            budget=budget, groups=train_groups, ordered=ordered, deadline=deadline,
         )
+        cut_short = cut_short or bool(found and found.stopped_for_time)
         if found is None:
             emit(
                 Round(
@@ -358,13 +421,13 @@ def improve(
                     name="hyperparameters",
                     label="Model settings",
                     what_it_tried=f"Tried {found.fits} fits across this model's settings, "
-                    f"scored on the training folds.",
+                    f"scored on the training folds." + time_tail(found),
                     score=found.score,
                     std=found.std,
                     gain=gain,
                     accepted=True,
                     outcome=f"Better settings found: {metric_label} up {gain:+.3f}.",
-                    detail={"params": found.readable_params},
+                    detail={"params": found.readable_params, **_reached(found)},
                 )
             )
         else:
@@ -373,14 +436,14 @@ def improve(
                     name="hyperparameters",
                     label="Model settings",
                     what_it_tried=f"Tried {found.fits} fits across this model's settings, "
-                    f"scored on the training folds.",
+                    f"scored on the training folds." + time_tail(found),
                     score=found.score,
                     std=found.std,
                     gain=round(found.score - best_score, 4),
                     accepted=False,
                     outcome="No setting beat the defaults by more than the folds disagree "
                     "with each other, so the defaults were kept.",
-                    detail={"params": found.readable_params},
+                    detail={"params": found.readable_params, **_reached(found)},
                 )
             )
 
@@ -391,6 +454,14 @@ def improve(
     #
     # An untuned gradient booster losing to a tuned logistic regression says nothing about
     # which is better; default settings favour some families more than others.
+    if not stopped_because and out_of_time():
+        stopped_because = "time_limit"
+    if stopped_because == "time_limit" and "other_models" not in skipped_for_time:
+        skip_for_time(
+            "other_models", "The other models, tuned",
+            "Looked at whether any of the models that lost the first round were close enough to be "
+            "worth searching.",
+        )
     if not stopped_because:
         starting("other_models", "Tuning the runners-up, in case they only lost on their defaults.")
         challengers = [
@@ -400,15 +471,27 @@ def improve(
         ]
         skipped = len(family_scores) - len(challengers) - 1
         improved_challenger = None
+        untried_for_time: list[str] = []
         for name in challengers:
+            if out_of_time():
+                untried_for_time.append(name)
+                continue
             found = tuning.search(
                 build_for(name), name, X_train, y_train, task,
-                budget=budget, groups=train_groups, ordered=ordered,
+                budget=budget, groups=train_groups, ordered=ordered, deadline=deadline,
             )
+            cut_short = cut_short or bool(found and found.stopped_for_time)
             if found and _is_real_gain(found.score, best_score, found.std):
                 if improved_challenger is None or found.score > improved_challenger[1].score:
                     improved_challenger = (name, found)
 
+        cut_short = cut_short or bool(untried_for_time)
+        time_note = (
+            f" The time limit stopped it before {len(untried_for_time)} of the "
+            f"{len(challengers)} could be tried."
+            if untried_for_time
+            else ""
+        )
         if not challengers:
             emit(
                 Round(
@@ -437,8 +520,11 @@ def improve(
                     gain=gain,
                     accepted=True,
                     outcome=f"{modeling.MODELS[name].label} overtakes it once tuned: "
-                    f"{metric_label} up {gain:+.3f}.",
-                    detail={"model": name, "params": found.readable_params},
+                    f"{metric_label} up {gain:+.3f}." + time_note,
+                    detail={
+                        "model": name, "params": found.readable_params,
+                        **({"untried_for_time": untried_for_time} if untried_for_time else {}),
+                    },
                 )
             )
         else:
@@ -450,7 +536,8 @@ def improve(
                     f"{'model' if len(challengers) == 1 else 'models'} close enough behind to "
                     f"be worth it, in case they only lost because of their defaults.",
                     accepted=False,
-                    outcome="None of them caught up once tuned.",
+                    outcome="None of them caught up once tuned." + time_note,
+                    detail={"untried_for_time": untried_for_time} if untried_for_time else {},
                 )
             )
 
@@ -464,6 +551,14 @@ def improve(
     # started -- all of them if none were on, none if some were -- with the model and
     # settings that lead, and keeps whichever the folds prefer. "The derived inputs did not
     # help" and "they did" are both findings, and either way the user learns which.
+    if not stopped_because and out_of_time():
+        stopped_because = "time_limit"
+    if stopped_because == "time_limit" and "derived_features" not in skipped_for_time:
+        skip_for_time(
+            "derived_features", "Derived inputs",
+            "Looked for columns that could be turned into inputs -- dates, free text, blanks, "
+            "values that repeat.",
+        )
     if not stopped_because:
         starting("derived_features", "Trying inputs built from your columns.")
         alt_recipes, alt_frame = frames["alternative"]
@@ -556,8 +651,11 @@ def improve(
             stopped_because = "goal_reached"
 
     if not stopped_because:
-        stopped_because = "goal_reached" if _goal_met(best_score, goal) else (
-            "goal_out_of_reach" if goal is not None else "no_further_gains"
+        stopped_because = (
+            "goal_reached" if _goal_met(best_score, goal)
+            else "time_limit" if cut_short
+            else "goal_out_of_reach" if goal is not None
+            else "no_further_gains"
         )
 
     # --- The one look at the test set ----------------------------------------------------
@@ -570,6 +668,8 @@ def improve(
         "metric": metric,
         "goal": goal,
         "stopped_because": stopped_because,
+        "time_limit_seconds": limit,
+        "skipped_for_time": skipped_for_time,
         "best": {
             "model": best_name,
             "label": modeling.MODELS[best_name].label,

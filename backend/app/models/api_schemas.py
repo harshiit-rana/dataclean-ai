@@ -266,6 +266,9 @@ class ImproveRequest(TrainRequest):
     # Fits per search. Higher explores more settings and takes proportionally longer; the
     # default is sized so a few thousand rows finish in well under a minute.
     budget: int = Field(default=24, ge=4, le=120)
+    # The most wall-clock time the search may take, in seconds, counted from when it starts. None means
+    # no limit beyond the budget. The final refit and the report on the held-out rows come after it.
+    time_limit_seconds: Optional[float] = Field(default=None, ge=1.0, le=3600.0)
 
 
 class SessionStatusResponse(BaseModel):

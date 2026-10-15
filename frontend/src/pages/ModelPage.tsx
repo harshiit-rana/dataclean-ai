@@ -92,6 +92,8 @@ export function ModelPage() {
   // Kept as text, not a number: an empty box means "as good as you can get", and coercing
   // that to 0 would read as a target of zero.
   const [goal, setGoal] = useState("");
+  // Minutes, as text: empty means no limit. Sent as whole seconds, between one second and an hour.
+  const [timeLimit, setTimeLimit] = useState("");
   const [lastRequest, setLastRequest] = useState<TrainRequest | null>(null);
   const [loadingCard, setLoadingCard] = useState(false);
   const [error, setErrorMessage] = useState<string | null>(null);
@@ -190,6 +192,11 @@ export function ModelPage() {
     if (!sessionId) return;
     const parsed = Number.parseFloat(goal);
     const target = goal.trim() !== "" && Number.isFinite(parsed) ? parsed : null;
+    const minutes = Number.parseFloat(timeLimit);
+    const limitSeconds =
+      timeLimit.trim() !== "" && Number.isFinite(minutes) && minutes > 0
+        ? Math.min(3600, Math.max(1, Math.round(minutes * 60)))
+        : null;
     const base: TrainRequest | null = lastRequest ?? (result ? requestFromResult(result) : null);
 
     const request: ImproveRequest = {
@@ -215,6 +222,7 @@ export function ModelPage() {
       time_gap_days: base?.time_gap_days ?? null,
       include_deep_diagnostics: true,
       goal: target,
+      time_limit_seconds: limitSeconds,
     };
 
     setImproving(true);
@@ -441,6 +449,24 @@ export function ModelPage() {
               </Button>
               <span className="text-xs text-muted-foreground">
                 Leave it blank to get as far as it can.
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor="time-limit" className="text-muted-foreground">
+                Spend at most
+              </label>
+              <input
+                id="time-limit"
+                type="text"
+                inputMode="decimal"
+                value={timeLimit}
+                onChange={(event) => setTimeLimit(event.target.value)}
+                placeholder="no limit"
+                className="h-9 w-28 rounded-md border border-border bg-transparent px-3 text-sm tabular-nums"
+              />
+              <span className="text-muted-foreground">minutes</span>
+              <span className="text-xs text-muted-foreground">
+                Bounds the search; scoring the result on the held-out rows comes after.
               </span>
             </div>
           </CardContent>

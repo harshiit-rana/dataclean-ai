@@ -654,6 +654,17 @@ with each other. It stops on its own and says which of three reasons — target 
 out of reach, or the rounds stopped paying for themselves — and it shows the rounds it
 *rejected*, because "tuning this data didn't help" means the ceiling is your columns.
 
+**A time limit on the search (#47).** "Try to do better" takes an optional "spend at most N minutes". The
+deadline (a monotonic clock, counted from when the search starts) is checked before each round, before each
+runner-up family in the third round, and between the settings inside a search, so the search returns within the
+limit plus the time one setting takes to score. The settings search is now an explicit loop over the same draws
+`RandomizedSearchCV` used (a test holds it to the same winner, score, spread and fit count), so a search cut short
+reports the best of the settings it reached, a prefix of the sequence a full search would have drawn. Rounds that
+did not run are listed in the trail marked "Not run: time limit", and the run's stop reason is `time_limit`. A goal
+that was met still wins over the clock. The final refit and the single scoring on the held-out rows come after the
+limit, so the response takes a little longer than the limit; the limit bounds the search, not the report. The
+integrity suite checks that a limit which bites stops at the same place whatever the held-out answers are.
+
 **A record of what you tried.** Results used to overwrite a single file, so retraining
 discarded the previous run — which made the question people actually ask unanswerable: *did the
 thing I just changed help?* Every run is now kept with its settings, its headline number and

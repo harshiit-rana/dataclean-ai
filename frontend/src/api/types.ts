@@ -938,7 +938,11 @@ export interface ImprovementTrail {
   /** What the rounds were judged on: roc_auc, accuracy or r2. */
   metric: string;
   goal: number | null;
-  stopped_because: "goal_reached" | "goal_out_of_reach" | "no_further_gains";
+  stopped_because: "goal_reached" | "goal_out_of_reach" | "no_further_gains" | "time_limit";
+  /** The limit the run was given, in seconds. Null or absent when it had none. */
+  time_limit_seconds?: number | null;
+  /** The rounds that did not run because the limit was reached first. */
+  skipped_for_time?: string[];
   /** Cross-validated, from the training rows only -- not the headline number, which is
    * measured once on rows nothing was selected against. */
   cv_score: number;
@@ -949,6 +953,8 @@ export interface ImprovementTrail {
 export interface ImproveRequest extends TrainRequest {
   goal?: number | null;
   budget?: number;
+  /** The most wall-clock time the search may take, in seconds (1 to 3600). Absent means no limit. */
+  time_limit_seconds?: number | null;
 }
 
 /** What POST /api/model/{id}/improve/stream sends, one per `data:` line. */

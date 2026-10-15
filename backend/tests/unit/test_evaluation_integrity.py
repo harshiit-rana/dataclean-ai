@@ -403,6 +403,56 @@ class TestTheImprovementLoop:
         assert rigged["test_metrics"] != honest["test_metrics"]
         assert len(honest["rounds"]) >= 2  # there were decisions to compare
 
+    def test_a_time_limit_does_not_let_the_test_answers_in(self, learnable, flipped_test_answers):
+        """The deadline is checked against the clock, never against a score, so a limit that cuts the
+        search short cuts it at the same place whatever the held-out answers are."""
+        import sklearn.model_selection as selection
+
+        from app.services import tuning
+
+        class Clock:
+            now = 1000.0
+
+            def monotonic(self):
+                return self.now
+
+        def run():
+            clock = Clock()
+            real = selection.cross_val_score
+
+            def slow(*args, **kwargs):
+                clock.now += 10.0
+                return real(*args, **kwargs)
+
+            with pytest.MonkeyPatch.context() as patch:
+                patch.setattr(improvement, "time", clock)
+                patch.setattr(tuning, "time", clock)
+                patch.setattr(selection, "cross_val_score", slow)
+                return self._improve(learnable, time_limit_seconds=25)
+
+        honest = run()
+        flipped_test_answers()
+        rigged = run()
+
+        assert honest["stopped_because"] == "time_limit"
+        assert self._decisions(rigged) == self._decisions(honest)
+        assert rigged["skipped_for_time"] == honest["skipped_for_time"] != []
+        assert rigged["test_metrics"] != honest["test_metrics"]
+
+    def test_the_test_set_is_scored_exactly_once_whether_or_not_the_clock_runs_out(self, learnable, monkeypatch):
+        calls = []
+        real = modeling.evaluate
+
+        def counting(pipeline, X, y, *args, **kwargs):
+            calls.append(len(X))
+            return real(pipeline, X, y, *args, **kwargs)
+
+        monkeypatch.setattr(modeling, "evaluate", counting)
+        self._improve(learnable)
+        self._improve(learnable, time_limit_seconds=1)
+        # One evaluation per run, on the held-out rows -- never on a training fold.
+        assert len(calls) == 2
+
     def test_the_derived_inputs_it_keeps_are_unmoved(self, dated, flipped_test_answers):
         honest = self._improve(dated, split_strategy="time", time_column="when")
         flipped_test_answers()

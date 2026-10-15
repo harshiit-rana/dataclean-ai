@@ -19,6 +19,7 @@ cover the parameters that actually move a score on tabular data of this size.
 from __future__ import annotations
 
 import logging
+import time
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -110,6 +111,12 @@ class SearchResult:
     # How many times the folds were repeated with a different shuffle: `fits` is folds x repeats.
     # One for anything but a small file split at random.
     repeats: int = 1
+    # Settings tried, of those the budget allowed, and whether the time limit cut the search short.
+    # A search that stopped for time is the best of the settings it got to, which is a prefix of the
+    # same sequence a full search would have drawn.
+    tried: int = 0
+    planned: int = 0
+    stopped_for_time: bool = False
 
     @property
     def readable_params(self) -> dict:
@@ -268,13 +275,21 @@ def search(
     folds: int = CV_FOLDS,
     groups=None,
     ordered: bool = False,
+    deadline: float | None = None,
 ) -> SearchResult | None:
     """Randomized search over this model's space, cross-validated on the training data.
+
+    The settings are drawn exactly as `RandomizedSearchCV` draws them (the same `ParameterSampler`
+    and seed) but scored one at a time, so a search can be stopped part-way: `deadline` is a
+    `time.monotonic()` instant, checked before each setting after the first. A search that runs out
+    of time returns the best of the settings it reached and says so (`stopped_for_time`). Without a
+    deadline the result is the one `RandomizedSearchCV` gave.
 
     Returns None when there is nothing to search (no space for this model, or too few rows
     per class to fold), which the caller reports as "nothing to try" rather than as a failure.
     """
-    from sklearn.model_selection import RandomizedSearchCV
+    from sklearn.base import clone
+    from sklearn.model_selection import ParameterSampler, cross_val_score
 
     space = SEARCH_SPACES.get(model_name)
     if not space:
@@ -294,35 +309,44 @@ def search(
         combinations *= len(values)
     iterations = min(budget, combinations)
 
-    searcher = RandomizedSearchCV(
-        build(),
-        space,
-        n_iter=iterations,
-        cv=splitter,
-        scoring=metric,
-        random_state=42,
-        n_jobs=1,
-        refit=False,  # improvement.py refits once, at the end, on everything it kept
-        # A combination that can't fit (say `max_features=None` on a degenerate matrix) is
-        # scored NaN and loses, rather than aborting the whole search.
-        error_score=np.nan,
-    )
-    try:
-        searcher.fit(X_train, y_input, groups=groups)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("Search failed for %s: %s", model_name, exc, exc_info=True)
-        return None
+    settings = list(ParameterSampler(space, n_iter=iterations, random_state=42))
+    template = build()
+    best: tuple[float, float, dict] | None = None  # mean, spread across folds, settings
+    tried = 0
+    stopped_for_time = False
+    for params in settings:
+        # After the first, so a search that was started always has something to report; the caller
+        # decides whether to start one at all.
+        if deadline is not None and tried > 0 and time.monotonic() >= deadline:
+            stopped_for_time = True
+            break
+        try:
+            scores = cross_val_score(
+                clone(template).set_params(**params), X_train, y_input, cv=splitter, scoring=metric,
+                n_jobs=1, groups=groups,
+                # A combination that can't fit (say `max_features=None` on a degenerate matrix) is
+                # scored NaN and loses, rather than aborting the whole search.
+                error_score=np.nan,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Search failed for %s: %s", model_name, exc, exc_info=True)
+            return None
+        tried += 1
+        mean = float(np.mean(scores))
+        if np.isfinite(mean) and (best is None or mean > best[0]):
+            best = (mean, float(np.std(scores)), dict(params))
 
-    index = int(searcher.best_index_)
-    std = float(searcher.cv_results_["std_test_score"][index])
-    if not np.isfinite(searcher.best_score_):
+    if best is None:
         return None
 
     return SearchResult(
-        params=dict(searcher.best_params_),
-        score=round(float(searcher.best_score_), 4),
-        std=round(std, 4),
+        params=best[2],
+        score=round(best[0], 4),
+        std=round(best[1], 4),
         metric=metric,
-        fits=iterations * splitter.get_n_splits(),
+        fits=tried * splitter.get_n_splits(),
         repeats=int(getattr(splitter, "n_repeats", 1)),
+        tried=tried,
+        planned=len(settings),
+        stopped_for_time=stopped_for_time,
     )
