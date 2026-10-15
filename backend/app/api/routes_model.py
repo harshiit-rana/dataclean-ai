@@ -710,6 +710,56 @@ def _refuse_if_the_data_cannot_support_a_model(df, goal, rules=None) -> str:
     return task
 
 
+# Codes that mean the request was refused before anything was fitted, rather than failing during the fit.
+REFUSAL_CODES = frozenset({"data_blocked", "target_missing", "target_unusable"})
+
+
+def _record_attempt(
+    directory, df, *, goal, route: str, request, started: float | None, cost_limit: int | None, detail: str,
+    code: str | None, task: str | None = None,
+) -> None:
+    """Puts an attempt that produced no model in the run history, with the reason the user was given.
+
+    "Refused" when the guard said no before any fitting, "failed" when the fit itself did. Called on the way to
+    raising the original error, so it must never raise itself: a bookkeeping problem must not replace the
+    reason the user needs to see.
+    """
+    try:
+        version = current_dataset_version_in(directory, ensure=True)
+        metadata = run_metadata.describe(
+            request=None if request is None else request.model_dump(mode="json"),
+            route=route,
+            dataset_version=version,
+            runtime_seconds=None if started is None else time.perf_counter() - started,
+            result={},
+            cost_limit=cost_limit,
+        )
+        entry = model_store.attempt_entry(
+            status="refused" if code in REFUSAL_CODES else "failed",
+            reason=detail,
+            code=code,
+            fingerprint=model_store.fingerprint_frame(df),
+            target_column=(goal.target_column or "").strip() or None,
+            task=task,
+            metadata=metadata,
+        )
+        model_store.record_attempt(directory, entry)
+    except Exception:  # noqa: BLE001
+        logger.warning("A failed training attempt could not be recorded", exc_info=True)
+
+
+def _refuse_or_record(df, goal, rules, directory, *, route: str, request, cost_limit: int | None) -> str:
+    """`_refuse_if_the_data_cannot_support_a_model`, with a refusal recorded in the run history first."""
+    try:
+        return _refuse_if_the_data_cannot_support_a_model(df, goal, rules)
+    except TrainingFailedError as exc:
+        _record_attempt(
+            directory, df, goal=goal, route=route, request=request, started=None, cost_limit=cost_limit,
+            detail=exc.detail, code=exc.code,
+        )
+        raise
+
+
 def _save_and_record(
     directory, result: dict, df, *, route: str, action_log=None, goal_text: str = "", request=None,
     started: float | None = None, cost_limit: int | None = None,
@@ -873,7 +923,9 @@ async def train_model(
     df, goal, directory, rules = _load_session(settings, session_id)
     log = await action_log_service.read(graph, session_id)
     target = (goal.target_column or "").strip()
-    task = _refuse_if_the_data_cannot_support_a_model(df, goal, rules)
+    task = _refuse_or_record(
+        df, goal, rules, directory, route="train", request=request, cost_limit=settings.training_cost_limit
+    )
 
     model_names = request.model_names or [spec.name for spec in modeling.models_for_task(task)]
     point = _operating_point(request)
@@ -907,10 +959,19 @@ async def train_model(
         # request in this process, including in-flight SSE streams.
         result = await asyncio.to_thread(run)
     except modeling.ModelingError as exc:
+        _record_attempt(
+            directory, df, goal=goal, route="train", request=request, started=started,
+            cost_limit=settings.training_cost_limit, detail=str(exc), code=exc.code, task=task,
+        )
         raise TrainingFailedError(str(exc), code=exc.code) from exc
     except Exception as exc:  # noqa: BLE001 -- surface the reason rather than a bare 500
         logger.exception("Training failed for session %s", session_id)
-        raise TrainingFailedError(f"Training stopped unexpectedly: {exc}", code="training_error") from exc
+        detail = f"Training stopped unexpectedly: {exc}"
+        _record_attempt(
+            directory, df, goal=goal, route="train", request=request, started=started,
+            cost_limit=settings.training_cost_limit, detail=detail, code="training_error", task=task,
+        )
+        raise TrainingFailedError(detail, code="training_error") from exc
 
     # Recorded so the plan can show what was excluded last time and the model card can say
     # which columns were deliberately withheld.
@@ -1072,10 +1133,14 @@ async def improve_model(
     """
     df, goal_context, directory, rules = _load_session(settings, session_id)
     target = (goal_context.target_column or "").strip()
-    task = _refuse_if_the_data_cannot_support_a_model(df, goal_context, rules)
+    task = _refuse_or_record(
+        df, goal_context, rules, directory, route="improve", request=request,
+        cost_limit=settings.training_cost_limit,
+    )
     point = _operating_point(request)
     log = await action_log_service.read(graph, session_id)
 
+    started = time.perf_counter()
     try:
         return await asyncio.to_thread(
             _improve_and_save,
@@ -1090,10 +1155,19 @@ async def improve_model(
             cost_limit=settings.training_cost_limit,
         )
     except modeling.ModelingError as exc:
+        _record_attempt(
+            directory, df, goal=goal_context, route="improve", request=request, started=started,
+            cost_limit=settings.training_cost_limit, detail=str(exc), code=exc.code, task=task,
+        )
         raise TrainingFailedError(str(exc), code=exc.code) from exc
     except Exception as exc:  # noqa: BLE001 -- surface the reason rather than a bare 500
         logger.exception("Improvement failed for session %s", session_id)
-        raise TrainingFailedError(f"Improving stopped unexpectedly: {exc}", code="training_error") from exc
+        detail = f"Improving stopped unexpectedly: {exc}"
+        _record_attempt(
+            directory, df, goal=goal_context, route="improve", request=request, started=started,
+            cost_limit=settings.training_cost_limit, detail=detail, code="training_error", task=task,
+        )
+        raise TrainingFailedError(detail, code="training_error") from exc
 
 
 # Seconds of silence before the stream sends a comment line. A settings search can run for
@@ -1134,7 +1208,10 @@ async def improve_model_stream(
     """
     df, goal_context, directory, rules = _load_session(settings, session_id)
     target = (goal_context.target_column or "").strip()
-    task = _refuse_if_the_data_cannot_support_a_model(df, goal_context, rules)
+    task = _refuse_or_record(
+        df, goal_context, rules, directory, route="improve_stream", request=request,
+        cost_limit=settings.training_cost_limit,
+    )
     point = _operating_point(request)
     log = await action_log_service.read(graph, session_id)
 
@@ -1150,6 +1227,14 @@ async def improve_model_stream(
 
     def on_stage(name: str, description: str) -> None:
         push({"type": "stage", "name": name, "description": description})
+
+    def record_failure(detail: str, code: str | None) -> None:
+        _record_attempt(
+            directory, df, goal=goal_context, route="improve_stream", request=request, started=started,
+            cost_limit=settings.training_cost_limit, detail=detail, code=code, task=task,
+        )
+
+    started = time.perf_counter()
 
     async def work() -> None:
         try:
@@ -1170,10 +1255,12 @@ async def improve_model_stream(
             )
             await queue.put({"type": "result", "result": result})
         except modeling.ModelingError as exc:
+            record_failure(str(exc), exc.code)
             # `code` only when there is one, like the HTTP errors, so an uncoded failure is the event it always was.
             await queue.put({"type": "error", "detail": str(exc), **({"code": exc.code} if exc.code else {})})
         except Exception as exc:  # noqa: BLE001 -- the reason goes to the page, not a 500
             logger.exception("Streamed improvement failed for session %s", session_id)
+            record_failure(f"Improving stopped unexpectedly: {exc}", "training_error")
             await queue.put(
                 {
                     "type": "error",
@@ -1446,6 +1533,9 @@ def _history_comparisons(directory, runs: list[dict]) -> dict[str, dict]:
     page shows the difference without colouring it.
     """
     found: dict[str, dict] = {}
+    # An attempt that produced no model has no score to compare: each run is compared with the last run before
+    # it that has one.
+    runs = [run for run in runs if model_store.succeeded(run)]
     for index, run in enumerate(runs[:-1]):
         previous = runs[index + 1]
         if (

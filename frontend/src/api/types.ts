@@ -453,6 +453,11 @@ export interface EvaluationStatus {
 export interface ModelRun {
   run_id: string;
   at: string;
+  /** "failed" or "refused" for an attempt that produced no model: no score, the reason the user
+   * was given in `reason`. Absent on entries from before attempts were recorded. */
+  status?: "succeeded" | "failed" | "refused";
+  reason?: string | null;
+  code?: string | null;
   /** Identifies the data this ran against, so runs from before a cleaning change are visible
    * as such rather than compared as though nothing happened. */
   data_fingerprint: string;

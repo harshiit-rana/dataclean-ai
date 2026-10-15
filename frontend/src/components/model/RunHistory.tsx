@@ -13,6 +13,11 @@ import type { ModelRun, RunComparison } from "@/api/types";
  * The change column is the point of the table. A list of scores makes you do the subtraction
  * yourself, and the subtraction is the finding. */
 
+/** An attempt that produced no model -- refused before fitting or failed during it. */
+export function isAttempt(run: ModelRun): boolean {
+  return run.status === "failed" || run.status === "refused";
+}
+
 function metricOf(run: ModelRun): number | null {
   const key = run.primary_metric ?? "";
   const value = run.metrics?.[key];
@@ -130,6 +135,27 @@ function Provenance({ run }: { run: ModelRun }) {
   );
 }
 
+/** A refused or failed attempt, in sequence with the runs, with the reason the user was given. */
+function AttemptRow({ run, current }: { run: ModelRun; current: boolean }) {
+  return (
+    <tr className="border-b border-border/60 align-top">
+      <td className="py-2 pr-3">
+        <span className="font-medium">{run.status === "refused" ? "Refused" : "Failed"}</span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
+          {when(run.at)}
+          {current && " · latest attempt"}
+        </span>
+        <Provenance run={run} />
+      </td>
+      <td className="py-2 pr-3 text-xs text-muted-foreground" colSpan={2}>
+        {run.reason ?? (run.status === "refused" ? "Nothing was trained." : "Training did not finish.")}
+      </td>
+      <td className="py-2 pr-3 text-xs text-muted-foreground">no model</td>
+      <td className="py-2 text-xs">—</td>
+    </tr>
+  );
+}
+
 export function RunHistory({
   runs,
   currentFingerprint,
@@ -142,6 +168,8 @@ export function RunHistory({
 }) {
   // One run is not a comparison, and a table of one row implies there is something to compare.
   if (runs.length < 2) return null;
+  // The model in use is the newest run that produced one; a later failed attempt did not replace it.
+  const currentId = runs.find((r) => !isAttempt(r))?.run_id;
 
   return (
     <Card>
@@ -169,15 +197,17 @@ export function RunHistory({
             </thead>
             <tbody>
               {runs.map((run, index) => {
+                if (isAttempt(run)) return <AttemptRow key={run.run_id} run={run} current={index === 0} />;
                 const score = metricOf(run);
-                // Compared against the run before it in time, which is the next row down.
-                const previous = runs[index + 1];
+                // Compared against the last run before it that has a score: an attempt that
+                // produced no model sits between them in the list but has nothing to subtract.
+                const previous = runs.slice(index + 1).find((r) => !isAttempt(r));
                 const previousScore = previous ? metricOf(previous) : null;
                 const comparable =
                   score != null &&
                   previousScore != null &&
-                  previous.data_fingerprint === run.data_fingerprint &&
-                  previous.primary_metric === run.primary_metric;
+                  previous?.data_fingerprint === run.data_fingerprint &&
+                  previous?.primary_metric === run.primary_metric;
                 const delta = comparable ? score - previousScore : null;
                 const comparison = comparisons?.[run.run_id];
                 const verdict = comparable ? (comparison?.verdict ?? null) : null;
@@ -192,7 +222,7 @@ export function RunHistory({
                       <span className="font-medium">{run.model_label ?? run.best_model}</span>
                       <span className="mt-0.5 block text-xs text-muted-foreground">
                         {when(run.at)}
-                        {index === 0 && " · current"}
+                        {run.run_id === currentId && " · current"}
                       </span>
                       <Provenance run={run} />
                     </td>

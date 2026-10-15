@@ -122,6 +122,10 @@ are both running locally, you're ready to make changes.
   so a run from before the change is *labelled* rather than deleted or silently compared.
   History bookkeeping must never fail a training run — losing a result that exists because its
   record couldn't be written is the worst outcome available.
+- **A route that fits a model records its refusals and failures.** Call `_refuse_or_record` instead of
+  `_refuse_if_the_data_cannot_support_a_model`, and `_record_attempt` in each `except` before raising, so the run
+  history holds what was tried and not only what worked. Codes in `REFUSAL_CODES` are recorded as refused, every
+  other one as failed. Anything that reads the history and expects a score checks `model_store.succeeded` first.
 - **A new seed or default that decides results goes in `run_metadata`.** `seeds()` and `constants()` feed
   `config_hash`, so a change to one changes the hash of every run made after it. A seed or default left out
   makes two different experiments look like one. Request fields need nothing: the whole validated request is

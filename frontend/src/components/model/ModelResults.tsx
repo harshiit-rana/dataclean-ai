@@ -471,11 +471,19 @@ function HeldOutTable({ result, keys }: { result: ModelResult; keys: string[] })
                 <span className="ml-2 text-xs text-muted-foreground">chosen</span>
               )}
             </td>
-            {keys.map((key) => (
-              <td key={key} className="px-2 py-1.5 text-right tabular-nums">
-                {entry.failed ? "—" : formatMetric(entry.metrics[key])}
+            {/* A candidate that did not train says why, rather than a row of dashes that reads
+                as "scored nothing". */}
+            {entry.failed ? (
+              <td colSpan={keys.length} className="px-2 py-1.5 text-xs text-muted-foreground">
+                Did not train: {entry.failed}
               </td>
-            ))}
+            ) : (
+              keys.map((key) => (
+                <td key={key} className="px-2 py-1.5 text-right tabular-nums">
+                  {formatMetric(entry.metrics[key])}
+                </td>
+              ))
+            )}
           </tr>
         ))}
         <BaselineRows baseline={result.baseline} keys={keys} />

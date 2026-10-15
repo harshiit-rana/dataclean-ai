@@ -118,6 +118,9 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
             # test-set ledger names the run a look belongs to -- and made here otherwise.
             "run_id": result.get("run_id") or uuid.uuid4().hex[:12],
             "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            # "succeeded", or "failed" / "refused" for an attempt that produced no model (see `attempt_entry`).
+            # Absent on entries from before attempts were recorded, all of which succeeded.
+            "status": "succeeded",
             "data_fingerprint": fingerprint,
             # Which rows were held out, by the rule that held them. Two runs can be compared on
             # the same rows only if this matches as well as the data.
@@ -213,6 +216,48 @@ def summarise(result: dict, *, fingerprint: str = "") -> dict:
             },
         }
     )
+
+
+ATTEMPT_STATUSES = ("failed", "refused")
+
+
+def succeeded(entry: dict) -> bool:
+    """Whether a history entry is a run with a model and a score, rather than an attempt that produced neither."""
+    return entry.get("status", "succeeded") == "succeeded"
+
+
+def attempt_entry(
+    *, status: str, reason: str, code: str | None, fingerprint: str = "", target_column: str | None = None,
+    task: str | None = None, metadata: dict | None = None,
+) -> dict:
+    """A history entry for an attempt that produced no model: refused before fitting (the readiness checks said
+    no, the target is gone) or failed during it. The record of what was tried omitted exactly the attempts that
+    taught something. Same shape as a run's entry, so a reader of the history needs no second schema, with no
+    score, no model and the user-facing reason.
+    """
+    if status not in ATTEMPT_STATUSES:
+        raise ValueError(f"not an attempt status: {status}")
+    entry = summarise(
+        {"target_column": target_column, "task": task, "run_metadata": metadata}, fingerprint=fingerprint
+    )
+    request = (metadata or {}).get("request") or {}
+    entry.update(
+        status=status,
+        reason=reason,
+        code=code,
+        excluded_columns=list(request.get("excluded_columns") or []),
+        models_tried=list(request.get("model_names") or []),
+    )
+    return _jsonable(entry)
+
+
+def record_attempt(directory: Path, entry: dict) -> None:
+    """Appends an attempt to the history. Never raises: the caller is already reporting a failure, and the
+    bookkeeping must not replace that failure with one of its own."""
+    try:
+        append_history(directory, entry)
+    except Exception:  # noqa: BLE001
+        logger.warning("A failed attempt could not be recorded", exc_info=True)
 
 
 def load_history(directory: Path) -> list[dict]:

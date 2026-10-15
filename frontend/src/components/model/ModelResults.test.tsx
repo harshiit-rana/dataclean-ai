@@ -147,6 +147,18 @@ describe("ModelResults — the table that chose the model (#90)", () => {
     expect(screen.getByText("did not train")).toBeInTheDocument();
   });
 
+  it("gives a failed candidate's reason in the held-out table instead of dashes (#64)", () => {
+    const broken = result();
+    broken.results[1] = {
+      ...broken.results[1],
+      failed: "The classes are not in class_weight",
+      metrics: {},
+    };
+    render(<ModelResults result={broken} />);
+    fireEvent.click(screen.getByRole("button", { name: /Show held-out scores for every model/ }));
+    expect(screen.getByText("Did not train: The classes are not in class_weight")).toBeInTheDocument();
+  });
+
   it("describes a result saved before models were chosen on folds as what it was", () => {
     /* Its choice WAS made on the test set, so its test-score table is the honest account. */
     const old = result();

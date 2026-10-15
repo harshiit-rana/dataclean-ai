@@ -807,6 +807,14 @@ scikit-learn" can be named. The streamed and the blocking search hash alike, and
 hashes like that state. The metadata rides on the saved result too, and the history table shows it under each run's
 *how it was made*; runs from before it was kept say *not recorded*. Gathering it can never fail a run.
 
+Attempts that produced no model are in the record too (#64). A train or search the readiness checks refused, or one that
+failed during fitting (a split that could not be made, no usable columns, an unexpected error), leaves an entry with
+`status` `refused` or `failed`, the reason the user was shown, its code, the request and the data version, in the same
+shape as a run's entry. The table shows it in sequence with the reason, and score changes compare each run with the last
+run before it that had a score; the *current* label stays on the model in use. Recording an attempt never replaces the
+error the user needs to see. In a successful run, a candidate that did not train gives its reason in the held-out table
+instead of a row of dashes.
+
 **Artifacts you can leave with.** `train_model.py` that rebuilds the model from scratch
 (tuned settings included), the fitted `model.joblib`, and a written model card that says what
 not to trust. A test runs the generated script in a subprocess and checks it reproduces the

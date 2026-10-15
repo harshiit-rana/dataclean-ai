@@ -308,3 +308,39 @@ describe("RunHistory — how each run was made (#63)", () => {
     expect(screen.getAllByText("how it was made: not recorded")).toHaveLength(2);
   });
 });
+
+describe("RunHistory — refused and failed attempts are part of the record (#64)", () => {
+  const refused = run({
+    status: "refused",
+    code: "data_blocked",
+    reason: "This data cannot support a model that would mean anything, so nothing was trained.",
+    metrics: {},
+    best_model: null as unknown as string,
+    model_label: null as unknown as string,
+    verdict: null as unknown as string,
+  });
+
+  it("shows the attempt in sequence with its reason", () => {
+    renderHistory([refused, run()]);
+    expect(screen.getByText("Refused")).toBeInTheDocument();
+    expect(screen.getByText(/nothing was trained/)).toBeInTheDocument();
+    expect(screen.getByText("no model")).toBeInTheDocument();
+  });
+
+  it("names a failure as a failure", () => {
+    renderHistory([run({ status: "failed", reason: "No usable columns.", metrics: {} }), run()]);
+    expect(screen.getByText("Failed")).toBeInTheDocument();
+    expect(screen.getByText("No usable columns.")).toBeInTheDocument();
+  });
+
+  it("compares a run with the last run that had a score, skipping the attempt between them", () => {
+    renderHistory([run({ metrics: { roc_auc: 0.85 } }), refused, run({ metrics: { roc_auc: 0.8 } })]);
+    expect(screen.getByText("+0.0500")).toBeInTheDocument();
+  });
+
+  it("keeps the current label on the model in use, not on a later failed attempt", () => {
+    renderHistory([refused, run({ model_label: "Random forest" })]);
+    expect(screen.getByText(/· current/)).toBeInTheDocument();
+    expect(screen.getByText(/latest attempt/)).toBeInTheDocument();
+  });
+});
