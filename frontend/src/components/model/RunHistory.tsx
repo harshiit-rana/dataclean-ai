@@ -170,6 +170,18 @@ export function describeDiff(diff: VersionDiff): string[] {
   return [...lines, ...diff.notes];
 }
 
+/** Why a run cannot be compared with the one before it, in words: the data changed, the metric
+ * changed, or one of them has no score. Empty when they can be compared. */
+export function whyNotComparable(run: ModelRun, previous: ModelRun): string[] {
+  const reasons: string[] = [];
+  if (previous.data_fingerprint !== run.data_fingerprint) reasons.push("data changed");
+  if (previous.primary_metric !== run.primary_metric) {
+    reasons.push(`different metric (${previous.primary_metric ?? "none"} → ${run.primary_metric ?? "none"})`);
+  }
+  if (!reasons.length && (metricOf(run) == null || metricOf(previous) == null)) reasons.push("no score to compare");
+  return reasons;
+}
+
 /** "What changed" for a run trained on an earlier version of the data, fetched when asked for. */
 function WhatChanged({ from, to, fetchDiff }: { from: number; to: number; fetchDiff: (from: number, to: number) => Promise<VersionDiff> }) {
   const [lines, setLines] = useState<string[] | null>(null);
@@ -382,7 +394,24 @@ export function RunHistory({
                     <td className="py-2 pr-3 tabular-nums">
                       {delta == null ? (
                         <span className="text-xs text-muted-foreground">
-                          {previous ? "not comparable" : olderCount > 0 ? "earlier runs not shown" : "first run"}
+                          {previous
+                            ? `not comparable: ${whyNotComparable(run, previous).join("; ") || "no score to compare"}`
+                            : olderCount > 0
+                              ? "earlier runs not shown"
+                              : "first run"}
+                          {/* The data changed between the two: say what, when both versions are known. */}
+                          {previous &&
+                            fetchDiff &&
+                            previous.data_fingerprint !== run.data_fingerprint &&
+                            previous.dataset_version?.version != null &&
+                            run.dataset_version?.version != null &&
+                            previous.dataset_version.version !== run.dataset_version.version && (
+                              <WhatChanged
+                                from={previous.dataset_version.version}
+                                to={run.dataset_version.version}
+                                fetchDiff={fetchDiff}
+                              />
+                            )}
                         </span>
                       ) : (
                         <>

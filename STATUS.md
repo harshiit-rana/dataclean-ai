@@ -806,6 +806,10 @@ checked against the version's fingerprint, and the diff says when it does not ma
 per-column counts are skipped and the summary stays exact. A version recorded before versions kept their fixes gives
 counts only. In the history table, a run trained before the data changed offers *What changed since*.
 
+A change that cannot be compared says why (#97): *not comparable: data changed*, *different metric (roc_auc →
+accuracy)*, both, or *no score to compare*. When the data changed and both runs recorded their data version, the cell
+links to what changed between the two.
+
 Each run's model is kept too (#66). A run writes its result and fitted pipeline to its own folder, `runs/<run_id>/`,
 and `current.json` names the one in use; every route reads through that pointer, so nothing about the API changed. A
 cleaning change no longer deletes models: it unsets the pointer and marks each stored run as trained on data that has

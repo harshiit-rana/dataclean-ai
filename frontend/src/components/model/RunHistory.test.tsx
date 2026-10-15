@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { RunHistory, describeDiff, describeProvenance } from "./RunHistory";
+import { RunHistory, describeDiff, describeProvenance, whyNotComparable } from "./RunHistory";
 import type { ModelRun, VersionDiff } from "@/api/types";
 
 function run(overrides: Partial<ModelRun> = {}): ModelRun {
@@ -66,7 +66,7 @@ describe("RunHistory", () => {
       run({ metrics: { roc_auc: 0.9 }, data_fingerprint: "bbb" }),
       run({ metrics: { roc_auc: 0.8 }, data_fingerprint: "aaa" }),
     ], "bbb");
-    expect(screen.getByText("not comparable")).toBeInTheDocument();
+    expect(screen.getByText("not comparable: data changed")).toBeInTheDocument();
     expect(screen.queryByText("+0.1000")).not.toBeInTheDocument();
   });
 
@@ -224,7 +224,7 @@ describe("RunHistory — a change is only coloured when it is real", () => {
         run({ run_id: "old", metrics: { roc_auc: 0.8 }, data_fingerprint: "aaa" }),
       ]
     );
-    expect(screen.getByText("not comparable")).toBeInTheDocument();
+    expect(screen.getByText("not comparable: data changed")).toBeInTheDocument();
     expect(screen.queryByText(/95% range/)).not.toBeInTheDocument();
   });
 });
@@ -470,6 +470,44 @@ describe("RunHistory — what changed in the data since a run (#71)", () => {
   it("offers nothing for a run on the current data, or one without a recorded version", () => {
     const noVersion = run({ data_fingerprint: "old" });
     render(<RunHistory runs={[run(), noVersion]} currentFingerprint="aaa" currentDatasetVersion={4} fetchDiff={vi.fn()} />);
+    expect(screen.queryByRole("button", { name: /What changed/ })).not.toBeInTheDocument();
+  });
+});
+
+describe("RunHistory — why two runs are not comparable (#97)", () => {
+  it("names a data change", () => {
+    renderHistory([run({ data_fingerprint: "bbb" }), run({ data_fingerprint: "aaa" })], "bbb");
+    expect(screen.getByText(/not comparable: data changed/)).toBeInTheDocument();
+  });
+
+  it("names a metric change with both metrics", () => {
+    renderHistory([run({ primary_metric: "accuracy", metrics: { accuracy: 0.8 } }), run()]);
+    expect(screen.getByText(/not comparable: different metric \(roc_auc → accuracy\)/)).toBeInTheDocument();
+  });
+
+  it("names both when both changed", () => {
+    expect(
+      whyNotComparable(run({ data_fingerprint: "b", primary_metric: "accuracy" }), run())
+    ).toEqual(["data changed", "different metric (roc_auc → accuracy)"]);
+  });
+
+  it("links to what changed when both runs' data versions are known", () => {
+    const fetchDiff = vi.fn();
+    const v = (version: number) => ({ version, fingerprint: "f", rows: 300, columns: 4, event: "clean" });
+    render(
+      <RunHistory
+        runs={[run({ data_fingerprint: "bbb", dataset_version: v(3) }), run({ data_fingerprint: "aaa", dataset_version: v(2) })]}
+        currentFingerprint="bbb"
+        fetchDiff={fetchDiff}
+      />
+    );
+    expect(screen.getByRole("button", { name: /What changed since \(version 2 → 3\)/ })).toBeInTheDocument();
+  });
+
+  it("offers no link without the versions", () => {
+    render(
+      <RunHistory runs={[run({ data_fingerprint: "bbb" }), run({ data_fingerprint: "aaa" })]} currentFingerprint="bbb" fetchDiff={vi.fn()} />
+    );
     expect(screen.queryByRole("button", { name: /What changed/ })).not.toBeInTheDocument();
   });
 });
