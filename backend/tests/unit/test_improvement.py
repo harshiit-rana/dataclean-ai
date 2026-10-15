@@ -203,9 +203,17 @@ class TestSearchSpaces:
     def test_every_model_has_a_space_worth_searching(self):
         """A model with no space silently skips its tuning round, which would look like
         'tuning did not help' when nothing was tried."""
-        for name in modeling.MODELS:
+        for name, spec in modeling.MODELS.items():
+            if spec.ensemble:
+                continue  # its settings are its members, each searched as a family of its own
             assert name in tuning.SEARCH_SPACES, f"{name} has no search space"
             assert tuning.SEARCH_SPACES[name]
+
+    def test_an_ensemble_is_never_searched_as_a_family(self):
+        """An ensemble is made by the loop from families it has searched; it is never a candidate whose
+        own search would come back empty and read as 'tuning did not help'."""
+        for task in ("classification", "regression"):
+            assert not any(spec.ensemble for spec in modeling.models_for_task(task))
 
     def test_search_parameters_address_the_model_step(self):
         """They are set on the Pipeline, so anything without the prefix silently does
