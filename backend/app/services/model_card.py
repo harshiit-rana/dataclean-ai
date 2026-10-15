@@ -582,8 +582,6 @@ def _trust_section(result: dict) -> list[str]:
 
     if curve:
         first, last = curve[0], curve[-1]
-        gap = last["training_score"] - last["validation_score"]
-        still_climbing = last["validation_score"] - first["validation_score"] > 0.05
         measure = _METRIC_LABELS.get(first.get("metric", ""), ("score",))[0]
         lines.append(
             f"Trained on increasing amounts of data, the {measure} on unseen rows went from "
@@ -591,25 +589,12 @@ def _trust_section(result: dict) -> list[str]:
             f"{last['validation_score']:.3f} at {last['training_rows']:,}."
         )
         lines.append("")
-        if gap > 0.15:
-            lines += [
-                "The model scores much better on the rows it trained on than on unseen ones, "
-                "which means it is partly memorizing. More data would likely help more than "
-                "a different model.",
-                "",
-            ]
-        elif still_climbing:
-            lines += [
-                "The score was still improving as data was added, so more rows would "
-                "probably still be worth having.",
-                "",
-            ]
-        else:
-            lines += [
-                "The score flattened out, so more rows of the same kind are unlikely to help "
-                "much. Better or different columns would matter more.",
-                "",
-            ]
+        # The same reading the page shows: a statement only when the difference beats the folds'
+        # own disagreement, and "inconclusive" when it does not.
+        from app.services.diagnostics import read_learning_curve
+
+        reading = deep.get("learning_curve_reading") or read_learning_curve(curve)
+        lines += [reading["text"], ""]
 
     return lines
 

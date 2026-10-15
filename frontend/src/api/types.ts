@@ -700,6 +700,15 @@ export interface LearningCurvePoint {
   validation_score: number;
   /** The metric scored: roc_auc for two classes, accuracy for more, r2 for a number. */
   metric?: string;
+  /** How much the folds disagreed at this size. Absent on results from before it was kept. */
+  training_std?: number;
+  validation_std?: number;
+}
+
+/** What the learning curve says, worked out once on the server for the page and the card. */
+export interface LearningCurveReading {
+  kind: "memorizing" | "climbing" | "flat" | "inconclusive";
+  text: string;
 }
 export interface CorrelationResult {
   columns: string[];
@@ -817,6 +826,7 @@ export interface ModelResult {
     skipped?: string | null;
     cross_validation?: CrossValidation | null;
     learning_curve?: LearningCurvePoint[] | null;
+    learning_curve_reading?: LearningCurveReading | null;
     permutation_importance?: PermutationImportance[] | null;
   };
   feature_correlations: CorrelationResult;

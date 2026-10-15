@@ -777,7 +777,9 @@ export function ModelResults({
         </div>
       )}
       {deep.cross_validation ? <CrossValidationChart cv={deep.cross_validation} /> : null}
-      {deep.learning_curve?.length ? <LearningCurveChart points={deep.learning_curve} /> : null}
+      {deep.learning_curve?.length ? (
+        <LearningCurveChart points={deep.learning_curve} reading={deep.learning_curve_reading} />
+      ) : null}
       {result.feature_correlations?.columns?.length ? (
         <CorrelationHeatmap data={result.feature_correlations} />
       ) : null}

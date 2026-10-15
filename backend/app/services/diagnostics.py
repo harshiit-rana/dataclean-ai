@@ -560,10 +560,82 @@ def learning_curve_points(
             "training_rows": int(size),
             "training_score": round(float(train.mean()), 4),
             "validation_score": round(float(validation.mean()), 4),
+            # How much the folds disagreed at this size: what a difference between points has to
+            # beat before the curve says anything.
+            "training_std": round(float(train.std()), 4),
+            "validation_std": round(float(validation.std()), 4),
             "metric": scoring,
         }
         for size, train, validation in zip(sizes, train_scores, validation_scores)
     ]
+
+
+# What a learning curve has to show before it is read as saying anything. The fixed sizes are the
+# floors the reading always had (a train/unseen gap worth calling memorizing, a rise worth calling
+# still climbing); the difference must also be more than twice the folds' own disagreement.
+MEMORIZING_GAP = 0.15
+CLIMBING_RISE = 0.05
+_NOISE_MULTIPLE = 2.0
+
+
+def read_learning_curve(points: list[dict]) -> dict | None:
+    """What the curve says, or that it does not say anything, as `{"kind", "text"}`.
+
+    Kinds: `memorizing`, `climbing`, `flat`, `inconclusive`. A curve from before the fold spread was
+    kept has no `validation_std`, and is read by the fixed sizes alone, as it always was.
+    """
+    if not points:
+        return None
+    first, last = points[0], points[-1]
+    gap = last["training_score"] - last["validation_score"]
+    rise = last["validation_score"] - first["validation_score"]
+    has_noise = "validation_std" in last and "validation_std" in first
+    gap_noise = (
+        float(np.hypot(last.get("training_std", 0.0), last["validation_std"])) if has_noise else 0.0
+    )
+    rise_noise = float(np.hypot(first["validation_std"], last["validation_std"])) if has_noise else 0.0
+    rough = (
+        " With three folds that spread is itself only roughly known, so treat this as a hint, not a "
+        "finding."
+    )
+
+    if gap > MEMORIZING_GAP:
+        if gap > _NOISE_MULTIPLE * gap_noise:
+            return {
+                "kind": "memorizing",
+                "text": "The model scores much better on the rows it trained on than on unseen ones, "
+                "which means it is partly memorizing. More data would likely help more than a "
+                "different model.",
+            }
+        return {
+            "kind": "inconclusive",
+            "text": f"The gap of {gap:.3f} between rows it saw and unseen ones looks like memorizing, "
+            f"but the folds disagree by about {gap_noise:.3f}, so the curve is inconclusive.{rough}",
+        }
+    if rise > CLIMBING_RISE:
+        if rise > _NOISE_MULTIPLE * rise_noise:
+            return {
+                "kind": "climbing",
+                "text": "The score was still improving as data was added, so more rows would probably "
+                "still be worth having.",
+            }
+        return {
+            "kind": "inconclusive",
+            "text": f"The score rose by {rise:.3f} as data was added, but the folds disagree by about "
+            f"{rise_noise:.3f}, so whether it is still climbing is inconclusive.{rough}",
+        }
+    if has_noise and _NOISE_MULTIPLE * rise_noise > CLIMBING_RISE:
+        return {
+            "kind": "inconclusive",
+            "text": f"The score barely moved as data was added, but the folds disagree by about "
+            f"{rise_noise:.3f} -- enough to hide a real rise -- so whether more rows would help is "
+            f"inconclusive.{rough}",
+        }
+    return {
+        "kind": "flat",
+        "text": "The score flattened out, so more rows of the same kind are unlikely to help much. "
+        "Better or different columns would matter more.",
+    }
 
 
 def permutation_importance_scores(
@@ -659,4 +731,6 @@ def compute_deep_diagnostics(
             logger.warning("Deep diagnostic %s failed", key, exc_info=True)
             result[key] = None
 
+    # Read here, once, so the page and the card say the same thing about the curve.
+    result["learning_curve_reading"] = read_learning_curve(result.get("learning_curve") or [])
     return result

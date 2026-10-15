@@ -1,9 +1,10 @@
 import {
+  Area,
   Bar,
   BarChart,
   CartesianGrid,
+  ComposedChart,
   Line,
-  LineChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -19,6 +20,7 @@ import {
 } from "@/components/charts/primitives";
 import { AXIS_TICK_STYLE, inkOn, useChartTheme } from "@/lib/chartTheme";
 import type {
+  LearningCurveReading,
   ColumnImportance,
   CorrelationResult,
   CrossValidation,
@@ -138,7 +140,14 @@ export function PermutationImportanceChart({ rows }: { rows: PermutationImportan
   );
 }
 
-export function LearningCurveChart({ points }: { points: LearningCurvePoint[] }) {
+export function LearningCurveChart({
+  points,
+  reading: serverReading,
+}: {
+  points: LearningCurvePoint[];
+  /** The server's reading, which weighs each difference against the folds' disagreement. */
+  reading?: LearningCurveReading | null;
+}) {
   const theme = useChartTheme();
   if (!points?.length) return null;
 
@@ -147,12 +156,21 @@ export function LearningCurveChart({ points }: { points: LearningCurvePoint[] })
   const gap = last.training_score - last.validation_score;
   const climbing = last.validation_score - points[0].validation_score > 0.05;
 
+  // A result from before the spread was kept has no server reading; it is read by the fixed sizes
+  // it always was.
   const reading =
-    gap > 0.15
+    serverReading?.text ??
+    (gap > 0.15
       ? "The model scores much better on rows it trained on than on unseen ones — it is partly memorizing. More data would help more than a different model."
       : climbing
         ? "The score on unseen rows was still climbing as data was added, so more rows would probably still be worth having."
-        : "The score flattened out, so more rows of the same kind are unlikely to help. Better or different columns would matter more.";
+        : "The score flattened out, so more rows of the same kind are unlikely to help. Better or different columns would matter more.");
+  // A band of one fold-spread either side of the unseen-rows line: how far apart the folds were.
+  const hasBand = points.every((p) => typeof p.validation_std === "number");
+  const data = points.map((p) => ({
+    ...p,
+    band: hasBand ? [p.validation_score - (p.validation_std ?? 0), p.validation_score + (p.validation_std ?? 0)] : undefined,
+  }));
 
   return (
     <ChartCard
@@ -167,7 +185,18 @@ export function LearningCurveChart({ points }: { points: LearningCurvePoint[] })
       footnote={reading}
     >
       <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
-        <LineChart data={points} margin={CHART_MARGIN}>
+        <ComposedChart data={data} margin={CHART_MARGIN}>
+          {hasBand && (
+            <Area
+              type="monotone"
+              dataKey="band"
+              name="Spread across folds"
+              stroke="none"
+              fill={theme.series[0]}
+              fillOpacity={0.15}
+              isAnimationActive={false}
+            />
+          )}
           <CartesianGrid stroke={theme.grid} vertical={false} />
           <XAxis
             dataKey="training_rows"
@@ -213,12 +242,13 @@ export function LearningCurveChart({ points }: { points: LearningCurvePoint[] })
             dot={{ r: 4, fill: theme.series[0], stroke: theme.surface, strokeWidth: 2 }}
             isAnimationActive={false}
           />
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
       <ChartLegend
         items={[
           { label: "On unseen rows", color: theme.series[0] },
           { label: "On rows it saw", color: theme.series[1] },
+          ...(hasBand ? [{ label: "Spread across folds", color: theme.series[0] }] : []),
         ]}
       />
     </ChartCard>

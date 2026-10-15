@@ -59,3 +59,32 @@ describe("PermutationImportanceChart — one metric across the page", () => {
     expect(screen.getByText(/how much the score drops/)).toBeInTheDocument();
   });
 });
+
+describe("LearningCurveChart — read against the folds' disagreement (#42)", () => {
+  const withSpread = (std: number): LearningCurvePoint[] => [
+    { training_rows: 100, training_score: 0.84, validation_score: 0.8, metric: "roc_auc", training_std: std, validation_std: std },
+    { training_rows: 400, training_score: 0.84, validation_score: 0.81, metric: "roc_auc", training_std: std, validation_std: std },
+  ];
+
+  it("shows the server's reading, which weighs each difference against the folds' spread", () => {
+    render(
+      <LearningCurveChart
+        points={withSpread(0.04)}
+        reading={{ kind: "inconclusive", text: "The score barely moved as data was added, but the folds disagree by about 0.057 -- enough to hide a real rise -- so whether more rows would help is inconclusive." }}
+      />
+    );
+    expect(screen.getByText(/enough to hide a real rise/)).toBeInTheDocument();
+    expect(screen.queryByText(/flattened out/)).not.toBeInTheDocument();
+  });
+
+  it("draws the spread across folds as a band when the points carry it", () => {
+    render(<LearningCurveChart points={withSpread(0.02)} reading={{ kind: "flat", text: "The score flattened out." }} />);
+    expect(screen.getByText("Spread across folds")).toBeInTheDocument();
+  });
+
+  it("falls back to the fixed reading, and no band, for a result from before the spread was kept", () => {
+    render(<LearningCurveChart points={curve("roc_auc")} />);
+    expect(screen.queryByText("Spread across folds")).not.toBeInTheDocument();
+    expect(screen.getByText(/flattened out|still climbing|memorizing/)).toBeInTheDocument();
+  });
+});

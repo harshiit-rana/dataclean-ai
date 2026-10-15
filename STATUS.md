@@ -422,6 +422,14 @@ class balance, feature importance, permutation importance, cross-validation spre
 curve, correlation matrix — and for regression, predicted-vs-actual, residuals, residual
 distribution, error by range.
 
+**The learning curve is read against its own noise.** The card called a train/unseen gap over 0.15
+"memorizing" and a rise over 0.05 "still climbing" whatever the folds' disagreement, so on small data
+noise could produce either statement. Each point now carries the folds' spread (drawn as a band on the
+chart), a statement is made only when the difference is past the old size *and* more than twice that
+spread, "flattened out" is said only when the spread is small enough to rule out a real rise, and
+otherwise the curve is called inconclusive -- with a note that three folds give only a rough spread. The
+reading is worked out once on the server, so the page and the card say the same thing.
+
 **One metric across the charts.** The cross-validation spread was scored in AUC for a two-class
 target while the learning curve and the permutation importance beside it were scored in accuracy,
 so on a lopsided target the curve could sit flat while the AUC improved and the two read as

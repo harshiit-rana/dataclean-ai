@@ -388,6 +388,10 @@ are both running locally, you're ready to make changes.
   place the averaged form is used. After fitting, `cv` is replaced by an int so the saved model
   does not need this application's class to load. Nothing may build a fold splitter without the groups -- not even to ask whether folds are possible -- or `test_identical_rows_folds.py` rightly flags it. `TestCalibratingTheProbabilities` in
   `test_evaluation_integrity.py` is the guard; keep it passing when you touch any of this.
+- **The learning curve is read in one place.** `diagnostics.read_learning_curve` decides what the curve
+  says from each point's `validation_std`; the deep diagnostics carry its result and both the card and
+  the chart print it, so do not add a second reading in the frontend. A curve without spreads (an older
+  result) falls back to the fixed sizes.
 - **Drift is judged per column on what the column actually has.** `drift.compare` gives every column
   its own filled-in counts and refuses to judge one below `MIN_VALUES_TO_JUDGE`; it compares blank
   shares (a change beyond chance is a finding in itself); and a derived input is passed its source
