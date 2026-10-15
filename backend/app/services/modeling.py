@@ -2591,6 +2591,14 @@ def train_candidates(
         fold_groups = copy_ids.loc[list(X_train.index)]
     else:
         fold_groups = None
+    # What the model expects as input, from the training rows only (input_schema.py). Never fails a run.
+    try:
+        from app.services import input_schema
+
+        schema = input_schema.build(df.loc[list(X_train.index)], features, target_column, task, y_train)
+    except Exception:  # noqa: BLE001
+        logger.warning("The input schema could not be built", exc_info=True)
+        schema = None
     X_train, X_test = X_train[used], X_test[used]
 
     # Within the processing limit, or reduced to fit it. A date split is not sampled: its folds are cut by
@@ -2879,6 +2887,7 @@ def train_candidates(
         "task": task,
         "target_column": target_column,
         "features": features,
+        "input_schema": schema,
         "operating_point": chosen_point,
         "operating_point_not_judged": cutoff_not_judged,
         "calibration": calibration_summary,

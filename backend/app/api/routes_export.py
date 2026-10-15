@@ -257,6 +257,12 @@ async def export_bundle(
             / model_store.MODEL_SIDECAR_FILENAME,
             model_store.MODEL_SIDECAR_FILENAME,
         ),
+        # What the model expects as input: the contract a new file is checked against.
+        (
+            (model_store.pipeline_path(directory) or directory / model_store.PIPELINE_FILENAME).parent
+            / model_store.SCHEMA_FILENAME,
+            model_store.SCHEMA_FILENAME,
+        ),
     ]
     present = [(path, name) for path, name in candidates if path.exists()]
     if not present:

@@ -419,6 +419,26 @@ class TestComparingWithTheBestSingleColumn:
 # ------------------------------------------------------------------ the improvement loop
 
 
+class TestTheInputSchema:
+    def test_the_schema_is_unmoved_by_anything_in_the_test_rows(self, learnable):
+        """The schema describes what the model learned from. Put a value in the held-out rows far outside anything
+        in training and it must not appear. (Only the features: the split is stratified on the answers, so
+        changing a held-out answer changes which rows are held out, which is a different experiment.)"""
+        train = lambda df: modeling.train_candidates(  # noqa: E731
+            df, target_column="outcome", task="classification", model_names=["logistic_regression"],
+            include_deep_diagnostics=False,
+        )
+        honest = train(learnable)
+        _, X_test, _, _ = modeling.split_data(learnable, "outcome", "classification")
+        rigged = learnable.copy()
+        rigged.loc[X_test.index, "a"] = 1e6
+        rigged.loc[X_test.index, "noise"] = np.nan
+        result = train(rigged)
+        assert result["split"]["test_rows"] == len(X_test)
+        assert result["input_schema"] == honest["input_schema"]
+        assert honest["input_schema"]["columns"]  # there was a schema to compare
+
+
 class TestTheImprovementLoop:
     def _improve(self, df, **kwargs):
         return improvement.improve(

@@ -62,6 +62,8 @@ DEFAULT_MAX_STORED_RUNS = 10
 # Beside each fitted pipeline: its SHA-256 and the versions that wrote it, checked before every load
 # (`load_pipeline`) and shipped in the export bundle so a user can check the file they were given.
 MODEL_SIDECAR_FILENAME = "model.json"
+# What the model expects as input (input_schema.py), beside it in its run folder and in the export bundle.
+SCHEMA_FILENAME = "schema.json"
 
 
 class ModelArtifactError(Exception):
@@ -537,6 +539,8 @@ def save_result(
 
     payload = strip_pipelines(result)
     (folder / RUN_RESULT_FILENAME).write_text(json.dumps(payload), encoding="utf-8")
+    if payload.get("input_schema"):
+        (folder / SCHEMA_FILENAME).write_text(json.dumps(payload["input_schema"], indent=2), encoding="utf-8")
 
     best = next(
         (r for r in result.get("results", []) if r.get("model") == result.get("best_model")),

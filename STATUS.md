@@ -906,6 +906,14 @@ does not match and a model saved by a different scikit-learn minor version, with
 different bug-fix release only adds a note. The export bundle carries `model.json`, and the card's loading snippet says
 to check it (and, for a model trained with stated costs, to copy its `CostWeighted` class first).
 
+Each model also has a written contract for its input (#76): `schema.json`, saved in its run folder, carried in the
+export bundle and summarised in the model card. It lists every source column the model needs -- the file's own
+columns before derived inputs are made, including those only a derived input reads (a date column behind its date
+parts, both halves of an interaction) -- with its kind, type at training, blank share, range and quantiles or the
+categories seen with counts (capped at 50), and the derived inputs that read it; plus the target and its labels. It
+is built from the training rows only, and the integrity suite puts values far outside training into the held-out
+rows to show they never reach it.
+
 ### Where test information could reach a decision — an audit
 
 Prompted by a roadmap review that made the rule explicit: *the final test set must never be used

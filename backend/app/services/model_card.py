@@ -571,6 +571,39 @@ def _excluded_section(result: dict) -> list[str]:
     return lines
 
 
+def _schema_section(result: dict) -> list[str]:
+    """What the model expects as input, from the schema saved with it."""
+    schema = result.get("input_schema")
+    if not schema:
+        return []
+    lines = [
+        "",
+        "## What it expects as input",
+        "",
+        f"`schema.json` in the export records every column a new file must have, as the {schema.get('rows')} "
+        f"training rows had it: its kind, how often it was blank, its range or the values seen. It was built from the "
+        f"training rows only.",
+        "",
+        "| Column | Kind | Blank in training | Range or values |",
+        "| --- | --- | --- | --- |",
+    ]
+    for column in schema.get("columns") or []:
+        if column.get("range"):
+            span = f"{column['range'].get('min')} to {column['range'].get('max')}"
+        elif column.get("categories") is not None:
+            shown = ", ".join(list(column["categories"])[:5])
+            more = column.get("distinct", 0) - min(5, len(column["categories"]))
+            span = shown + (f" and {more} more" if more > 0 else "")
+        else:
+            span = "--"
+        via = "" if column.get("used_directly") else " (read by a derived input)"
+        lines.append(
+            f"| {column['name']}{via} | {column['kind']} | {column.get('blank_share', 0):.0%} | "
+            f"{span.replace('|', '/')} |"
+        )
+    return lines
+
+
 def _environment_section(result: dict) -> list[str]:
     """The software, seeds and configuration that produced the numbers above, from the run's own record.
 
@@ -1113,6 +1146,7 @@ def build_model_card(
         logger.warning("Prediction snippet could not be rendered", exc_info=True)
         script_note = ""
 
+    lines += _schema_section(result)
     lines += _environment_section(result)
     lines += [
         "",
