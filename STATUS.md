@@ -810,6 +810,14 @@ A change that cannot be compared says why (#97): *not comparable: data changed*,
 accuracy)*, both, or *no score to compare*. When the data changed and both runs recorded their data version, the cell
 links to what changed between the two.
 
+Any two runs can be compared, not only neighbours (#68). `GET /api/model/{id}/runs/compare?a=&b=` lists every setting
+that differs (columns, derived inputs, clipping, split, models, chosen model, tuned settings, calibration, cut-off),
+says whether the two can be compared at all (the same data, metric and target) and whether on the same held-out rows
+(the same split too), gives each shared metric's difference, and gives the primary metric's difference with its
+uncertainty: paired on the shared rows when it can be, from the two stored intervals otherwise, and nothing for runs
+that cannot be compared. One sentence says what it means: *Leaving out 'region' did not change roc_auc beyond the
+noise.*
+
 Each run's model is kept too (#66). A run writes its result and fitted pipeline to its own folder, `runs/<run_id>/`,
 and `current.json` names the one in use; every route reads through that pointer, so nothing about the API changed. A
 cleaning change no longer deletes models: it unsets the pointer and marks each stored run as trained on data that has

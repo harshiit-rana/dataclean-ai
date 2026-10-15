@@ -7,6 +7,13 @@ Three endpoints, in the order a person actually works:
 - `POST /api/model/{id}/improve`  keep searching for a better one, and say when to stop
 - `GET  /api/model/{id}/result`   the last evaluation, so a refresh doesn't lose it
 
+And the record of runs:
+
+- `GET  /api/model/{id}/history`                    every run and attempt, newest first, a page at a time
+- `GET  /api/model/{id}/runs/compare?a=&b=`         any two runs: what differed, and whether the score moved
+                                                    beyond the noise (paired on shared rows when it can be)
+- `POST /api/model/{id}/runs/{run_id}/restore`      bring back a stored run trained on the data as it is now
+
 The plan step exists because the interesting decisions in a model build are made before any
 fitting happens -- which columns count as inputs, how the data is split, what is being
 optimized. Hiding those behind a "train" button makes them defaults nobody chose. This is the
@@ -48,6 +55,7 @@ from app.services import (
     model_store,
     modeling,
     operating_point,
+    run_compare,
     run_metadata,
     search_markers,
     why_this_model,
@@ -1577,6 +1585,39 @@ async def get_model_history(
         "current_dataset_version": (current_dataset_version_in(directory) or {}).get("version"),
         "stored_run_ids": model_store.stored_runs(directory),
     }
+
+
+class RunNotInHistoryError(AppError):
+    status_code = 404
+
+    def __init__(self, detail: str):
+        super().__init__("No such run", detail, code="run_not_found")
+
+
+@router.get("/api/model/{session_id}/runs/compare")
+async def compare_two_runs(
+    session_id: str,
+    a: str,
+    b: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Run `a` against run `b`: every setting that differs, whether the two can be compared (the same data,
+    metric and target) and on the same held-out rows (the same split too), each shared metric's difference, and
+    the primary metric's difference with its uncertainty -- paired on the shared rows when it can be, the two
+    stored intervals otherwise, nothing for runs that cannot be compared -- with one sentence saying what it
+    means (run_compare.py). Differences are a minus b. Attempts that produced no model have no score to compare.
+    """
+    meta = read_session_meta(settings.upload_dir, session_id)
+    if meta is None:
+        raise SessionNotFoundError(session_id)
+    directory = session_dir(settings.upload_dir, session_id)
+    by_id = {r.get("run_id"): r for r in model_store.load_history(directory)}
+    for run_id in (a, b):
+        if run_id not in by_id:
+            raise RunNotInHistoryError(f"Run {run_id} is not in this session's history.")
+        if not model_store.succeeded(by_id[run_id]):
+            raise RunNotInHistoryError(f"Run {run_id} produced no model, so it has no score to compare.")
+    return await asyncio.to_thread(run_compare.compare, directory, by_id[a], by_id[b])
 
 
 class RunNotStoredError(AppError):
