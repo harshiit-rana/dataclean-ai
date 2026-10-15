@@ -67,14 +67,14 @@ class TestWhenTheLimitBites:
     def test_a_search_cut_short_says_how_far_it_got_and_the_later_rounds_are_skipped(self, clock):
         found = improve(time_limit_seconds=25)
         assert found["stopped_because"] == "time_limit" and found["time_limit_seconds"] == 25
-        assert names(found) == ["baseline", "hyperparameters", "other_models", "derived_features", "interactions"]
+        assert names(found) == ["baseline", "hyperparameters", "other_models", "derived_features", "interactions", "ensemble"]
         settings = next(r for r in found["rounds"] if r["name"] == "hyperparameters")
         assert settings["detail"]["stopped_for_time"] is True and settings["detail"]["tried"] < settings["detail"]["planned"]
         assert "The time limit stopped it after" in settings["what_it_tried"]
         for skipped in found["rounds"][2:]:
             assert skipped["detail"] == {"skipped": "time_limit"} and skipped["accepted"] is False
             assert skipped["outcome"] == "Not run: the 25-second time limit was reached first."
-        assert found["skipped_for_time"] == ["other_models", "derived_features", "interactions"]
+        assert found["skipped_for_time"] == ["other_models", "derived_features", "interactions", "ensemble"]
 
     def test_a_limit_gone_before_the_second_round_skips_every_search_round(self, clock):
         found = improve(time_limit_seconds=1)

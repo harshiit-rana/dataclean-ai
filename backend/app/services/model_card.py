@@ -800,6 +800,17 @@ def protocol_facts(result: dict, labels: tuple[str, ...] | None = None) -> list[
     return [b for b in bullets if any(b.startswith(f"- **{label}**") for label in labels)]
 
 
+def _members_text(best: dict) -> str:
+    """For an ensemble, which models it averages; nothing for a single model."""
+    from app.services.modeling import MODELS
+
+    members = (best.get("tuned_params") or {}).get("members") or []
+    if not members:
+        return ""
+    names = [MODELS[m["model"]].label.lower() if m.get("model") in MODELS else str(m.get("model")) for m in members]
+    return f" (averaging {' and '.join(names)})"
+
+
 def _looks_cell(result: dict) -> str:
     """A run made before the ledger existed has no count, and says so. Reading that as one
     look would present a score of unknown history as an independent one."""
@@ -1007,7 +1018,7 @@ def build_model_card(
         "| | |",
         "| --- | --- |",
         f"| Task | {result.get('task')} |",
-        f"| Model chosen | {best.get('label', '—')} |",
+        f"| Model chosen | {best.get('label', '—')}{_members_text(best)} |",
         f"| Columns used | {len(features.get('numeric', [])) + len(features.get('categorical', [])) + len(features.get('frequent', []))} |",
         f"| Rows trained on | {_fmt(split.get('train_rows'))} |",
         f"| Rows held back for testing | {_fmt(split.get('test_rows'))} |",

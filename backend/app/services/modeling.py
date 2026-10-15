@@ -123,6 +123,12 @@ class ModelSpec:
     # How many times dearer than the cheapest model it is to fit one row, roughly: what the processing
     # limit is estimated in. A linear model is 1; a forest of 200 trees is far more, and so is boosting.
     cost_weight: int = 1
+    # An ensemble of other registry models. Its `members` setting names them, each with its own settings:
+    # `[{"model": "logistic_regression", "params": {...}}, ...]`. It is built, and written into the exported
+    # script, from those values like any other spec, so the app and the script cannot disagree about it. Never
+    # an ordinary candidate (`models_for_task` leaves it out): the improvement loop makes one from the
+    # strongest models it has scored, and keeps it only if it beats them.
+    ensemble: bool = False
 
     def settings(self, overrides: dict | None = None) -> dict:
         """Defaults, with anything the tuner found layered on top.
@@ -136,14 +142,38 @@ class ModelSpec:
         import importlib
 
         cls = getattr(importlib.import_module(self.module), self.class_name)
-        return cls(**self.settings(overrides))
+        settings = self.settings(overrides)
+        if self.ensemble:
+            members = settings.pop("members", [])
+            estimators = [(m["model"], MODELS[m["model"]].build(m.get("params") or {})) for m in members]
+            return cls(estimators=estimators, **settings)
+        return cls(**settings)
 
     @property
     def import_line(self) -> str:
         return f"from {self.module} import {self.class_name}"
 
+    def import_lines(self, overrides: dict | None = None) -> str:
+        """The imports the exported script needs for this model: an ensemble's members as well as its own."""
+        if not self.ensemble:
+            return self.import_line
+        lines = [self.import_line]
+        for member in self.settings(overrides).get("members", []):
+            line = MODELS[member["model"]].import_line
+            if line not in lines:
+                lines.append(line)
+        return "\n".join(lines)
+
     def constructor_source(self, overrides: dict | None = None) -> str:
-        arguments = ", ".join(f"{k}={v!r}" for k, v in self.settings(overrides).items())
+        settings = self.settings(overrides)
+        if self.ensemble:
+            members = settings.pop("members", [])
+            estimators = ", ".join(
+                f"({m['model']!r}, {MODELS[m['model']].constructor_source(m.get('params') or {})})" for m in members
+            )
+            rest = "".join(f", {k}={v!r}" for k, v in settings.items())
+            return f"{self.class_name}(estimators=[{estimators}]{rest})"
+        arguments = ", ".join(f"{k}={v!r}" for k, v in settings.items())
         return f"{self.class_name}({arguments})"
 
 
@@ -220,12 +250,56 @@ MODELS: dict[str, ModelSpec] = {
             explains_features=False,
             complexity_rank=3,
         ),
+        ModelSpec(
+            "soft_voting_classifier",
+            "Soft-voting ensemble",
+            "Averages the probabilities of the strongest models. Kept only when the average beats each of "
+            "them by more than the folds disagree.",
+            "classification",
+            "sklearn.ensemble",
+            "VotingClassifier",
+            {
+                "voting": "soft",
+                # The members the improvement loop chose replace these; they are here so the spec can be built,
+                # and exported, on its own.
+                "members": [
+                    {"model": "logistic_regression", "params": {}},
+                    {"model": "random_forest_classifier", "params": {}},
+                ],
+            },
+            explains_features=False,
+            complexity_rank=4,
+            ensemble=True,
+        ),
+        ModelSpec(
+            "averaging_regressor",
+            "Averaging ensemble",
+            "Averages the predictions of the strongest models. Kept only when the average beats each of them "
+            "by more than the folds disagree.",
+            "regression",
+            "sklearn.ensemble",
+            "VotingRegressor",
+            {
+                "members": [
+                    {"model": "linear_regression", "params": {}},
+                    {"model": "random_forest_regressor", "params": {}},
+                ],
+            },
+            explains_features=False,
+            complexity_rank=4,
+            ensemble=True,
+        ),
     ]
 }
 
+# The ensemble the improvement loop builds for each kind of target.
+ENSEMBLE_FOR_TASK = {"classification": "soft_voting_classifier", "regression": "averaging_regressor"}
+
 
 def models_for_task(task: str) -> list[ModelSpec]:
-    return [spec for spec in MODELS.values() if spec.task == task]
+    """The ordinary candidates for this kind of target. Ensembles are not among them: they are made by the
+    improvement loop from candidates it has already scored."""
+    return [spec for spec in MODELS.values() if spec.task == task and not spec.ensemble]
 
 
 # --- feature selection ---------------------------------------------------------------------
@@ -1697,6 +1771,9 @@ _COST_WEIGHTS = {
     "random_forest_regressor": 40,
     "gradient_boosting_classifier": 25,
     "gradient_boosting_regressor": 25,
+    # Fits every member: as dear as the dearest two families together, at most.
+    "soft_voting_classifier": 65,
+    "averaging_regressor": 65,
 }
 for _name, _weight in _COST_WEIGHTS.items():
     if _name in MODELS:

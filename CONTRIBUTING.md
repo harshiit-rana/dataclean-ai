@@ -351,6 +351,10 @@ are both running locally, you're ready to make changes.
   proposal: both columns present, numeric, varying, and neither the target nor excluded. Any new loop-made kind needs
   the same id round trip, a branch in both `apply` and `as_pandas` with a parity test (include the awkward values:
   zero denominators, blanks), and a place in the plan so the next run shows it ticked.
+- **An ensemble is a spec with members, not a special case in the pipeline.** `ModelSpec(ensemble=True)` builds its
+  estimators from `members` in `build`, writes them out in `constructor_source` and imports them in `import_lines`, so the
+  export cannot drift from the app. Keep ensembles out of `models_for_task`; anything that tunes a model through
+  `pipeline.set_params` must pass an ensemble's settings to `build_pipeline` instead (see `improvement.build_for`).
 - **Recipe ids are re-proposed, never trusted.** `features.select` re-runs `propose` and keeps
   the ids that come back, so a stale id for a column that no longer supports the recipe is
   dropped quietly rather than failing a run, and a recipe naming an excluded column cannot be

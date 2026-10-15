@@ -495,6 +495,19 @@ class TestTheImprovementLoop:
         searched = [r for r in honest["rounds"] if r["detail"].get("rungs")]
         assert searched  # the strategy ran, so there were rungs to protect
 
+    def test_whether_the_models_are_averaged_never_depends_on_the_test_answers(self, learnable, flipped_test_answers):
+        """The seventh round averages the incumbent with the strongest runner-up and checks the average on the
+        training folds and on fresh ones. Flip every held-out answer: the members, the scores and whether the
+        average was kept must not move."""
+        honest = self._improve(learnable)
+        flipped_test_answers()
+        rigged = self._improve(learnable)
+
+        averaged = next(r for r in honest["rounds"] if r["name"] == "ensemble")
+        assert averaged["detail"]["members"]  # the round ran
+        assert self._decisions(rigged) == self._decisions(honest)
+        assert rigged["test_metrics"] != honest["test_metrics"]
+
     def test_which_combinations_are_kept_never_depends_on_the_test_answers(self, flipped_test_answers):
         """The sixth round ranks the numeric inputs on validation folds, tries products and ratios of the top
         few, and confirms the winner on fresh folds. Give it data where a product helps, flip every held-out

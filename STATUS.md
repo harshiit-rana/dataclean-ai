@@ -762,6 +762,16 @@ so it is rebuilt for the final model, the next plan shows it ticked with its evi
 with the same lines `apply` runs (a test compares the two, with zero denominators). The trail lists what was kept with the
 check on fresh folds, and how many pairs were tried. On data with no signal nothing is kept.
 
+**The strongest models, averaged (#54, #55).** Two models that make different mistakes can average to fewer than either.
+The loop's seventh round averages the incumbent with the strongest runner-up, each with the settings its search found (a
+soft-voting classifier, which averages probabilities, or an averaging regressor), scores it on the run's own folds
+(grouped or forward in time when the run is), and keeps it only if it beats the incumbent by more than the folds disagree,
+holds on fresh folds, and is clear of chance. An ensemble is a registry spec whose members are data
+(`[{"model", "params"}]`), so the app and the exported script build it from the same values: the script imports every
+member and writes the `VotingClassifier(estimators=[...])` out in full, and a test runs it and compares its accuracy.
+Ensembles are never ordinary candidates in the plan; they are made by the loop from models it has scored. An ensemble has
+no single importance ranking, so none is shown rather than a misleading one; the card names what it averages.
+
 **A record of what you tried.** Results used to overwrite a single file, so retraining
 discarded the previous run — which made the question people actually ask unanswerable: *did the
 thing I just changed help?* Every run is now kept with its settings, its headline number and

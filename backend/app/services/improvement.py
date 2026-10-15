@@ -147,6 +147,28 @@ def _without(features: dict, removed: set[str]) -> dict:
     return kept
 
 
+def chance_level(metric: str, y) -> float | None:
+    """What a model that has learned nothing scores on this metric: 0.5 AUC, the commonest answer's share of
+    accuracy, 0 R-squared. None for a metric without one."""
+    if metric == "roc_auc":
+        return 0.5
+    if metric == "r2":
+        return 0.0
+    if metric == "accuracy":
+        shares = pd.Series(y).astype(str).value_counts(normalize=True)
+        return float(shares.iloc[0]) if len(shares) else None
+    return None
+
+
+def clear_of_chance(score: float, std: float | None, metric: str, y) -> bool:
+    """Whether a fold score is above what guessing scores by more than the folds disagree. A change that only
+    brings a model up to chance -- a default that overfits noise to below 0.5 AUC, replaced by one that
+    predicts the same for everyone -- is not an improvement worth keeping: with no signal every setting is
+    chance, and calling one of them better is the luck the confirmation exists to refuse."""
+    floor = chance_level(metric, y)
+    return floor is None or score - float(std or 0.0) > floor
+
+
 def _reached(found: tuning.SearchResult) -> dict:
     """What a settings search was and how far it got, for the trail: always the strategy, and the
     settings it reached only when the time limit cut it short."""
@@ -406,6 +428,8 @@ def improve(
         )
 
     strategies_used: set[str] = set()
+    # The best settings each family's search found, accepted or not, for the members of an ensemble.
+    searched_settings: dict[str, dict] = {}
 
     def strategy_for(model: str) -> tuple[str, str]:
         """The strategy for this model's settings search, and the reason, for the trail."""
@@ -435,14 +459,16 @@ def improve(
         incumbent = tuning.score_config(build_for(best_name, best_params), X_train, y_train, task, **fresh)
         if candidate is None or incumbent is None:
             return {"status": "unavailable", "real": False}
-        real = _is_real_gain(candidate.score, incumbent.score, candidate.std)
+        beats = _is_real_gain(candidate.score, incumbent.score, candidate.std)
+        clear = clear_of_chance(candidate.score, candidate.std, metric, y_train)
         return {
-            "status": "confirmed" if real else "not_confirmed",
-            "real": real,
+            "status": "confirmed" if beats and clear else "at_chance" if beats else "not_confirmed",
+            "real": beats and clear,
             "search_score": found.score,
             "confirmation_score": candidate.score,
             "confirmation_std": candidate.std,
             "incumbent_confirmation_score": incumbent.score,
+            "chance": chance_level(metric, y_train),
         }
 
     def confirmation_detail(check: dict | None) -> dict:
@@ -458,6 +484,12 @@ def improve(
             return f"{led}, but the time limit came before it could be checked, so {kept}."
         if check["status"] == "unavailable":
             return f"{led}, but it could not be checked on fresh folds, so {kept}."
+        if check["status"] == "at_chance":
+            return (
+                f"{led}, and on fresh folds it beat what it would replace ({check['confirmation_score']:.3f} against "
+                f"{check['incumbent_confirmation_score']:.3f}), but it is not clear of the {check['chance']:.3f} that "
+                f"guessing scores by more than the folds disagree: it only brought the model up to chance, so {kept}."
+            )
         return (
             f"{led} on the folds it was picked on ({check['search_score']:.3f}), but on fresh folds it was "
             f"{check['confirmation_score']:.3f} against {check['incumbent_confirmation_score']:.3f} for what it "
@@ -475,15 +507,19 @@ def improve(
         feats = with_features or features
 
         def factory():
+            ensemble = modeling.MODELS[name].ensemble
             pipeline = modeling.build_pipeline(
                 name,
                 feats["numeric"],
                 feats["categorical"],
+                # An ensemble's settings are its members, which are built with it; everything else is tuned by
+                # setting the searched values on the pipeline's model step.
+                model_params=params if ensemble else None,
                 frequent=feats["frequent"],
                 target_encoded=feats.get("target_encoded"),
                 clip=feats.get("clipped"),
             )
-            if params:
+            if params and not ensemble:
                 pipeline.set_params(**params)
             return pipeline
 
@@ -675,6 +711,7 @@ def improve(
             )
             if found:
                 strategies_used.add(found.strategy)
+                searched_settings[name] = found.params  # what an ensemble of it would use
             cut_short = cut_short or bool(found and found.stopped_for_time)
             if found and _is_real_gain(found.score, best_score, found.std):
                 if improved_challenger is None or found.score > improved_challenger[1].score:
@@ -1082,8 +1119,12 @@ def improve(
                 build_for(best_name, best_params, features), X_train, y_train, task,
                 groups=train_groups, ordered=ordered, confirmation=True,
             )
-            if winner is None or incumbent is None or not _is_real_gain(winner.score, incumbent.score, winner.std):
-                break  # the luckiest of those tried did not hold on fresh folds: nothing changes
+            if (
+                winner is None or incumbent is None
+                or not _is_real_gain(winner.score, incumbent.score, winner.std)
+                or not clear_of_chance(winner.score, winner.std, metric, y_train)
+            ):
+                break  # the luckiest of those tried did not hold on fresh folds, or only reached chance
             gain = round(scored.score - best_score, 4)
             best_score, best_std = scored.score, scored.std
             recipes = [*recipes, recipe]
@@ -1127,6 +1168,109 @@ def improve(
                         "were left as they were."
                     ),
                     detail={"tried": len(tried_interactions)},
+                )
+            )
+        if _goal_met(best_score, goal):
+            stopped_because = "goal_reached"
+
+    # --- Round 7: the strongest models averaged ------------------------------------------
+    #
+    # Two models that make different mistakes can average to fewer than either. Average the incumbent with the
+    # strongest runner-up, each with the settings its search found, and keep the average only if it beats the
+    # incumbent by more than the folds disagree *and* holds on fresh folds, clear of chance. It is one candidate,
+    # but a model built from the winners is still a winner's score, so it is checked the same way.
+    ensemble_name = modeling.ENSEMBLE_FOR_TASK.get(task)
+    runner_ups = [n for n in sorted(family_scores, key=lambda n: -family_scores[n]) if n != best_name]
+    if not stopped_because and out_of_time():
+        stopped_because = "time_limit"
+    if (
+        stopped_because == "time_limit"
+        and "ensemble" not in skipped_for_time
+        and ensemble_name and runner_ups and best_name != ensemble_name
+    ):
+        skip_for_time("ensemble", "The strongest models, averaged", "Averaged the two strongest models.")
+    if not stopped_because and ensemble_name and runner_ups and best_name != ensemble_name:
+        starting("ensemble", "Averaging the two strongest models.")
+        partner = runner_ups[0]
+
+        def readable(params: dict) -> dict:
+            return {k.replace("model__", ""): v for k, v in (params or {}).items()}
+
+        members = [
+            {"model": best_name, "params": readable(best_params)},
+            {"model": partner, "params": readable(searched_settings.get(partner, {}))},
+        ]
+        settings = {"members": members}
+        label = f"{modeling.MODELS[best_name].label} and {modeling.MODELS[partner].label.lower()}"
+        what = f"Averaged {label}, each with the settings its search found, and scored it on the training folds."
+        scored = tuning.score_config(
+            build_for(ensemble_name, settings), X_train, y_train, task, groups=train_groups, ordered=ordered,
+        )
+        check: dict | None = None
+        accepted = scored is not None and _is_real_gain(scored.score, best_score, scored.std)
+        if accepted:
+            if out_of_time():
+                cut_short = True
+                accepted = False
+                check = {"status": "skipped_for_time"}
+            else:
+                fresh = dict(groups=train_groups, ordered=ordered, confirmation=True)
+                averaged = tuning.score_config(build_for(ensemble_name, settings), X_train, y_train, task, **fresh)
+                single = tuning.score_config(build_for(best_name, best_params), X_train, y_train, task, **fresh)
+                if averaged is None or single is None:
+                    accepted, check = False, {"status": "unavailable"}
+                else:
+                    beats = _is_real_gain(averaged.score, single.score, averaged.std)
+                    clear = clear_of_chance(averaged.score, averaged.std, metric, y_train)
+                    accepted = beats and clear
+                    check = {
+                        "status": "confirmed" if accepted else "at_chance" if beats else "not_confirmed",
+                        "search_score": scored.score,
+                        "confirmation_score": averaged.score,
+                        "confirmation_std": averaged.std,
+                        "incumbent_confirmation_score": single.score,
+                        "chance": chance_level(metric, y_train),
+                    }
+        detail = {"members": members, **({"confirmation": check} if check else {})}
+        if accepted:
+            gain = round(scored.score - best_score, 4)
+            best_name, best_params = ensemble_name, settings
+            best_score, best_std = scored.score, scored.std
+            emit(
+                Round(
+                    name="ensemble",
+                    label="The strongest models, averaged",
+                    what_it_tried=what,
+                    score=scored.score,
+                    std=scored.std,
+                    gain=gain,
+                    accepted=True,
+                    outcome=f"The average of {label} beats either alone: {metric_label} up {gain:+.3f}, and it "
+                    f"held on fresh folds. It is the model now.",
+                    detail=detail,
+                )
+            )
+        else:
+            emit(
+                Round(
+                    name="ensemble",
+                    label="The strongest models, averaged",
+                    what_it_tried=what,
+                    score=None if scored is None else scored.score,
+                    std=None if scored is None else scored.std,
+                    gain=None if scored is None else round(scored.score - best_score, 4),
+                    accepted=False,
+                    outcome=(
+                        f"The average could not be scored, so {modeling.MODELS[best_name].label.lower()} stayed."
+                        if scored is None
+                        else not_confirmed_outcome(
+                            check, "The average looked better", f"{modeling.MODELS[best_name].label.lower()} stayed"
+                        )
+                        if check is not None
+                        else f"The average did not beat {modeling.MODELS[best_name].label.lower()} by more than the "
+                        f"folds disagree, so the single model stayed."
+                    ),
+                    detail=detail,
                 )
             )
         if _goal_met(best_score, goal):

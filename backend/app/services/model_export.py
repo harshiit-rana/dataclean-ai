@@ -521,7 +521,7 @@ from sklearn.impute import SimpleImputer
 {encoder_import}{split_import}
 from sklearn.pipeline import Pipeline
 {_metric_imports(task, brier)}
-{_calibration_imports(result, calibrated) + chr(10) if calibrated else ""}{spec.import_line}
+{_calibration_imports(result, calibrated) + chr(10) if calibrated else ""}{spec.import_lines(best.get("tuned_params"))}
 {_clipper_block(clipped)}{_time_folds_block() if needs_time_folds else ""}
 TARGET = {_literal(target)}
 NUMERIC_FEATURES = {_literal(numeric)}

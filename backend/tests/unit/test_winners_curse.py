@@ -146,7 +146,7 @@ class TestTheDecision:
         assert round_["accepted"] is True
         assert round_["detail"]["confirmation"] == {
             "status": "confirmed", "search_score": 0.99, "confirmation_score": 0.75,
-            "confirmation_std": 0.01, "incumbent_confirmation_score": 0.70,
+            "confirmation_std": 0.01, "incumbent_confirmation_score": 0.70, "chance": 0.5,
         }
         assert "Confirmed on fresh folds: 0.750 against 0.700." in round_["outcome"]
         assert controlled.confirmation_calls == ["challenger", "incumbent"]
@@ -208,6 +208,36 @@ class TestTheDecision:
         assert round_["detail"]["confirmation"]["status"] == "skipped_for_time"
         assert "the time limit came before it could be checked" in round_["outcome"]
         assert found["stopped_because"] == "time_limit"
+
+
+class TestTheChanceFloor:
+    """A winner that beats the incumbent on fresh folds but only reaches chance is not an improvement: on data with
+    no signal a default that overfits scores below chance, and a setting that predicts the same for everyone lands
+    exactly on it. That is what kept the gradient-boosting acceptances on noise from falling."""
+
+    def test_the_levels_guessing_reaches(self):
+        assert improvement.chance_level("roc_auc", ["a", "b"]) == 0.5
+        assert improvement.chance_level("r2", [1.0, 2.0]) == 0.0
+        assert improvement.chance_level("accuracy", ["a", "a", "a", "b"]) == 0.75
+        assert improvement.chance_level("f1", ["a"]) is None
+
+    def test_clear_means_beyond_chance_by_more_than_the_fold_spread(self):
+        assert improvement.clear_of_chance(0.70, 0.05, "roc_auc", ["a", "b"]) is True
+        assert improvement.clear_of_chance(0.52, 0.05, "roc_auc", ["a", "b"]) is False
+        assert improvement.clear_of_chance(0.10, 0.02, "r2", [1.0]) is True
+        assert improvement.clear_of_chance(0.5, 0.0, "f1", ["a"]) is True  # no level to be clear of
+
+    def test_a_winner_that_only_reaches_chance_is_refused_and_says_why(self, monkeypatch):
+        Controlled(monkeypatch, challenger=0.50, incumbent=0.40)
+        round_ = settings_round(improve())
+        assert round_["accepted"] is False
+        assert round_["detail"]["confirmation"]["status"] == "at_chance"
+        assert round_["detail"]["confirmation"]["chance"] == 0.5
+        assert "only brought the model up to chance" in round_["outcome"]
+
+    def test_a_winner_clear_of_chance_is_still_accepted(self, monkeypatch):
+        Controlled(monkeypatch, challenger=0.75, incumbent=0.70)
+        assert settings_round(improve())["accepted"] is True
 
 
 class TestTheOtherModelsRound:
