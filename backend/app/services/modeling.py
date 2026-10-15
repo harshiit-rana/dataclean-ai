@@ -1707,7 +1707,12 @@ def feature_importance(pipeline, top_n: int = 15) -> list[dict]:
     try:
         prepare = pipeline.named_steps["prepare"]
         model = pipeline.named_steps["model"]
-        model = getattr(model, "estimator_", model)  # a cost-weighted model reads through to what it wraps
+        # A cost-weighted model reads through to what it wraps. Only that wrapper: a random forest also has an
+        # `estimator_` -- its unfitted template tree -- and reading through it lost every forest's importances.
+        from app.services.cost_weighting import CostWeighted
+
+        if isinstance(model, CostWeighted):
+            model = model.estimator_
         names = [str(n) for n in prepare.get_feature_names_out()]
 
         if hasattr(model, "feature_importances_"):

@@ -103,6 +103,23 @@ class TestThePipeline:
         )
         assert scored is not None and 0.5 < scored.score <= 1
 
+    def test_a_forest_s_importance_is_not_read_through_its_template_tree(self):
+        """A random forest has an `estimator_` too -- its unfitted template -- and unwrapping anything with one
+        emptied every forest's importances. Only the cost-weighting wrapper is read through."""
+        result = modeling.train_candidates(
+            classification(), target_column="outcome", task="classification", model_names=[RF],
+            include_deep_diagnostics=False,
+        )
+        importance = result["results"][0]["feature_importance"]
+        assert importance and sum(f["importance"] for f in importance) == pytest.approx(1.0, abs=0.05)
+
+    def test_a_weighted_forest_reads_through_the_wrapper(self):
+        result = modeling.train_candidates(
+            classification(), target_column="outcome", task="classification", model_names=[RF],
+            include_deep_diagnostics=False, model_params={RF: {"cost_weighting": WEIGHTS}},
+        )
+        assert result["results"][0]["feature_importance"]
+
     def test_the_wrapper_is_built_with_the_model_s_own_settings(self):
         pipeline = modeling.build_pipeline(LR, ["x", "z"], [], model_params={"C": 0.5, "cost_weighting": WEIGHTS})
         model = pipeline.named_steps["model"]
