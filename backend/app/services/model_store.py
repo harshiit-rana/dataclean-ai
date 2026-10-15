@@ -48,6 +48,18 @@ PREDICTIONS_DIR = "run_predictions"
 
 ALL_ARTIFACTS = (RESULT_FILENAME, PIPELINE_FILENAME, CARD_FILENAME, SCRIPT_FILENAME)
 
+# Every trained model in its own folder, `runs/<run_id>/`, holding its result and fitted pipeline, so a new run no
+# longer overwrites the last and an earlier one can be compared or brought back. `current.json` names the run in use;
+# `load_result` and `pipeline_path` read through it, so no route needs to know. The card and the script stay at the
+# top level as caches of the current run's write-up, dropped whenever the pointer moves.
+RUNS_DIR = "runs"
+CURRENT_FILENAME = "current.json"
+RUN_RESULT_FILENAME = "result.json"
+# Written into a run's folder when the data changed underneath it: the run is kept, but it describes rows that are
+# no longer the data.
+SUPERSEDED_FILENAME = "superseded.json"
+DEFAULT_MAX_STORED_RUNS = 10
+
 # Runs kept per session. Long enough that a working session of "try it, change something, try
 # again" stays entirely visible; short enough that the file remains small and readable.
 MAX_HISTORY_ENTRIES = 20
@@ -292,22 +304,82 @@ def append_history(directory: Path, entry: dict) -> list[dict]:
         return load_history(directory)
 
 
-def save_result(directory: Path, result: dict, *, fingerprint: str = "") -> dict:
-    """Writes the evaluation as JSON and the winning pipeline as a joblib blob.
+def run_dir(directory: Path, run_id: str) -> Path:
+    return directory / RUNS_DIR / run_id
 
-    Returns the serializable form. A failure to persist the pipeline is logged and swallowed:
-    the user can still see their results and retrain, which is a far better outcome than
-    losing a completed training run to a disk problem.
-    """
-    directory.mkdir(parents=True, exist_ok=True)
 
-    # A card and script from a previous run describe a model that no longer exists. Drop
-    # them so the next request regenerates rather than serving the old write-up.
+def current_run_id(directory: Path) -> Optional[str]:
+    """The run in use, or None: nothing trained yet, or the data changed underneath the last one."""
+    try:
+        pointer = json.loads((directory / CURRENT_FILENAME).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    run_id = pointer.get("run_id") if isinstance(pointer, dict) else None
+    return run_id if isinstance(run_id, str) and run_id else None
+
+
+def _drop_write_ups(directory: Path) -> None:
+    """A card and script describe one model. When the model in use changes they are regenerated on request."""
     for stale in (CARD_FILENAME, SCRIPT_FILENAME):
         (directory / stale).unlink(missing_ok=True)
 
+
+def set_current(directory: Path, run_id: Optional[str], **note: Any) -> None:
+    """Points the session at a stored run (or at none), and drops the write-ups of the one before."""
+    _drop_write_ups(directory)
+    (directory / CURRENT_FILENAME).write_text(
+        json.dumps({"run_id": run_id, "at": datetime.now(timezone.utc).isoformat(timespec="seconds"), **note}),
+        encoding="utf-8",
+    )
+
+
+def stored_runs(directory: Path) -> list[str]:
+    """The run ids with a folder, oldest first by when their result was written."""
+    root = directory / RUNS_DIR
+    if not root.is_dir():
+        return []
+    found = [p for p in root.iterdir() if (p / RUN_RESULT_FILENAME).exists()]
+    return [p.name for p in sorted(found, key=lambda p: (p / RUN_RESULT_FILENAME).stat().st_mtime)]
+
+
+def is_superseded(directory: Path, run_id: str) -> bool:
+    """Whether the data changed underneath this stored run after it was trained."""
+    return (run_dir(directory, run_id) / SUPERSEDED_FILENAME).exists()
+
+
+def prune_runs(directory: Path, keep: int) -> list[str]:
+    """Deletes the oldest stored runs beyond `keep`, never the current one. Returns the ids removed."""
+    import shutil
+
+    keep = max(1, int(keep))
+    current = current_run_id(directory)
+    others = [r for r in stored_runs(directory) if r != current]
+    surplus = len(others) + (1 if current else 0) - keep
+    removed = others[: max(0, surplus)]
+    for run_id in removed:
+        shutil.rmtree(run_dir(directory, run_id), ignore_errors=True)
+    return removed
+
+
+def save_result(
+    directory: Path, result: dict, *, fingerprint: str = "", keep_runs: int = DEFAULT_MAX_STORED_RUNS
+) -> dict:
+    """Writes the run to its own folder -- the evaluation as JSON, the winning pipeline as a joblib blob -- and
+    makes it the one in use.
+
+    Returns the serializable form. A failure to persist the pipeline is logged and swallowed:
+    the user can still see their results and retrain, which is a far better outcome than
+    losing a completed training run to a disk problem. Runs beyond `keep_runs` are pruned, oldest
+    first, never the one just made.
+    """
+    directory.mkdir(parents=True, exist_ok=True)
+    # One id names the folder, the history entry and the ledger's look.
+    result["run_id"] = result.get("run_id") or uuid.uuid4().hex[:12]
+    folder = run_dir(directory, result["run_id"])
+    folder.mkdir(parents=True, exist_ok=True)
+
     payload = strip_pipelines(result)
-    (directory / RESULT_FILENAME).write_text(json.dumps(payload), encoding="utf-8")
+    (folder / RUN_RESULT_FILENAME).write_text(json.dumps(payload), encoding="utf-8")
 
     best = next(
         (r for r in result.get("results", []) if r.get("model") == result.get("best_model")),
@@ -317,9 +389,18 @@ def save_result(directory: Path, result: dict, *, fingerprint: str = "") -> dict
         try:
             import joblib
 
-            joblib.dump(best["pipeline"], directory / PIPELINE_FILENAME)
+            joblib.dump(best["pipeline"], folder / PIPELINE_FILENAME)
         except Exception:  # noqa: BLE001
             logger.exception("Fitted pipeline could not be saved; results were still written")
+
+    set_current(directory, result["run_id"])
+    # The single files of the layout before run folders: superseded by the run just written.
+    for legacy in (RESULT_FILENAME, PIPELINE_FILENAME):
+        (directory / legacy).unlink(missing_ok=True)
+    try:
+        prune_runs(directory, keep_runs)
+    except OSError:
+        logger.warning("Old runs could not be pruned", exc_info=True)
 
     entry = summarise(payload, fingerprint=fingerprint)
     if best and best.get("_held_out"):
@@ -443,7 +524,24 @@ def _paired_comparison(directory: Path, newer: dict, older: dict, metric: str | 
     return {"method": "paired", "verdict": verdict, **found}
 
 
+def load_run(directory: Path, run_id: str) -> Optional[dict]:
+    """A stored run's result, whether or not it is the one in use."""
+    path = run_dir(directory, run_id) / RUN_RESULT_FILENAME
+    if not path.exists():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        logger.warning("Stored run at %s could not be read", path, exc_info=True)
+        return None
+
+
 def load_result(directory: Path) -> Optional[dict]:
+    """The result of the run in use. A session from before run folders has a single file at the top level,
+    read as it always was."""
+    current = current_run_id(directory)
+    if current is not None:
+        return load_run(directory, current)
     path = directory / RESULT_FILENAME
     if not path.exists():
         return None
@@ -454,8 +552,16 @@ def load_result(directory: Path) -> Optional[dict]:
         return None
 
 
+def result_path(directory: Path) -> Path:
+    """Where the result of the run in use is stored (it may not exist yet)."""
+    current = current_run_id(directory)
+    return run_dir(directory, current) / RUN_RESULT_FILENAME if current else directory / RESULT_FILENAME
+
+
 def pipeline_path(directory: Path) -> Optional[Path]:
-    path = directory / PIPELINE_FILENAME
+    """The fitted pipeline of the run in use (or of a session from before run folders)."""
+    current = current_run_id(directory)
+    path = run_dir(directory, current) / PIPELINE_FILENAME if current else directory / PIPELINE_FILENAME
     return path if path.exists() else None
 
 
@@ -502,8 +608,12 @@ def fingerprint_frame(df) -> str:
 
 
 def clear(directory: Path) -> None:
-    """Drops every model artifact. Used when the data changes underneath them -- an
-    evaluation, card or script describing rows that no longer exist is worse than none.
+    """Puts no model in use. Used when the data changes underneath them -- an evaluation, card
+    or script describing rows that no longer exist is worse than none.
+
+    The stored runs are kept, each marked as trained on data that has since changed, so they
+    can still be compared with; the pointer is unset, the write-ups are dropped, and the single
+    files of a session from before run folders are removed.
 
     The run history deliberately survives. It is the record of what was tried, and the moment
     it is most useful is exactly this one: the user has just changed the data and wants to
@@ -516,3 +626,16 @@ def clear(directory: Path) -> None:
             (directory / name).unlink(missing_ok=True)
         except OSError:
             logger.warning("Could not remove %s", name, exc_info=True)
+    stamp = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    for run_id in stored_runs(directory):
+        try:
+            marker = run_dir(directory, run_id) / SUPERSEDED_FILENAME
+            if not marker.exists():
+                marker.write_text(json.dumps({"since": stamp, "reason": "the data changed"}), encoding="utf-8")
+        except OSError:
+            logger.warning("Could not mark run %s as superseded", run_id, exc_info=True)
+    if current_run_id(directory) is not None or (directory / CURRENT_FILENAME).exists():
+        try:
+            set_current(directory, None, cleared_because="the data changed")
+        except OSError:
+            logger.warning("Could not unset the current run", exc_info=True)

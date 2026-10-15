@@ -795,7 +795,14 @@ is the finding.
 Runs survive a cleaning change rather than being wiped by it. Comparing across one is often the
 most interesting comparison available — it just has to be labelled, so each run carries a
 fingerprint of the data it trained on and anything older is marked *trained before the data
-changed* and excluded from the arithmetic. It is a record, not a restore point.
+changed* and excluded from the arithmetic.
+
+Each run's model is kept too (#66). A run writes its result and fitted pipeline to its own folder, `runs/<run_id>/`,
+and `current.json` names the one in use; every route reads through that pointer, so nothing about the API changed. A
+cleaning change no longer deletes models: it unsets the pointer and marks each stored run as trained on data that has
+since changed. The oldest runs beyond `MAX_STORED_RUNS` (default 10; a fitted forest can be tens of megabytes) are
+pruned, never the one in use, and the session's retention sweep still removes everything. The export bundle carries
+the current run's pipeline. A session from before run folders still reads its single files until it next trains.
 
 Each run also records what exactly produced it (#63): the Python, scikit-learn, pandas, numpy and joblib versions;
 every seed (split, model, search, the fresh folds a winner is confirmed on); the request as the server validated it;

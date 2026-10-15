@@ -233,7 +233,7 @@ def test_a_whole_session_over_http(journey):
     assert result["assessment"]["verdict"] in {"useful", "marginal", "no_better_than_guessing", "not_enough_test_data"}
     assert all(r["cv_score"] is not None for r in result["results"] if not r["failed"])
     assert ledger.look_count(directory, None, result["split"]) == 1
-    assert (directory / model_store.PIPELINE_FILENAME).exists()
+    assert model_store.pipeline_path(directory) is not None
 
     # --- improve: a second look, still no test-set selection --------------------------------
     improved = client.post(f"/api/model/{session_id}/improve", json={**FAST, "budget": 4})

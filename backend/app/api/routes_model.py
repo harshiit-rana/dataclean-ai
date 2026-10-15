@@ -806,7 +806,8 @@ def _save_and_record(
     if (result.get("split") or {}).get("sealed"):
         result["split"]["sealed_after_looks"] = _record_the_seal(directory, result["split"], version)
     payload = model_store.save_result(
-        directory, result, fingerprint=model_store.fingerprint_frame(df)
+        directory, result, fingerprint=model_store.fingerprint_frame(df),
+        keep_runs=get_settings().max_stored_runs,
     )
     # A report already written describes the model that was here before this one.
     mark_report_stale_if_written(directory)

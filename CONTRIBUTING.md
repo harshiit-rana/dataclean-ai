@@ -116,7 +116,9 @@ are both running locally, you're ready to make changes.
   The audit report mirrors this with `_rules_section`, which exists only because the
   model-readiness section is skipped entirely when no target was named.
 - **Run history survives `model_store.clear`.** `clear` fires when the data changes underneath
-  a model, and drops the result, card, script and joblib — but not `model_history.json`. That
+  a model, unsets the current run and drops the card and script — but not `model_history.json`, and not the
+  stored runs in `runs/`, which are marked superseded instead. Read the model in use only through
+  `load_result`, `result_path` and `pipeline_path`, never by a file name: the files live in the current run's folder. That
   moment is exactly when the history is most useful: the user has just changed something and
   wants to know whether it helped. Each entry carries a fingerprint of the data it trained on,
   so a run from before the change is *labelled* rather than deleted or silently compared.

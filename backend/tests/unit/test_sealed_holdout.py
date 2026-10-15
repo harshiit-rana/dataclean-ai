@@ -569,7 +569,7 @@ class TestOpeningIt:
         train(session_id, sealed_holdout=True)
         stored = model_store.load_result(directory)
         stored["split"]["sealed_rows_hash"] = "0" * 16
-        (directory / model_store.RESULT_FILENAME).write_text(__import__("json").dumps(stored))
+        model_store.result_path(directory).write_text(__import__("json").dumps(stored))
 
         response = client.post(f"/api/model/{session_id}/finalise")
 

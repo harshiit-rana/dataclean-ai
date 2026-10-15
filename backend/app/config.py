@@ -35,6 +35,11 @@ class Settings(BaseSettings):
     # hundred thousand rows through unreduced.
     training_cost_limit: int = 30_000_000
 
+    # Trained models kept per session, each in its own folder with its fitted pipeline, so an earlier one can
+    # be compared or brought back. The oldest beyond this are pruned; the one in use never is. A fitted forest
+    # can run to tens of megabytes, so this is the disk a session can take for models. At least 1.
+    max_stored_runs: int = 10
+
     # Uploaded CSVs, cleaned copies and audit reports are deleted this long after a session
     # was last touched. Matches redis_ttl_seconds by default so the files and the checkpoint
     # that refers to them expire together -- a session whose state has already gone can't be

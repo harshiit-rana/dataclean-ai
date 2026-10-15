@@ -213,7 +213,7 @@ async def export_bundle(
         (directory / "audit_report.md", f"{stem}_audit_report.md"),
         (directory / model_store.CARD_FILENAME, model_store.CARD_FILENAME),
         (directory / model_store.SCRIPT_FILENAME, model_store.SCRIPT_FILENAME),
-        (directory / model_store.PIPELINE_FILENAME, model_store.PIPELINE_FILENAME),
+        (model_store.pipeline_path(directory) or directory / model_store.PIPELINE_FILENAME, model_store.PIPELINE_FILENAME),
     ]
     present = [(path, name) for path, name in candidates if path.exists()]
     if not present:
