@@ -921,6 +921,15 @@ checks and diagnostics off the test rows, whole-file fixes no longer proposed fo
 (with training-only clipping instead), a property suite that flips every held-out answer, and a
 whole-session HTTP test. Statistical Reliability — confidence intervals first — is next.
 
+**Is the multiple-candidate correction still needed? (decision pending, #35).** The verdict raises the AUC bar
+with the number of candidates trained, which compensated for reporting the best of several test-set draws. A
+simulation (`backend/scripts/simulate_verdict_correction.py`) shows that choosing on training folds leaves the test
+AUC close to a single draw, but that relaxing the correction would find only about 2 more of 48 weak-signal datasets
+while raising the pure-noise false-positive rate from about 3% to about 11% in those runs. The recommendation, in
+[`docs/decisions/0002-multiple-candidate-correction.md`](docs/decisions/0002-multiple-candidate-correction.md), is to
+keep it; nothing has been changed, and the decision is the owner's. The note also records that on 30 test rows a lucky
+noise run can be called "useful" because the noise bar sits above the 0.70 cut-off, which is a separate question.
+
 The direction below is unchanged; the issues are its concrete form. The end state is an
 *honest* AutoML — not a button that hands back a leaderboard score, but a system that takes a
 raw file to a working model, and an honest answer about whether it works, while showing its
