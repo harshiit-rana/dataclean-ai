@@ -269,6 +269,8 @@ export function RunHistory({
   currentDatasetVersion = null,
   fetchDiff,
   fetchComparison,
+  onReproduce,
+  reproducing = null,
 }: {
   runs: ModelRun[];
   currentFingerprint: string;
@@ -292,6 +294,9 @@ export function RunHistory({
   fetchDiff?: (from: number, to: number) => Promise<VersionDiff>;
   /** Compares two runs (newer first); with it, any two rows can be picked and compared. */
   fetchComparison?: (a: string, b: string) => Promise<RunPairComparison>;
+  /** Re-runs a run's recorded configuration to check it reproduces. */
+  onReproduce?: (runId: string) => void;
+  reproducing?: string | null;
 }) {
   const [picked, setPicked] = useState<string[]>([]);
   const [comparison, setComparison] = useState<RunPairComparison | null>(null);
@@ -379,6 +384,32 @@ export function RunHistory({
                         {run.run_id === currentId && " · current"}
                       </span>
                       <Provenance run={run} />
+                      {run.reproduction && (
+                        <span
+                          className={cn(
+                            "mt-0.5 block text-xs",
+                            run.reproduction.reproduced
+                              ? "text-emerald-700 dark:text-emerald-400"
+                              : "text-amber-700 dark:text-amber-500"
+                          )}
+                          title={run.reproduction.summary}
+                        >
+                          {run.reproduction.reproduced
+                            ? "reproduces: same numbers on a re-run"
+                            : `did not reproduce${run.reproduction.likely_causes.length ? `: ${run.reproduction.likely_causes[0]}` : ""}`}
+                        </span>
+                      )}
+                      {/* Only a run that recorded its request, on the data as it is now. */}
+                      {onReproduce && run.request && !stale && (
+                        <button
+                          type="button"
+                          className="mt-1 block text-xs text-primary underline underline-offset-2 disabled:opacity-50"
+                          disabled={reproducing !== null}
+                          onClick={() => onReproduce(run.run_id)}
+                        >
+                          {reproducing === run.run_id ? "Re-running…" : "Check it reproduces"}
+                        </button>
+                      )}
                       {fetchComparison && (
                         <label className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
                           <input

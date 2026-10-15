@@ -47,6 +47,9 @@ EXHAUSTED_AT_LOOK = 4
 LOOK = "look"
 NEW_DATA = "new_data_evaluation"
 FINAL = "final_evaluation"
+# A recorded configuration re-run to check it reproduces (#72). Recorded, never counted: the configuration was fixed
+# before this score, nothing can be chosen by it, and no run is saved from it (ADR 0001, section 1).
+REPRODUCTION = "reproduction"
 
 # Serialises appends within this process. Two tabs training at once record two looks, which is
 # right -- both revealed a score -- and the lock is what stops one overwriting the other.

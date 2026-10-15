@@ -11,6 +11,7 @@ import type {
   GoalContextResponse,
   ImproveRequest,
   ModelHistory,
+  Reproduction,
   RunPairComparison,
   VersionDiff,
   ModelPlan,
@@ -229,6 +230,16 @@ export async function restoreRun(sessionId: string, runId: string): Promise<Mode
     { method: "POST" }
   );
   return handleResponse<ModelResult>(response);
+}
+
+/** Re-runs a recorded run's configuration on the same data and says whether its numbers come back. */
+export async function reproduceRun(sessionId: string, runId: string): Promise<Reproduction> {
+  const response = await sessionFetch(
+    sessionId,
+    `/api/model/${sessionId}/runs/${encodeURIComponent(runId)}/reproduce`,
+    { method: "POST" }
+  );
+  return handleResponse<Reproduction>(response);
 }
 
 /** Run `a` against run `b`: what differed and whether the score moved beyond the noise. */

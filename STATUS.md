@@ -823,6 +823,16 @@ readers and reachable by keyboard); picking two opens a panel with the sentence 
 newer side by side), the paired range when there is one, and the shared scores, with a note that only the headline
 metric is judged against the noise. Runs that cannot be compared say why and show no difference in score.
 
+The record is checked, not only kept (#72). `POST /api/model/{id}/runs/{run_id}/reproduce` re-runs a run's recorded
+request on the same data (refused when the data or the target has changed, or the run predates recorded requests) and
+compares every metric of the chosen model within 1e-6. Every model here is seeded, so a plain train and a search both
+reproduce exactly on the same software. A mismatch lists the likely causes: a library version that differs from the
+recorded one, changed defaults or seeds in the app, a time-limited search, a different model chosen. The re-run is
+not saved and is not a look at the held-out rows: the configuration was fixed before the score, so nothing can be
+chosen by it. It is recorded in the ledger as its own `reproduction` event, and ADR 0001's table now lists it (and the
+restore route). The outcome is kept on the run's history entry and shown in its row, with *Check it reproduces* on
+any run that recorded its request.
+
 Each run's model is kept too (#66). A run writes its result and fitted pipeline to its own folder, `runs/<run_id>/`,
 and `current.json` names the one in use; every route reads through that pointer, so nothing about the API changed. A
 cleaning change no longer deletes models: it unsets the pointer and marks each stored run as trained on data that has

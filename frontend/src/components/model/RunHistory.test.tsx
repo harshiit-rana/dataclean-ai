@@ -511,3 +511,38 @@ describe("RunHistory — why two runs are not comparable (#97)", () => {
     expect(screen.queryByRole("button", { name: /What changed/ })).not.toBeInTheDocument();
   });
 });
+
+describe("RunHistory — whether a run reproduces (#72)", () => {
+  it("offers the check on a run that recorded its request, and calls back with its id", () => {
+    const onReproduce = vi.fn();
+    render(
+      <RunHistory runs={[run({ run_id: "new", request: { budget: 4 } }), run({ run_id: "old" })]}
+        currentFingerprint="aaa" onReproduce={onReproduce} />
+    );
+    const buttons = screen.getAllByRole("button", { name: "Check it reproduces" });
+    expect(buttons).toHaveLength(1);
+    fireEvent.click(buttons[0]);
+    expect(onReproduce).toHaveBeenCalledWith("new");
+  });
+
+  it("shows a run that reproduced", () => {
+    renderHistory([
+      run({ reproduction: { at: "t", reproduced: true, likely_causes: [], summary: "Same numbers." } }),
+      run(),
+    ]);
+    expect(screen.getByText("reproduces: same numbers on a re-run")).toBeInTheDocument();
+  });
+
+  it("shows a run that did not, with its likeliest cause", () => {
+    renderHistory([
+      run({
+        reproduction: {
+          at: "t", reproduced: false, summary: "Different numbers.",
+          likely_causes: ["scikit-learn was 1.5.1 when the run was made and is 1.9.0 now."],
+        },
+      }),
+      run(),
+    ]);
+    expect(screen.getByText(/did not reproduce: scikit-learn was 1\.5\.1/)).toBeInTheDocument();
+  });
+});

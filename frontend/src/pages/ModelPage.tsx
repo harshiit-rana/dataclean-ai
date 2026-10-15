@@ -20,6 +20,7 @@ import {
   finaliseModel,
   compareRuns,
   fetchVersionDiff,
+  reproduceRun,
   restoreRun,
   trainModel,
 } from "@/api/client";
@@ -206,6 +207,22 @@ export function ModelPage() {
       // The newest page is still shown; the button stays for another try.
     } finally {
       setLoadingOlder(false);
+    }
+  };
+
+  // A re-run of a recorded configuration: its outcome is kept on the run's history entry.
+  const [reproducing, setReproducing] = useState<string | null>(null);
+  const handleReproduce = async (runId: string) => {
+    if (!sessionId) return;
+    setReproducing(runId);
+    setRestoreError(null);
+    try {
+      await reproduceRun(sessionId, runId);
+      setHistory(await fetchModelHistory(sessionId).catch(() => history));
+    } catch (err) {
+      setRestoreError(err instanceof ApiError ? err.detail : String((err as Error)?.message ?? err));
+    } finally {
+      setReproducing(null);
     }
   };
 
@@ -553,6 +570,8 @@ export function ModelPage() {
           currentDatasetVersion={history.current_dataset_version ?? null}
           fetchDiff={sessionId ? (from, to) => fetchVersionDiff(sessionId, from, to) : undefined}
           fetchComparison={sessionId ? (a, b) => compareRuns(sessionId, a, b) : undefined}
+          onReproduce={handleReproduce}
+          reproducing={reproducing}
         />
       )}
 

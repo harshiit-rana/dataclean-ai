@@ -166,6 +166,22 @@ class TestWhatIsNotALook:
 
         assert len(ledger.looks(directory)) == before == 1
 
+    def test_restoring_comparing_and_reproducing_count_no_look(self):
+        """Restore and compare fit nothing. A reproduction fits and scores, but re-runs a configuration fixed
+        before this score: it is its own ledger event and never counts (ADR 0001, section 1)."""
+        session_id, directory = _session()
+        first = client.post(f"/api/model/{session_id}/train", json=FAST).json()["run_id"]
+        second = client.post(f"/api/model/{session_id}/train", json={**FAST, "excluded_columns": ["noise"]}).json()["run_id"]
+        assert _count(directory) == 2
+
+        client.get(f"/api/model/{session_id}/runs/compare", params={"a": second, "b": first})
+        client.post(f"/api/model/{session_id}/runs/{first}/restore")
+        assert client.post(f"/api/model/{session_id}/runs/{first}/reproduce").status_code == 200
+
+        assert _count(directory) == 2
+        events = [e["event"] for e in ledger.looks(directory)]
+        assert events.count(ledger.REPRODUCTION) == 1 and events.count(ledger.LOOK) == 2
+
     def test_the_improvement_that_keeps_it_all_still_counts_once_after_a_refresh(self):
         """A refresh re-reads; it does not re-run."""
         session_id, directory = _session()

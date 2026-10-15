@@ -460,6 +460,8 @@ export interface ModelRun {
   code?: string | null;
   /** On a "restored" event: the run that was brought back as the model in use. */
   restored_run_id?: string | null;
+  /** The last check that re-running this run's recorded configuration gives the same numbers. */
+  reproduction?: Reproduction | null;
   /** On an "interrupted" search: the rounds that had finished when its process stopped. */
   rounds_completed?: { name: string; label: string | null; accepted: boolean | null }[];
   /** Identifies the data this ran against, so runs from before a cleaning change are visible
@@ -543,6 +545,15 @@ export interface ModelRun {
     rule?: string | null;
     scores: Record<string, number | null>;
   } | null;
+}
+
+/** Whether a re-run of a recorded configuration gave the same numbers, and why not when it did not. */
+export interface Reproduction {
+  at: string;
+  reproduced: boolean;
+  likely_causes: string[];
+  summary: string;
+  differences?: { metric: string; recorded: number; now: number; difference: number }[];
 }
 
 /** Any two runs compared (GET /runs/compare). Differences are a minus b; a is the newer. */

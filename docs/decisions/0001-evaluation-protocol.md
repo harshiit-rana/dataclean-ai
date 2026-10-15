@@ -40,6 +40,8 @@ held-out rows for a model the app just fitted.
 | `GET /api/export/*`, `GET /api/readiness/*` | No | No model scoring. |
 | Any request that fails, or is refused (blocked readiness → 422) | No | Nothing was revealed. |
 | `POST /api/model/{id}/finalise` (#8) | **Its own event**, `final_evaluation` | Opens the sealed partition, once. See §4. |
+| `POST /api/model/{id}/runs/{run_id}/reproduce` (#72) | **No — its own event**, `reproduction` | Re-runs a configuration that was fixed before this score, on the same data, to check the recorded numbers come back. Nothing can be chosen by it and no run is saved from it; when it reproduces it reveals nothing new. Recorded in the ledger so it can be shown, never counted. |
+| `POST /api/model/{id}/runs/{run_id}/restore` (#67) | No | Makes a stored run current; reveals its stored result again, fits nothing. |
 
 A new route that returns held-out performance must be added to this table in the same change,
 and to the property suite (#23).

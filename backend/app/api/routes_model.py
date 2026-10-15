@@ -57,6 +57,7 @@ from app.services import (
     operating_point,
     run_compare,
     run_metadata,
+    run_reproduction,
     search_markers,
     why_this_model,
 )
@@ -924,6 +925,31 @@ def _describe_run(result: dict, request, route: str, version, started, cost_limi
         return None
 
 
+def _train_result(df, *, target: str, task: str, request: TrainRequest, point, cost_limit: int | None) -> dict:
+    """The plain train's fit and evaluation, unsaved. The train route saves it; a reproduction compares it."""
+    return modeling.train_candidates(
+        df,
+        target_column=target,
+        task=task,
+        model_names=request.model_names or [spec.name for spec in modeling.models_for_task(task)],
+        excluded_columns=request.excluded_columns,
+        split_strategy=request.split_strategy,
+        time_column=request.time_column,
+        group_column=request.group_column,
+        group_columns=request.group_columns,
+        include_deep_diagnostics=request.include_deep_diagnostics,
+        point=point,
+        feature_recipes_wanted=request.feature_recipes,
+        clip_outliers=request.clip_outliers,
+        keep_identical_rows_together=request.keep_identical_rows_together,
+        sealed_holdout=request.sealed_holdout,
+        calibration=request.calibration,
+        test_size=request.test_size,
+        time_gap_days=request.time_gap_days,
+        cost_limit=cost_limit,
+    )
+
+
 @router.post("/api/model/{session_id}/train")
 async def train_model(
     session_id: str,
@@ -938,31 +964,11 @@ async def train_model(
         df, goal, rules, directory, route="train", request=request, cost_limit=settings.training_cost_limit
     )
 
-    model_names = request.model_names or [spec.name for spec in modeling.models_for_task(task)]
     point = _operating_point(request)
 
     def run() -> dict:
-        return modeling.train_candidates(
-            df,
-            target_column=target,
-            task=task,
-            model_names=model_names,
-            excluded_columns=request.excluded_columns,
-            split_strategy=request.split_strategy,
-            time_column=request.time_column,
-            group_column=request.group_column,
-            group_columns=request.group_columns,
-            include_deep_diagnostics=request.include_deep_diagnostics,
-            point=point,
-            feature_recipes_wanted=request.feature_recipes,
-            clip_outliers=request.clip_outliers,
-            keep_identical_rows_together=request.keep_identical_rows_together,
-            sealed_holdout=request.sealed_holdout,
-            calibration=request.calibration,
-            test_size=request.test_size,
-            time_gap_days=request.time_gap_days,
-            cost_limit=settings.training_cost_limit,
-        )
+        return _train_result(df, target=target, task=task, request=request, point=point,
+                             cost_limit=settings.training_cost_limit)
 
     started = time.perf_counter()
     try:
@@ -1045,6 +1051,7 @@ def _search_and_save(
     on_stage=None,
     goal_text: str = "",
     cost_limit: int | None = None,
+    save: bool = True,
 ) -> dict:
     """Search, rebuild the winner the normal way, and save it. Runs in a worker thread.
 
@@ -1160,6 +1167,8 @@ def _search_and_save(
                     f"Removed by feature selection: shuffling it on validation folds changed the score by "
                     f"{-by_column[entry['column']]['importance']:+.3f}, so the model did better without it."
                 )
+    if not save:
+        return rebuilt  # a reproduction: compared with the recorded run, never saved or counted as a look
     # One look, however many rounds the search ran: the rounds are scored on training folds and
     # never open the held-out rows. Only this final rebuild does, once.
     return _save_and_record(
@@ -1618,6 +1627,87 @@ async def compare_two_runs(
         if not model_store.succeeded(by_id[run_id]):
             raise RunNotInHistoryError(f"Run {run_id} produced no model, so it has no score to compare.")
     return await asyncio.to_thread(run_compare.compare, directory, by_id[a], by_id[b])
+
+
+class NotReproducibleError(AppError):
+    status_code = 409
+
+    def __init__(self, detail: str, code: str):
+        super().__init__("That run cannot be re-run", detail, code=code)
+
+
+@router.post("/api/model/{session_id}/runs/{run_id}/reproduce")
+async def reproduce_run(
+    session_id: str,
+    run_id: str,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """Re-runs a recorded run's request on the same data and says whether its numbers come back the same.
+
+    Every metric of the chosen model is compared within `run_reproduction.TOLERANCE`; a mismatch lists the likely
+    causes (a library version change, the app's defaults, a time-limited search, a different model chosen). The
+    re-run is not saved and is not counted as a look at the held-out rows: the configuration was fixed before
+    this score and nothing can be chosen by it (ADR 0001, section 1). It is recorded in the ledger as a
+    `reproduction`, and the outcome is kept on the run's history entry.
+    """
+    if read_session_meta(settings.upload_dir, session_id) is None:
+        raise SessionNotFoundError(session_id)
+    directory = session_dir(settings.upload_dir, session_id)
+    entry = next((r for r in model_store.load_history(directory) if r.get("run_id") == run_id), None)
+    if entry is None or not model_store.succeeded(entry):
+        raise RunNotInHistoryError(f"Run {run_id} is not a run in this session's history with a score.")
+    recorded = entry.get("request")
+    if not recorded:
+        raise NotReproducibleError(
+            "This run was made before runs recorded the request that made them, so there is nothing to re-run.",
+            "request_not_recorded",
+        )
+
+    df, goal, _, rules = _load_session(settings, session_id)
+    if not entry.get("data_fingerprint") or model_store.fingerprint_frame(df) != entry["data_fingerprint"]:
+        raise RunTrainedOnOtherDataError()
+    target = (goal.target_column or "").strip()
+    if target != entry.get("target_column"):
+        raise NotReproducibleError(
+            f"The run predicted '{entry.get('target_column')}', and the session now predicts '{target}'.",
+            "target_changed",
+        )
+    task = entry.get("task") or _refuse_if_the_data_cannot_support_a_model(df, goal, rules)
+    improving = bool(entry.get("tuned"))
+    request = (ImproveRequest if improving else TrainRequest).model_validate(recorded)
+    point = _operating_point(request)
+
+    def rerun() -> dict:
+        if improving:
+            return _search_and_save(
+                df, target=target, task=task, request=request, point=point, directory=directory,
+                cost_limit=settings.training_cost_limit, save=False,
+            )
+        return _train_result(df, target=target, task=task, request=request, point=point,
+                             cost_limit=settings.training_cost_limit)
+
+    try:
+        result = await asyncio.to_thread(rerun)
+    except modeling.ModelingError as exc:
+        raise TrainingFailedError(f"The re-run failed: {exc}", code=exc.code) from exc
+
+    version = current_dataset_version_in(directory, ensure=True)
+    outcome = run_reproduction.compare(
+        entry, result,
+        config_hash_now=run_metadata.config_hash(
+            request.model_dump(mode="json"), version, route="improve" if improving else "train",
+            cost_limit=settings.training_cost_limit,
+        ),
+    )
+    evaluation_ledger.record(
+        directory, event=evaluation_ledger.REPRODUCTION, split=result.get("split"), route="reproduce",
+        run_id=run_id, version=version, extra={"reproduced": outcome["reproduced"]},
+    )
+    model_store.update_history_entry(
+        directory, run_id,
+        reproduction={k: outcome[k] for k in ("at", "reproduced", "likely_causes", "summary")},
+    )
+    return outcome
 
 
 class RunNotStoredError(AppError):

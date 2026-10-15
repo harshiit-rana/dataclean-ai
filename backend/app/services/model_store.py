@@ -395,6 +395,22 @@ def record_attempt(directory: Path, entry: dict) -> None:
         logger.warning("A failed attempt could not be recorded", exc_info=True)
 
 
+def update_history_entry(directory: Path, run_id: str, **fields: Any) -> bool:
+    """Adds fields to one history entry -- a later fact about that run, such as whether it reproduced. Never
+    raises; returns whether the entry was found and written."""
+    try:
+        entries = load_history(directory)
+        for entry in entries:
+            if entry.get("run_id") == run_id:
+                entry.update(_jsonable(fields))
+                (directory / HISTORY_FILENAME).write_text(json.dumps(entries), encoding="utf-8")
+                return True
+        return False
+    except OSError:
+        logger.warning("Run history could not be updated", exc_info=True)
+        return False
+
+
 def load_history(directory: Path) -> list[dict]:
     path = directory / HISTORY_FILENAME
     if not path.exists():
