@@ -10,6 +10,7 @@ import type {
   GoalContext,
   GoalContextResponse,
   ImproveRequest,
+  ExportAcceptance,
   ModelHistory,
   Reproduction,
   RunPairComparison,
@@ -258,6 +259,18 @@ export async function fetchVersionDiff(sessionId: string, from: number, to: numb
     `/api/session/${sessionId}/versions/diff?from=${from}&to=${to}`
   );
   return handleResponse<VersionDiff>(response);
+}
+
+/** Runs the exported scripts and checks the rebuilt model agrees with the app's on every held-out row. */
+export async function verifyExport(sessionId: string): Promise<ExportAcceptance> {
+  const response = await sessionFetch(sessionId, `/api/export/${sessionId}/verify`, { method: "POST" });
+  return handleResponse<ExportAcceptance>(response);
+}
+
+/** The last such check of the model in use. */
+export async function fetchExportVerification(sessionId: string): Promise<ExportAcceptance> {
+  const response = await sessionFetch(sessionId, `/api/export/${sessionId}/verify`);
+  return handleResponse<ExportAcceptance>(response);
 }
 
 export async function fetchModelCard(sessionId: string): Promise<string> {

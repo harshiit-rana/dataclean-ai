@@ -931,6 +931,14 @@ app's clipping and cost-weighting steps. The predictions file is assembled by on
 test applies a file in the app, runs the bundle's `predict.py` on it in an isolated Python, and requires the two
 outputs to be identical byte for byte; it needs only pandas, numpy, scikit-learn and joblib, which a test checks.
 
+The export is also checked against the user's own model, not only fixtures (#78). *Check the export rebuilds the model*
+on the export page (`POST /api/export/{id}/verify`) runs the exported `clean.py` and `train_model.py` on the session's
+upload in an isolated Python, with a time limit, and compares what the rebuilt model says about each held-out row with
+what the app's model said: the same answers and probabilities within 1e-9. (`train_model.py` has a dormant
+`--held-out-predictions FILE` option for this.) The outcome -- passed, or failed with the first differing rows, or an
+error such as the time limit -- is saved as `acceptance.json` beside the model and carried in the bundle. It is run on
+request, because it retrains the model, and never blocks or fails a download.
+
 ### Where test information could reach a decision — an audit
 
 Prompted by a roadmap review that made the rule explicit: *the final test set must never be used

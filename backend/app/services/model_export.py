@@ -572,6 +572,18 @@ pipeline.fit(X_train, y_train)
 joblib.dump(pipeline, "model.joblib")
 print("\\nSaved the fitted pipeline to model.joblib")
 print("Load it later with: pipeline = joblib.load('model.joblib')"){_clipper_load_note(clipped)}
+{HELD_OUT_BLOCK}'''
+
+
+# Dormant unless asked for: with `--held-out-predictions FILE`, the script also writes what its model said about each
+# held-out row, so the app can check the export reproduces its own model row for row (export_acceptance.py).
+HELD_OUT_BLOCK = '''
+if "--held-out-predictions" in sys.argv:
+    held_out = pd.DataFrame({"row_id": X_test.index, "called": pipeline.predict(X_test)})
+    if hasattr(pipeline, "predict_proba") and hasattr(pipeline, "classes_"):
+        for position, label in enumerate(pipeline.classes_):
+            held_out[f"proba__{label}"] = pipeline.predict_proba(X_test)[:, position]
+    held_out.to_csv(sys.argv[sys.argv.index("--held-out-predictions") + 1], index=False)
 '''
 
 

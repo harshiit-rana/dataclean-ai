@@ -1301,3 +1301,15 @@ export interface ApplyResult {
   } | null;
   downloads: { cleaned: string; predictions?: string };
 }
+
+/** Whether the exported scripts rebuild the app's model (backend export_acceptance.py). */
+export interface ExportAcceptance {
+  status: "passed" | "failed" | "error" | "not_checked";
+  message?: string;
+  rows_compared?: number;
+  rows_differing?: number;
+  max_probability_difference?: number | null;
+  first_differences?: { row: number; difference: string }[];
+  at?: string;
+  error?: string;
+}

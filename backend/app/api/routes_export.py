@@ -11,6 +11,8 @@ files served are always the session-scoped artifacts written by the graph. The u
 
 from __future__ import annotations
 
+import asyncio
+
 import io
 import logging
 import zipfile
@@ -26,7 +28,9 @@ from app.dependencies import get_graph
 from app.graph.checkpointer import thread_config
 from app.graph.nodes.audit_agent import generate_audit_artifacts, is_report_stale
 from app.models.graph_state import GraphState
-from app.services import cleaning_export, model_export, model_store, predict_export, spreadsheet_safe
+from app.services import (
+    cleaning_export, export_acceptance, model_export, model_store, predict_export, spreadsheet_safe,
+)
 from app.services.session_store import read_session_meta, session_dir
 
 logger = logging.getLogger(__name__)
@@ -103,6 +107,33 @@ async def _predict_files(session_id: str, directory: Path, graph, file_name: str
     except Exception:  # noqa: BLE001
         logger.exception("predict.py could not be built for session %s", session_id)
         return None
+
+
+@router.post("/api/export/{session_id}/verify")
+async def verify_export(
+    session_id: str,
+    settings: Settings = Depends(get_settings),
+    graph=Depends(get_graph),
+) -> dict:
+    """Runs the exported clean.py and train_model.py on the session's upload and checks the rebuilt model agrees
+    with the app's on every held-out row (export_acceptance.py). Saved as acceptance.json beside the model, and
+    carried in the bundle. A check that fails or cannot run is reported, never raised."""
+    _, directory = _session_files(settings, session_id)
+    result = model_store.load_result(directory)
+    if result is None:
+        raise NothingToExportError("There is no model to check yet. Train one first.")
+    actions = run_actions(result)
+    if actions is None:
+        state = await graph.aget_state(thread_config(session_id))
+        actions = list((state.values or {}).get("action_log", [])) if state else []
+    return await asyncio.to_thread(export_acceptance.verify, directory, result, actions)
+
+
+@router.get("/api/export/{session_id}/verify")
+async def get_export_verification(session_id: str, settings: Settings = Depends(get_settings)) -> dict:
+    """The last check of the model in use, or `{"status": "not_checked"}`."""
+    _, directory = _session_files(settings, session_id)
+    return export_acceptance.load(directory) or {"status": "not_checked"}
 
 
 @router.get("/api/model/{session_id}/runs/{run_id}/clean-script", response_class=PlainTextResponse)
@@ -283,6 +314,12 @@ async def export_bundle(
             (model_store.pipeline_path(directory) or directory / model_store.PIPELINE_FILENAME).parent
             / model_store.MODEL_SIDECAR_FILENAME,
             model_store.MODEL_SIDECAR_FILENAME,
+        ),
+        # Whether the exported scripts rebuild this model (export_acceptance.py), when it has been checked.
+        (
+            (model_store.pipeline_path(directory) or directory / model_store.PIPELINE_FILENAME).parent
+            / export_acceptance.FILENAME,
+            export_acceptance.FILENAME,
         ),
         # What the model expects as input: the contract a new file is checked against.
         (

@@ -6,6 +6,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { DownloadButton } from "@/components/ui/download-button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ReadinessPanel } from "@/components/readiness/ReadinessPanel";
+import { ExportCheck } from "@/components/export/ExportCheck";
 import { ApiError, fetchAuditReport } from "@/api/client";
 
 /** Page 4, PRD §8.3 / FR-41..44: preview the audit report and download the artifacts.
@@ -88,6 +89,7 @@ export function ExportPage() {
           Clean another file
         </Link>
       </div>
+      <ExportCheck sessionId={sessionId!} />
       <p className="text-xs text-muted-foreground">
         In the CSV downloads, a text cell that begins with =, +, -, @ or a tab is written with a
         leading &apos; so a spreadsheet opens it as text instead of running it as a formula. The
