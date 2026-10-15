@@ -20,6 +20,24 @@ from app.services import modeling
 logger = logging.getLogger(__name__)
 
 
+# The two columns every predictions file adds to the uploaded rows: why a row has no prediction, and what the
+# schema check found in it. The app and the exported predict.py write them through `assemble_output`.
+NOTE_COLUMN = "dataclean_note"
+VALIDATION_COLUMN = "dataclean_validation"
+
+
+def assemble_output(new: pd.DataFrame, dropped: dict, predicted: pd.DataFrame, row_notes=None) -> pd.DataFrame:
+    """Every uploaded row, as uploaded, with its prediction -- or the reason it has none -- and its schema findings.
+
+    One function for the app's predictions file and predict.py's, so the two cannot drift apart.
+    """
+    output = new.reset_index(drop=True).join(predicted, how="left")
+    output[NOTE_COLUMN] = [f"no prediction: {dropped[i]}" if i in dropped else "" for i in output.index]
+    if row_notes is not None:
+        output[VALIDATION_COLUMN] = [row_notes.get(i, "") for i in output.index]
+    return output
+
+
 class ScoringError(Exception):
     """The new rows can't be scored. Carries a message written for the user."""
 

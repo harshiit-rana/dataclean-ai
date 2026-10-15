@@ -52,9 +52,9 @@ APPLIED_DIR = "applied"
 _APPLY_ID = re.compile(r"^[0-9a-f]{12}$")
 _FILES = {"cleaned": "cleaned.csv", "predictions": "predictions.csv"}
 PREVIEW_ROWS = 20
-NOTE_COLUMN = "dataclean_note"
+NOTE_COLUMN = scoring.NOTE_COLUMN
 # Each row's findings against the model's input schema (validation.py); empty for a row with none.
-VALIDATION_COLUMN = "dataclean_validation"
+VALIDATION_COLUMN = scoring.VALIDATION_COLUMN
 
 
 class NothingToApplyError(AppError):
@@ -172,14 +172,8 @@ def _run(directory, session_id: str, new: pd.DataFrame, action_log: list[dict], 
     response.setdefault("notes", []).extend(load_notes)
     predicted = scoring.predict(pipeline, X_new, result) if len(X_new) else pd.DataFrame(index=X_new.index)
 
-    # Every uploaded row, as uploaded, with its prediction -- or the reason it has none.
-    output = new.reset_index(drop=True).join(predicted, how="left")
-    output[NOTE_COLUMN] = [
-        f"no prediction: {applied.dropped[i]}" if i in applied.dropped else "" for i in output.index
-    ]
-    if row_notes is not None:
-        # Each row's findings against the schema, in a line of its own.
-        output[VALIDATION_COLUMN] = [row_notes.get(i, "") for i in output.index]
+    # Every uploaded row, as uploaded, with its prediction -- or the reason it has none -- and its schema findings.
+    output = scoring.assemble_output(new, applied.dropped, predicted, row_notes)
     output.to_csv(out_dir / _FILES["predictions"], index=False)
     response["downloads"]["predictions"] = f"/api/apply/{session_id}/{apply_id}/predictions"
 

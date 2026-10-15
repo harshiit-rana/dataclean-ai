@@ -1156,6 +1156,10 @@ def build_model_card(
         "the same preprocessing, the same split and the same settings. Running it should "
         "reproduce the numbers above.",
         "",
+        "`predict.py` uses the model on a new file the way the app does -- the approved cleaning, the check "
+        "against `schema.json`, the derived inputs, the cut-off -- and writes every row with its prediction or "
+        "the reason it has none: `python predict.py new_rows.csv predictions.csv`.",
+        "",
         "The fitted model itself is included as `model.joblib`:",
         "",
         "```python",

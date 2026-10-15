@@ -142,6 +142,11 @@ are both running locally, you're ready to make changes.
 - **An exported script states its versions through `run_metadata`.** A new exported script (or a new library
   one depends on) uses `install_line` and `versions_block`, so the pins and the start-up check stay in one place.
   The check only prints: a script that refuses to run on a newer library is worse than one that warns.
+- **predict.py ships some of the app's modules verbatim.** `operations`, `features`, `replay`, `scoring`,
+  `validation`, `clipping` and `cost_weighting` are copied into the bundle (`predict_export.RUNTIME_MODULES`), so
+  they must import only pandas, numpy, scikit-learn, the standard library and each other at module level (a test
+  checks). A change to how the app cleans, checks or scores a new file reaches predict.py by itself; the acceptance
+  test compares the two outputs byte for byte.
 - **Load a saved model only through `model_store.load_pipeline`.** It checks the file against its `model.json`
   before unpickling; a test fails on any other `joblib.load` in the app. A new artifact that is unpickled needs the
   same treatment: a sidecar written when it is saved and a check before it is read.

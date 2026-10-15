@@ -26,7 +26,7 @@ from app.dependencies import get_graph
 from app.graph.checkpointer import thread_config
 from app.graph.nodes.audit_agent import generate_audit_artifacts, is_report_stale
 from app.models.graph_state import GraphState
-from app.services import cleaning_export, model_export, model_store, spreadsheet_safe
+from app.services import cleaning_export, model_export, model_store, predict_export, spreadsheet_safe
 from app.services.session_store import read_session_meta, session_dir
 
 logger = logging.getLogger(__name__)
@@ -49,6 +49,7 @@ def _session_files(settings: Settings, session_id: str) -> tuple[dict, Path]:
 
 
 CLEAN_SCRIPT_NAME = "clean.py"
+PREDICT_SCRIPT_NAME = "predict.py"
 
 
 def run_actions(result: dict | None) -> list[dict] | None:
@@ -75,6 +76,32 @@ async def _cleaning_script(
         return cleaning_export.build_cleaning_script(original, log, file_name=file_name)
     except Exception:  # noqa: BLE001 -- a missing script must not sink the rest of the export
         logger.exception("clean.py could not be built for session %s", session_id)
+        return None
+
+
+async def _predict_files(session_id: str, directory: Path, graph, file_name: str) -> dict[str, str] | None:
+    """predict.py and the app code it runs, for the model in use (predict_export.py). None when there is no model
+    with a schema, or the files could not be built -- never a reason to fail the rest of the export."""
+    result = model_store.load_result(directory)
+    if not result or not result.get("input_schema") or model_store.pipeline_path(directory) is None:
+        return None
+    try:
+        actions = run_actions(result)
+        if actions is None:
+            state = await graph.aget_state(thread_config(session_id))
+            actions = list((state.values or {}).get("action_log", [])) if state else []
+        original = pd.read_csv(directory / "original.csv")
+        cleaned = directory / "cleaned.csv"
+        reference = pd.read_csv(cleaned) if cleaned.exists() else original
+        script = predict_export.build_predict_script(
+            result,
+            predict_export.frozen_steps(original, actions),
+            predict_export.reference_numeric(reference, result),
+            file_name=file_name,
+        )
+        return {PREDICT_SCRIPT_NAME: script, **predict_export.runtime_files()}
+    except Exception:  # noqa: BLE001
+        logger.exception("predict.py could not be built for session %s", session_id)
         return None
 
 
@@ -282,6 +309,8 @@ async def export_bundle(
         if (directory / "cleaned.csv").exists()
         else None
     )
+    # The model as a script that predicts on a new file the way the app does.
+    predict_files = await _predict_files(session_id, directory, graph, meta.get("file_name", "original.csv"))
 
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -293,6 +322,8 @@ async def export_bundle(
                 archive.write(path, arcname=name)
         if clean_script is not None:
             archive.writestr(CLEAN_SCRIPT_NAME, clean_script)
+        for name, text in (predict_files or {}).items():
+            archive.writestr(name, text)
     buffer.seek(0)
 
     return StreamingResponse(

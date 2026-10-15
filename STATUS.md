@@ -922,6 +922,15 @@ row numbers and example values. Every row of the predictions file gets a `datacl
 its problem is, and the Apply page shows the findings. Vectorised per column: 100,000 rows of 20 columns check in
 about 0.2 seconds.
 
+The export bundle has a `predict.py` that does what the app's *use this on a new file* does (#88): the approved
+cleaning with every learned value written in, the check against `schema.json` with the same blocking rule and message,
+the derived inputs, `model.joblib` checked against `model.json`, the stored cut-off, and every input row written back
+with its prediction or the reason it has none. It runs with the app's own code: the modules that clean, check, prepare
+and score are copied unchanged into an `app/services/` folder beside it, which also lets the pickled model find the
+app's clipping and cost-weighting steps. The predictions file is assembled by one function both use. An acceptance
+test applies a file in the app, runs the bundle's `predict.py` on it in an isolated Python, and requires the two
+outputs to be identical byte for byte; it needs only pandas, numpy, scikit-learn and joblib, which a test checks.
+
 ### Where test information could reach a decision — an audit
 
 Prompted by a roadmap review that made the rule explicit: *the final test set must never be used
