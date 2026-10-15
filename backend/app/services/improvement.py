@@ -43,6 +43,11 @@ MIN_ABSOLUTE_GAIN = 0.002
 # sklearn's scorer names read like plumbing. These are what the rounds say out loud.
 METRIC_LABELS = {"roc_auc": "AUC", "accuracy": "accuracy", "r2": "R²"}
 
+# Whether a search winner is re-scored on folds it was not selected on before it can replace the
+# incumbent. It is a module constant so the effect can be measured with it off (see the commit that
+# introduced it and `tests/unit/test_winners_curse.py`); there is no reason to turn it off in use.
+CONFIRM_SEARCH_WINNERS = True
+
 # How far behind the leader a model can be and still be worth tuning. Tuning moves a score by
 # a few hundredths on data this size; a family that lost the first round by more than this is
 # not going to close the gap, and searching it anyway is the single most expensive thing the
@@ -321,6 +326,51 @@ def improve(
         # A halving search that fell back to random says so itself; otherwise the reason it was chosen.
         return {**reached, "strategy_reason": found.note or reason}
 
+    def confirm(found: tuning.SearchResult, model: str) -> dict:
+        """Re-scores a search winner, and the incumbent it would replace, on folds the search did not use.
+
+        The winner is the best of several noisy estimates, so its score on the folds it won on is biased
+        upward; the incumbent is re-scored on the same fresh folds so the two are compared like for like,
+        not a fresh score against an old one. Costs two cross-validations per round, whatever the budget.
+        """
+        nonlocal cut_short
+        if out_of_time():
+            cut_short = True
+            return {"status": "skipped_for_time", "real": False}
+        fresh = dict(groups=train_groups, ordered=ordered, confirmation=True)
+        candidate = tuning.score_config(build_for(model, found.params), X_train, y_train, task, **fresh)
+        incumbent = tuning.score_config(build_for(best_name, best_params), X_train, y_train, task, **fresh)
+        if candidate is None or incumbent is None:
+            return {"status": "unavailable", "real": False}
+        real = _is_real_gain(candidate.score, incumbent.score, candidate.std)
+        return {
+            "status": "confirmed" if real else "not_confirmed",
+            "real": real,
+            "search_score": found.score,
+            "confirmation_score": candidate.score,
+            "confirmation_std": candidate.std,
+            "incumbent_confirmation_score": incumbent.score,
+        }
+
+    def confirmation_detail(check: dict | None) -> dict:
+        if not check:
+            return {}
+        return {"confirmation": {k: v for k, v in check.items() if k != "real"}}
+
+    def not_confirmed_outcome(
+        check: dict, led: str = "The best setting looked better", kept: str = "the defaults were kept"
+    ) -> str:
+        """Why a winner on the search's folds did not replace the incumbent. `led` opens the sentence."""
+        if check["status"] == "skipped_for_time":
+            return f"{led}, but the time limit came before it could be checked, so {kept}."
+        if check["status"] == "unavailable":
+            return f"{led}, but it could not be checked on fresh folds, so {kept}."
+        return (
+            f"{led} on the folds it was picked on ({check['search_score']:.3f}), but on fresh folds it was "
+            f"{check['confirmation_score']:.3f} against {check['incumbent_confirmation_score']:.3f} for what it "
+            f"would replace -- not by more than the folds disagree -- so {kept}."
+        )
+
     def time_tail(found) -> str:
         if not found.stopped_for_time:
             return ""
@@ -431,6 +481,12 @@ def improve(
             strategy=chosen,
         )
         cut_short = cut_short or bool(found and found.stopped_for_time)
+        # Worth it on the folds it was picked on; then it has to hold on fresh ones.
+        worth = found is not None and _is_real_gain(found.score, best_score, found.std)
+        check = None
+        if worth and CONFIRM_SEARCH_WINNERS:
+            check = confirm(found, best_name)
+            worth = check["real"]
         if found is None:
             emit(
                 Round(
@@ -440,7 +496,7 @@ def improve(
                     outcome="This model has no settings worth searching.",
                 )
             )
-        elif _is_real_gain(found.score, best_score, found.std):
+        elif worth:
             gain = round(found.score - best_score, 4)
             best_score, best_std, best_params = found.score, found.std, found.params
             emit(
@@ -453,8 +509,16 @@ def improve(
                     std=found.std,
                     gain=gain,
                     accepted=True,
-                    outcome=f"Better settings found: {metric_label} up {gain:+.3f}.",
-                    detail={"params": found.readable_params, **searched(found, why)},
+                    outcome=f"Better settings found: {metric_label} up {gain:+.3f}."
+                    + (
+                        f" Confirmed on fresh folds: {check['confirmation_score']:.3f} against "
+                        f"{check['incumbent_confirmation_score']:.3f}."
+                        if check
+                        else ""
+                    ),
+                    detail={
+                        "params": found.readable_params, **searched(found, why), **confirmation_detail(check)
+                    },
                 )
             )
         else:
@@ -468,9 +532,15 @@ def improve(
                     std=found.std,
                     gain=round(found.score - best_score, 4),
                     accepted=False,
-                    outcome="No setting beat the defaults by more than the folds disagree "
-                    "with each other, so the defaults were kept.",
-                    detail={"params": found.readable_params, **searched(found, why)},
+                    outcome=(
+                        not_confirmed_outcome(check)
+                        if check is not None
+                        else "No setting beat the defaults by more than the folds disagree "
+                        "with each other, so the defaults were kept."
+                    ),
+                    detail={
+                        "params": found.readable_params, **searched(found, why), **confirmation_detail(check)
+                    },
                 )
             )
 
@@ -517,6 +587,14 @@ def improve(
                     improved_challenger = (name, found)
 
         cut_short = cut_short or bool(untried_for_time)
+        # The best challenger has to hold on fresh folds too, against the incumbent it would replace.
+        check3 = None
+        failed_check3 = None
+        if improved_challenger is not None and CONFIRM_SEARCH_WINNERS:
+            check3 = confirm(improved_challenger[1], improved_challenger[0])
+            if not check3["real"]:
+                failed_check3 = (improved_challenger[0], check3)
+                improved_challenger, check3 = None, None
         time_note = (
             f" The time limit stopped it before {len(untried_for_time)} of the "
             f"{len(challengers)} could be tried."
@@ -551,10 +629,18 @@ def improve(
                     gain=gain,
                     accepted=True,
                     outcome=f"{modeling.MODELS[name].label} overtakes it once tuned: "
-                    f"{metric_label} up {gain:+.3f}." + time_note,
+                    f"{metric_label} up {gain:+.3f}."
+                    + (
+                        f" Confirmed on fresh folds: {check3['confirmation_score']:.3f} against "
+                        f"{check3['incumbent_confirmation_score']:.3f}."
+                        if check3
+                        else ""
+                    )
+                    + time_note,
                     detail={
                         "model": name, "params": found.readable_params,
                         **({"untried_for_time": untried_for_time} if untried_for_time else {}),
+                        **confirmation_detail(check3),
                     },
                 )
             )
@@ -567,8 +653,19 @@ def improve(
                     f"{'model' if len(challengers) == 1 else 'models'} close enough behind to "
                     f"be worth it, in case they only lost because of their defaults.",
                     accepted=False,
-                    outcome="None of them caught up once tuned." + time_note,
-                    detail={"untried_for_time": untried_for_time} if untried_for_time else {},
+                    outcome=(
+                        not_confirmed_outcome(
+                            failed_check3[1], f"{modeling.MODELS[failed_check3[0]].label} led once tuned",
+                            "the incumbent was kept",
+                        )
+                        if failed_check3
+                        else "None of them caught up once tuned."
+                    )
+                    + time_note,
+                    detail={
+                        **({"untried_for_time": untried_for_time} if untried_for_time else {}),
+                        **(confirmation_detail(failed_check3[1]) if failed_check3 else {}),
+                    },
                 )
             )
 

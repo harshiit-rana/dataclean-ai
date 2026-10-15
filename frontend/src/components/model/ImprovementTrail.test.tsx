@@ -162,3 +162,38 @@ describe("ImprovementTrail — the strategy chosen for each search (#50)", () =>
     expect(screen.queryByText(/settings searched by/)).not.toBeInTheDocument();
   });
 });
+
+describe("ImprovementTrail — the check on fresh folds (#51)", () => {
+  const checked = (status: string, accepted: boolean) => ({
+    name: "hyperparameters", label: "Model settings", what_it_tried: "Tried 60 fits.",
+    score: 0.99, std: 0.01, gain: 0.2, accepted, outcome: accepted ? "Better settings found." : "The defaults were kept.",
+    detail: {
+      confirmation: {
+        status, search_score: 0.99, confirmation_score: 0.75, confirmation_std: 0.01, incumbent_confirmation_score: 0.7,
+      },
+    },
+  });
+
+  it("shows the search score beside the fresh-fold score and what it would replace", () => {
+    render(<ImprovementTrail trail={trail({ rounds: [checked("confirmed", true)] })} />);
+    expect(screen.getByText(/Checked on fresh folds: 0.750 against 0.700 for what it would replace/)).toBeInTheDocument();
+    expect(screen.getByText(/0.990 on the folds it was picked on/)).toBeInTheDocument();
+  });
+
+  it("shows a refused winner's fresh-fold score too", () => {
+    render(<ImprovementTrail trail={trail({ rounds: [checked("not_confirmed", false)] })} />);
+    expect(screen.getByText(/Checked on fresh folds: 0.750 against 0.700/)).toBeInTheDocument();
+  });
+
+  it("says nothing when the check could not be made", () => {
+    const skipped = checked("skipped_for_time", false);
+    skipped.detail = { confirmation: { status: "skipped_for_time" } } as never;
+    render(<ImprovementTrail trail={trail({ rounds: [skipped] })} />);
+    expect(screen.queryByText(/Checked on fresh folds/)).not.toBeInTheDocument();
+  });
+
+  it("says nothing for a round that was never checked", () => {
+    render(<ImprovementTrail trail={trail()} />);
+    expect(screen.queryByText(/Checked on fresh folds/)).not.toBeInTheDocument();
+  });
+});

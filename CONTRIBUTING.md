@@ -225,7 +225,12 @@ are both running locally, you're ready to make changes.
   folds of the training data and opens the held-out set exactly once, at the end. If you add
   a round, score it through `tuning.score_config` or `tuning.search` — never by fitting and
   checking `X_test`. A round also has to clear `_is_real_gain`, which refuses anything smaller
-  than the fold-to-fold spread; without that the loop "improves" forever on noise.
+  than the fold-to-fold spread; without that the loop "improves" forever on noise. Selecting
+  within the folds has a bias of its own: the best of several fold scores is biased upward, so a round that picks a
+  winner out of a search (`tuning.search`) must re-score it, and the incumbent it would replace, on folds the search did
+  not select on (`improvement.confirm`, which uses `tuning.score_config(..., confirmation=True)`) and apply the gain rule
+  there too. Under a date split or ungrouped-regression groups the folds cannot be reshuffled, so the confirmation uses
+  one more fold: say so rather than claim more.
 - **Humans select on the test set too, so the app counts the looks.** An automatic decision can
   be tested not to read the held-out rows; a person who retrains and compares scores cannot be.
   `docs/decisions/0001-evaluation-protocol.md` fixes the protocol: which routes are a *look*

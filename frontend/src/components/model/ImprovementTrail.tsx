@@ -69,6 +69,21 @@ function strategyUsed(trail: Trail): string {
   return names.map((name) => STRATEGY_LABELS[name] ?? name).join(" and ");
 }
 
+interface Confirmation {
+  status: string;
+  search_score: number;
+  confirmation_score: number;
+  incumbent_confirmation_score: number;
+}
+
+/** The fresh-fold check of a search's winner, when the round made one and got a score. */
+function confirmationOf(detail: Record<string, unknown> | undefined): Confirmation | null {
+  const found = detail?.confirmation as Partial<Confirmation> | undefined;
+  return found && typeof found.confirmation_score === "number" && typeof found.incumbent_confirmation_score === "number"
+    ? (found as Confirmation)
+    : null;
+}
+
 function formatScore(value: number | null, metric: string): string {
   if (value === null) return "—";
   return metric === "r2" ? value.toFixed(3) : value.toFixed(3);
@@ -153,6 +168,13 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
                   Searched by{" "}
                   {STRATEGY_LABELS[String(round.detail.strategy)] ?? String(round.detail.strategy)}:{" "}
                   {round.detail.strategy_reason}.
+                </p>
+              )}
+              {confirmationOf(round.detail) && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Checked on fresh folds: {confirmationOf(round.detail)!.confirmation_score.toFixed(3)} against{" "}
+                  {confirmationOf(round.detail)!.incumbent_confirmation_score.toFixed(3)} for what it would replace (
+                  {confirmationOf(round.detail)!.search_score.toFixed(3)} on the folds it was picked on).
                 </p>
               )}
               {typeof round.detail?.note === "string" && (

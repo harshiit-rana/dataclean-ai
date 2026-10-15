@@ -695,6 +695,22 @@ which was used and why in a sentence for each search. `search_strategy` on the i
 to halve says it fell back. The run history shows the strategies used. The three thresholds are a first guess to be
 revisited with benchmark data on real files; moving them changes which strategy a run uses, never what either does.
 
+**A search winner is checked on fresh folds (#51).** The settings search returns the best of several noisy fold
+scores, so that score is biased upward and a setting that is no better can clear the gain rule by being the luckiest.
+A winner that clears the rule is now re-scored, together with the incumbent it would replace, on folds the search did
+not select on (a reshuffle with another seed; under a date split or ungrouped-regression groups, which cannot be
+reshuffled, one more fold, a weaker guarantee that the code says so), and has to clear the gain rule there too. Both are
+re-scored so the comparison is like for like, which costs two cross-validations a round whatever the budget. The trail
+shows the score on the folds it was picked on beside the fresh-fold score and what it would replace; a winner that did
+not hold says so and the incumbent stays; the check is skipped, and the winner refused, if the time limit has passed.
+Measured on pure noise (`backend/scripts/measure_winners_curse.py`), the settings round accepting a setting: logistic
+regression 0 of 25 seeds before and after (its existing gain rule already holds); gradient boosting on 80 rows 9 of 25
+before and 8 of 25 after. The second does not reach the "at most 1 of 25" the issue hoped for, and the reason is not luck:
+every accepted setting scores exactly 0.500 AUC on fresh folds (a model that predicts the same for everyone) while the
+default, which overfits the noise, scores 0.29 to 0.49, so replacing it is a genuine improvement to chance. The check
+refused the one case that was luck. Stopping a loop from "improving" a worse-than-chance default to chance would need a
+rule about chance, not about fold luck; that is a separate decision and is not made here.
+
 **A record of what you tried.** Results used to overwrite a single file, so retraining
 discarded the previous run — which made the question people actually ask unanswerable: *did the
 thing I just changed help?* Every run is now kept with its settings, its headline number and

@@ -144,8 +144,13 @@ def scoring_for(task: str, y) -> str:
     return "roc_auc" if pd.Series(y).nunique() == 2 else "accuracy"
 
 
+# The shuffle seed of the folds a search winner is confirmed on. Any value other than the search's own (42).
+CONFIRMATION_SEED = 1729
+
+
 def cv_splitter(
-    task: str, y, folds: int = CV_FOLDS, groups=None, ordered: bool = False, repeated: bool = False
+    task: str, y, folds: int = CV_FOLDS, groups=None, ordered: bool = False, repeated: bool = False,
+    confirmation: bool = False,
 ):
     """Stratified for classification, so every fold keeps the class balance -- without it a
     rare class can be missing from a fold entirely and the score for that fold is undefined.
@@ -162,6 +167,13 @@ def cv_splitter(
     split exists to rule out. Time-ordered folds validate each chunk only on a model trained
     on the rows before it. The rows must arrive in time order, which `split_data` guarantees.
 
+    `confirmation` asks for folds the search did not select on, to re-score its winner: the winner is
+    the best of several noisy estimates, so its score on the folds it won on is biased upward and a fresh
+    look is the honest one. Where the folds are shuffled the shuffle is reseeded. Where they are not (a
+    date split cuts at timestamps; `GroupKFold` assigns groups by size) there is nothing to reseed, so one
+    more fold is used and the cut points move. That is a weaker guarantee: the fresh folds overlap the
+    rows the search used, and a confirmation under a date split reduces the bias without removing it.
+
     Returns None when the data can't support even two folds, which is the caller's signal
     that searching isn't possible here.
     """
@@ -177,8 +189,12 @@ def cv_splitter(
 
     from app.services.time_folds import TimeFoldRule
 
+    seed = CONFIRMATION_SEED if confirmation else 42
+    # Folds that cannot be reshuffled change their count instead.
+    fixed_folds = folds + 1 if confirmation else folds
+
     if ordered:
-        usable = min(folds, len(y) - 1)
+        usable = min(fixed_folds, len(y) - 1)
         if usable < 2:
             return None
         # A rule carries the timestamps, so the folds keep every timestamp on one side and can
@@ -198,8 +214,8 @@ def cv_splitter(
             # on a lopsided target with few entities a fold could end up with almost none of the
             # rarer answer. Best-effort: when a rare answer is concentrated in a few large groups
             # no assignment can balance it, and a fold that cannot be scored is reported as such.
-            return StratifiedGroupKFold(n_splits=usable, shuffle=True, random_state=42)
-        return GroupKFold(n_splits=usable)
+            return StratifiedGroupKFold(n_splits=usable, shuffle=True, random_state=seed)
+        return GroupKFold(n_splits=min(fixed_folds, int(pd.Series(groups).nunique())))
 
     # `repeated` is asked for by the calls that *compare* models (choosing one, tuning it, the
     # fold spread shown beside the score). On a small file split at random they repeat the folds;
@@ -210,8 +226,8 @@ def cv_splitter(
 
     if task != "classification":
         if repeat:
-            return RepeatedKFold(n_splits=folds, n_repeats=CV_REPEATS, random_state=42)
-        return KFold(n_splits=folds, shuffle=True, random_state=42)
+            return RepeatedKFold(n_splits=folds, n_repeats=CV_REPEATS, random_state=seed)
+        return KFold(n_splits=folds, shuffle=True, random_state=seed)
 
     counts = pd.Series(y).value_counts()
     # One class in the training data is the degenerate case that reaches here when a rare
@@ -224,8 +240,8 @@ def cv_splitter(
     if usable < 2:
         return None
     if repeat:
-        return RepeatedStratifiedKFold(n_splits=usable, n_repeats=CV_REPEATS, random_state=42)
-    return StratifiedKFold(n_splits=usable, shuffle=True, random_state=42)
+        return RepeatedStratifiedKFold(n_splits=usable, n_repeats=CV_REPEATS, random_state=seed)
+    return StratifiedKFold(n_splits=usable, shuffle=True, random_state=seed)
 
 
 def score_config(
@@ -237,8 +253,11 @@ def score_config(
     folds: int = CV_FOLDS,
     groups=None,
     ordered: bool = False,
+    confirmation: bool = False,
 ) -> SearchResult | None:
     """Cross-validates one configuration. The unit of comparison everything else uses.
+
+    `confirmation` scores it on folds a search did not select on (see `cv_splitter`).
 
     `build` returns an *unfitted* pipeline each call -- each fold has to fit from scratch, or
     the imputer's medians and the encoder's categories carry over from rows the fold is about
@@ -246,7 +265,9 @@ def score_config(
     """
     from sklearn.model_selection import cross_val_score
 
-    splitter = cv_splitter(task, y_train, folds, groups, ordered, repeated=True)
+    # Passed only when asked for, so a caller that wraps the splitter with a fixed signature is untouched.
+    extra = {"confirmation": True} if confirmation else {}
+    splitter = cv_splitter(task, y_train, folds, groups, ordered, repeated=True, **extra)
     if splitter is None:
         return None
 

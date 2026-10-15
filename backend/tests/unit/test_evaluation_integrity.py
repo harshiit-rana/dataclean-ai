@@ -453,6 +453,27 @@ class TestTheImprovementLoop:
         searched = [r for r in honest["rounds"] if r["detail"].get("rungs")]
         assert searched  # the strategy ran, so there were rungs to protect
 
+    def test_the_check_on_fresh_folds_never_reads_the_test_set(self, learnable, flipped_test_answers, monkeypatch):
+        """A search winner is re-scored with the incumbent on reshuffled training folds. Force a winner that
+        clears the first rule so the check always happens, then flip every held-out answer: the fresh-fold
+        scores, and so the decision, must be the same."""
+        from app.services import tuning
+        from app.services.tuning import SearchResult
+
+        def lucky(build, name, X, y, task, **kwargs):
+            return SearchResult(params={"model__C": 3.0} if name == "logistic_regression" else {"model__max_depth": 6},
+                                score=0.999, std=0.001, metric="roc_auc", fits=1)
+
+        monkeypatch.setattr(tuning, "search", lucky)
+        honest = self._improve(learnable)
+        flipped_test_answers()
+        rigged = self._improve(learnable)
+
+        checks = [r["detail"]["confirmation"] for r in honest["rounds"] if "confirmation" in r["detail"]]
+        assert checks and all(c["status"] in {"confirmed", "not_confirmed"} for c in checks)
+        assert self._decisions(rigged) == self._decisions(honest)
+        assert rigged["test_metrics"] != honest["test_metrics"]
+
     def test_the_test_set_is_scored_exactly_once_whether_or_not_the_clock_runs_out(self, learnable, monkeypatch):
         calls = []
         real = modeling.evaluate
