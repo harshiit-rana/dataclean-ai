@@ -1103,7 +1103,8 @@ async def improve_model_stream(
             )
             await queue.put({"type": "result", "result": result})
         except modeling.ModelingError as exc:
-            await queue.put({"type": "error", "detail": str(exc), "code": exc.code})
+            # `code` only when there is one, like the HTTP errors, so an uncoded failure is the event it always was.
+            await queue.put({"type": "error", "detail": str(exc), **({"code": exc.code} if exc.code else {})})
         except Exception as exc:  # noqa: BLE001 -- the reason goes to the page, not a 500
             logger.exception("Streamed improvement failed for session %s", session_id)
             await queue.put(
