@@ -327,7 +327,9 @@ are both running locally, you're ready to make changes.
 - **Dependencies have a floor and a cap.** `requirements.txt` floors are the versions the suite
   last passed against and caps are the next release allowed to break the API. They used to be
   floors only, some years stale, so a fresh build got whatever was newest that day. To move up:
-  raise the bound, run the suite, commit both together.
+  raise the bound, run the suite, commit both together. Dependabot (`.github/dependabot.yml`) proposes this
+  weekly for pip, npm and the CI actions, one grouped PR per ecosystem; merge one only when its CI run is green,
+  and read the release notes of anything crossing a major version.
 - **CI runs on a pinned image, and its actions are kept off deprecated runtimes.** Both jobs use
   `ubuntu-24.04`, not `ubuntu-latest`: the alias moves to a new Ubuntu release on GitHub's
   schedule, and a new release can change the system libraries WeasyPrint needs and break the

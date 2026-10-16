@@ -1,0 +1,34 @@
+# Weekly proposals to move the dependency bounds forward, each validated by CI before anyone merges it.
+#
+# backend/requirements.txt caps every dependency below its next breaking release, at the versions the tests pass
+# against. Caps nobody revisits go stale and end up blocking security fixes, so the bot proposes raising them;
+# `widen` moves a cap without raising the floor, and the PR's CI run is the test of whether the new range works.
+# Updates are grouped per ecosystem so a week's proposals arrive as one PR each, not a dozen.
+version: 2
+updates:
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+    versioning-strategy: "widen"
+    open-pull-requests-limit: 5
+    groups:
+      backend:
+        patterns: ["*"]
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      frontend:
+        patterns: ["*"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    groups:
+      actions:
+        patterns: ["*"]

@@ -1185,7 +1185,8 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   rewrite every suggestion card; it now replays the saved cards, and a session that has
   already been cleaned points you at the cleaning page instead.
 - **Reproducible installs.** Dependencies are bounded above as well as below, at the versions
-  the tests pass against. ydata-profiling was removed: its output was never read, and on a
+  the tests pass against. Dependabot proposes moving the bounds forward weekly (#109), for pip, npm and the CI
+  actions, one grouped PR per ecosystem that CI validates. ydata-profiling was removed: its output was never read, and on a
   current install it could not even be imported.
 - **Degrade, don't crash.** A failed LLM call, an operation that can't run, a PDF that won't
   render — none of these end a session that already touched your data.
