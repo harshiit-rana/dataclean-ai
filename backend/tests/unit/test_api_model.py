@@ -359,7 +359,7 @@ class TestTraining:
             f"/api/model/{_session()}/train",
             json={"excluded_columns": ["employee_id"], "include_deep_diagnostics": False},
         ).json()
-        assert len(result["results"]) == 3
+        assert [r["model"] for r in result["results"]] == [m.name for m in modeling.models_for_task("classification")]
 
     def test_excluding_everything_is_a_422_not_a_500(self):
         response = client.post(
