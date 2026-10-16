@@ -255,6 +255,7 @@ def improve(
     search_strategy: str = "auto",
     cost_limit: int | None = None,
     stated_costs: dict | None = None,
+    journal=None,
 ) -> dict:
     """Runs rounds of increasingly expensive strategies until one of the stopping conditions.
 
@@ -291,7 +292,20 @@ def improve(
     tries the opposite -- all of them if none were on, none if some were -- and keeps whichever
     the folds prefer. Tuning is the small lever; on the churn sample it found nothing, which
     is how we know the ceiling is the columns.
+
+    `journal` (a `search_journal.Journal`) records every cross-validation, settings search and importance
+    measurement, or replays a journal from an interrupted run of the same search, so that run resumes where it
+    stopped instead of starting over (#104). None, the default, calls everything directly.
     """
+    def through_journal(kind: str, function: Callable):
+        if journal is None:
+            return function
+        return lambda *args, **kwargs: journal.call(kind, function, *args, **kwargs)
+
+    score_config = through_journal("score_config", tuning.score_config)
+    search = through_journal("search", tuning.search)
+    importance_of = through_journal("fold_importance", fold_importance)
+    expected_costs = through_journal("fold_expected_costs", fold_expected_costs)
     if target_column not in df.columns:
         raise modeling.ModelingError(f"'{target_column}' is not in the data.")
 
@@ -498,8 +512,8 @@ def improve(
             cut_short = True
             return {"status": "skipped_for_time", "real": False}
         fresh = dict(groups=train_groups, ordered=ordered, confirmation=True)
-        candidate = tuning.score_config(build_for(model, found.params), X_train, y_train, task, **fresh)
-        incumbent = tuning.score_config(build_for(best_name, best_params), X_train, y_train, task, **fresh)
+        candidate = score_config(build_for(model, found.params), X_train, y_train, task, **fresh)
+        incumbent = score_config(build_for(best_name, best_params), X_train, y_train, task, **fresh)
         if candidate is None or incumbent is None:
             return {"status": "unavailable", "real": False}
         beats = _is_real_gain(candidate.score, incumbent.score, candidate.std)
@@ -595,7 +609,7 @@ def improve(
         if scored and out_of_time():
             unscored_for_time.append(name)
             continue
-        result = tuning.score_config(
+        result = score_config(
             build_for(name), X_train, y_train, task, groups=train_groups, ordered=ordered
         )
         if result is None:
@@ -657,7 +671,7 @@ def improve(
     if not stopped_because:
         starting("hyperparameters", f"Searching the settings of {modeling.MODELS[best_name].label.lower()}.")
         chosen, why = strategy_for(best_name)
-        found = tuning.search(
+        found = search(
             build_for(best_name), best_name, X_train, y_train, task,
             budget=budget, groups=train_groups, ordered=ordered, deadline=deadline,
             strategy=chosen,
@@ -756,7 +770,7 @@ def improve(
                 untried_for_time.append(name)
                 continue
             chosen, why = strategy_for(name)
-            found = tuning.search(
+            found = search(
                 build_for(name), name, X_train, y_train, task,
                 budget=budget, groups=train_groups, ordered=ordered, deadline=deadline,
                 strategy=chosen,
@@ -899,7 +913,7 @@ def improve(
                 f"{'s' if len(recipes) != 1 else ''} the run started with and re-scored the "
                 f"leading model on the training folds, to check they were earning their place."
             )
-            scored = tuning.score_config(
+            scored = score_config(
                 build_for(best_name, best_params, alt_features),
                 X_train_alt,
                 y_train,
@@ -983,7 +997,7 @@ def improve(
         )
     if not stopped_because and len(used) >= MIN_INPUTS_TO_SELECT:
         starting("feature_selection", "Checking which inputs earn their place.")
-        importance = fold_importance(
+        importance = importance_of(
             build_for(best_name, best_params, features), X_train, y_train, task,
             groups=train_groups, ordered=ordered, columns=used,
         )
@@ -1021,7 +1035,7 @@ def improve(
                 if out_of_time():
                     cut_short = True
                     break
-                last_scored = tuning.score_config(
+                last_scored = score_config(
                     build_for(best_name, best_params, reduced),
                     X_train[reduced_used], y_train, task, groups=train_groups, ordered=ordered,
                 )
@@ -1102,7 +1116,7 @@ def improve(
         )
     if not stopped_because and len([c for c in used if c in features["numeric"]]) >= 2:
         starting("interactions", "Trying combinations of the inputs that matter most.")
-        importance = fold_importance(
+        importance = importance_of(
             build_for(best_name, best_params, features), X_train, y_train, task,
             groups=train_groups, ordered=ordered, columns=[c for c in used if c in features["numeric"]],
         )
@@ -1137,7 +1151,7 @@ def improve(
         def score_with(recipe, *, fresh_folds: bool = False):
             frame, added, columns = with_interaction(recipe)
             extra = dict(confirmation=True) if fresh_folds else {}
-            scored = tuning.score_config(
+            scored = score_config(
                 build_for(best_name, best_params, added), frame.loc[train_index, columns], y_train, task,
                 groups=train_groups, ordered=ordered, **extra,
             )
@@ -1167,7 +1181,7 @@ def improve(
                 break
             # The best of those tried: confirm it, against the incumbent, on folds that did not pick it.
             winner, frame, added, columns = score_with(recipe, fresh_folds=True)
-            incumbent = tuning.score_config(
+            incumbent = score_config(
                 build_for(best_name, best_params, features), X_train, y_train, task,
                 groups=train_groups, ordered=ordered, confirmation=True,
             )
@@ -1255,7 +1269,7 @@ def improve(
         settings = {"members": members}
         label = f"{modeling.MODELS[best_name].label} and {modeling.MODELS[partner].label.lower()}"
         what = f"Averaged {label}, each with the settings its search found, and scored it on the training folds."
-        scored = tuning.score_config(
+        scored = score_config(
             build_for(ensemble_name, settings), X_train, y_train, task, groups=train_groups, ordered=ordered,
         )
         check: dict | None = None
@@ -1267,8 +1281,8 @@ def improve(
                 check = {"status": "skipped_for_time"}
             else:
                 fresh = dict(groups=train_groups, ordered=ordered, confirmation=True)
-                averaged = tuning.score_config(build_for(ensemble_name, settings), X_train, y_train, task, **fresh)
-                single = tuning.score_config(build_for(best_name, best_params), X_train, y_train, task, **fresh)
+                averaged = score_config(build_for(ensemble_name, settings), X_train, y_train, task, **fresh)
+                single = score_config(build_for(best_name, best_params), X_train, y_train, task, **fresh)
                 if averaged is None or single is None:
                     accepted, check = False, {"status": "unavailable"}
                 else:
@@ -1353,8 +1367,8 @@ def improve(
             positive_label=positive, cost_of_missing=weights["cost_of_missing"],
             cost_of_false_alarm=weights["cost_of_false_alarm"], groups=train_groups, ordered=ordered,
         )
-        plain = fold_expected_costs(build_for(best_name, best_params), X_train, y_train, **costs)
-        weighted = fold_expected_costs(build_for(best_name, best_params, weighting=weights), X_train, y_train, **costs)
+        plain = expected_costs(build_for(best_name, best_params), X_train, y_train, **costs)
+        weighted = expected_costs(build_for(best_name, best_params, weighting=weights), X_train, y_train, **costs)
         what = (
             f"Trained {modeling.MODELS[best_name].label.lower()} again with each row weighted by the cost you "
             f"stated for getting it wrong (a missed case {weights['cost_of_missing']:g}, a false alarm "

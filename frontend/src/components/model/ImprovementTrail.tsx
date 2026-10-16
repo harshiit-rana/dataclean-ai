@@ -142,6 +142,16 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
           here was chosen against.
         </p>
 
+        {trail.resumed && (
+          <p className="rounded-md border border-sky-500/40 bg-sky-500/5 p-3">
+            This search was interrupted and carried on where it stopped. The {trail.resumed.reused} cross-validations
+            and searches it had finished were restored from its journal rather than run again
+            {trail.resumed.diverged_at !== null
+              ? ", until one no longer matched what had been recorded; everything from there was run afresh."
+              : "; the result is the one an uninterrupted run gives."}
+          </p>
+        )}
+
         <ol className="flex flex-col gap-2">
           {trail.rounds.map((round, index) => {
             const notRun = round.detail?.skipped === "time_limit";

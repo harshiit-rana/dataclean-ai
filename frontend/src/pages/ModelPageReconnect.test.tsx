@@ -92,6 +92,18 @@ describe("ModelPage — reconnecting to a search (#103)", () => {
     expect(streamJob).not.toHaveBeenCalled();
   });
 
+  it("follows a search that was interrupted and resumed as a new job (#104)", async () => {
+    const handlers = await startSearch();
+    act(() => {
+      handlers.onEvent({ type: "job", job_id: "j1" });
+      handlers.onEvent({ type: "round", round: ROUND });
+      handlers.onEvent({ type: "error", detail: "The process stopped.", code: "job_interrupted", resumed_as: "j2" });
+    });
+    expect(streamJob.mock.calls[0].slice(0, 3)).toEqual(["s1", "j2", 0]);
+    expect(sessionStorage.getItem("dataclean.job.s1")).toBe("j2");
+    expect(screen.queryByText("The process stopped.")).not.toBeInTheDocument();
+  });
+
   it("after a reload, follows the search this tab started from its first event", async () => {
     sessionStorage.setItem("dataclean.job.s1", "j9");
     renderPage();

@@ -33,6 +33,7 @@ from app.core.logging import configure_logging
 from app.dependencies import verify_session_access
 from app.graph.checkpointer import build_checkpointer, delete_thread
 from app.graph.workflow import build_graph
+from app.api import job_runner
 from app.services import jobs
 from app.services.session_store import purge_expired_session_ids
 
@@ -89,6 +90,10 @@ async def lifespan(app: FastAPI):
         orphans = await asyncio.to_thread(jobs.interrupt_orphans, settings.upload_dir)
         if orphans:
             logger.warning("Marked %d job(s) interrupted by the restart", len(orphans))
+        # An interrupted search carries on as a new job (#104), replaying what it had finished; run it here.
+        for folder in orphans:
+            if jobs.read_state(folder).get("state") == jobs.QUEUED:
+                job_runner.launch(settings, folder)
 
     async with build_checkpointer(settings) as checkpointer:
         app.state.graph = build_graph(checkpointer)

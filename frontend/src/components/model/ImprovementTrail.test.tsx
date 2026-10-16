@@ -260,3 +260,16 @@ describe("ImprovementTrail — combinations of inputs (#59)", () => {
     expect(screen.getByText("None of them helped.")).toBeInTheDocument();
   });
 });
+
+describe("ImprovementTrail — a resumed search (#104)", () => {
+  it("says it was interrupted and what was restored", () => {
+    render(<ImprovementTrail trail={trail({ resumed: { from_job: "j1", reused: 14, recorded: 14, diverged_at: null } })} />);
+    expect(screen.getByText(/interrupted and carried on where it stopped/)).toHaveTextContent("14 cross-validations");
+    expect(screen.getByText(/the result is the one an uninterrupted run gives/)).toBeInTheDocument();
+  });
+
+  it("says nothing when the search ran straight through", () => {
+    render(<ImprovementTrail trail={trail()} />);
+    expect(screen.queryByText(/interrupted/)).not.toBeInTheDocument();
+  });
+});

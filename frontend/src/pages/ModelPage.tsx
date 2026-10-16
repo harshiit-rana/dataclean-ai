@@ -358,6 +358,17 @@ export function ModelPage() {
               .then(setHistory)
               .catch(() => undefined);
           window.scrollTo({ top: 0, behavior: "smooth" });
+        } else if (event.type === "error" && event.resumed_as && sessionId) {
+          // Interrupted and resumed as a new job (#104): it replays the finished rounds from its journal in seconds,
+          // so the trail starts again from the top and then carries on.
+          jobId = event.resumed_as;
+          seen = 0;
+          rememberJob(jobId);
+          setLiveRounds([]);
+          setLiveStage("The search was interrupted; resuming it where it stopped.");
+          const id = jobId;
+          streamRef.current?.abort();
+          streamRef.current = streamJob(sessionId, id, 0, handlers);
         } else if (event.type === "error") {
           finish();
           setError(event.detail, event.code ?? null);

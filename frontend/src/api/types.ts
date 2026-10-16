@@ -1084,6 +1084,9 @@ export interface ImprovementTrail {
   search_strategy?: string | null;
   /** What the searches actually used, which for "auto" is the part worth showing. */
   search_strategies?: string[];
+  /** Set when the search was interrupted and carried on (#104): the job it resumed, how many of the earlier run's
+   * calls were replayed from its journal, and where (if anywhere) the replay stopped matching. */
+  resumed?: { from_job: string; reused: number; recorded: number; diverged_at: number | null } | null;
   /** Cross-validated, from the training rows only -- not the headline number, which is
    * measured once on rows nothing was selected against. */
   cv_score: number;
@@ -1111,7 +1114,8 @@ export type ImproveStreamEvent =
   | { type: "round"; round: ImprovementRound }
   /** Done: the same payload POST /improve returns, already saved server-side. */
   | { type: "result"; result: ModelResult }
-  | { type: "error"; detail: string; code?: string };
+  /** `resumed_as`: the search was interrupted and carries on as this job (#104); follow it instead of stopping. */
+  | { type: "error"; detail: string; code?: string; resumed_as?: string };
 
 // --- SSE event payloads, PRD §10.2 -------------------------------------------------------
 

@@ -185,7 +185,7 @@ def run(folder: Path, owner: str = "inline") -> dict:
     """Runs a claimed job to the end: running, the handler, then done or failed, with the last event saying which.
     Never raises; a caller that needs the outcome reads the state."""
     folder = Path(folder)
-    state = update_state(folder, state=RUNNING, started_at=_now(), owner=owner)
+    state = update_state(folder, state=RUNNING, started_at=_now(), started_epoch=time.time(), owner=owner)
     emit = emit_to(folder)
     handler = HANDLERS.get(state.get("kind", ""))
     stop = threading.Event()
@@ -256,9 +256,38 @@ def queued(upload_dir: str) -> list[Path]:
     return sorted(waiting, key=lambda p: read_state(p).get("created_epoch", 0))
 
 
-def mark_interrupted(folder: Path, detail: str) -> None:
-    emit_to(folder)({"type": "error", "detail": detail, "code": "job_interrupted"})
-    update_state(folder, state=INTERRUPTED, finished_at=_now(), detail=detail, code="job_interrupted", status=503)
+# Kinds that resume from where they stopped when interrupted (#104), and how many times one job's work is resumed
+# before it is left interrupted: a job that kills its runner every time (out of memory, say) must not loop.
+RESUMABLE = {"improve"}
+MAX_RESUMES = 3
+
+
+def resume(folder: Path) -> Path | None:
+    """A new queued job carrying on the interrupted one's work, or None when it is not resumable or has been resumed
+    too often. The new job's payload names the old one (`resume_of`), whose journal it replays; a time limit is
+    reduced by the time the interrupted run had already spent."""
+    state = read_state(folder)
+    payload = dict(state.get("payload") or {})
+    if state.get("kind") not in RESUMABLE or int(payload.get("resume_count", 0)) >= MAX_RESUMES:
+        return None
+    payload["resume_of"] = Path(folder).name
+    payload["resume_count"] = int(payload.get("resume_count", 0)) + 1
+    request = dict(payload.get("request") or {})
+    limit = request.get("time_limit_seconds")
+    if limit:
+        started = state.get("started_epoch") or state.get("created_epoch") or time.time()
+        request["time_limit_seconds"] = max(1.0, float(limit) - (time.time() - float(started)))
+        payload["request"] = request
+    return create(Path(folder).parents[1], state["kind"], payload)
+
+
+def mark_interrupted(folder: Path, detail: str, *, resumed_as: str | None = None) -> None:
+    event = {"type": "error", "detail": detail, "code": "job_interrupted"}
+    if resumed_as:
+        event["resumed_as"] = resumed_as
+    emit_to(folder)(event)
+    update_state(folder, state=INTERRUPTED, finished_at=_now(), detail=detail, code="job_interrupted", status=503,
+                 resumed_as=resumed_as)
 
 
 def reap_stale(upload_dir: str, *, now: float | None = None) -> list[Path]:
@@ -267,8 +296,14 @@ def reap_stale(upload_dir: str, *, now: float | None = None) -> list[Path]:
     found = []
     for folder in all_jobs(upload_dir):
         if read_state(folder).get("state") == RUNNING and is_stale(folder, now=now):
-            mark_interrupted(folder, "The process running this stopped before it finished. Start it again.")
-            found.append(folder)
+            resumed = resume(folder)
+            mark_interrupted(
+                folder,
+                "The process running this stopped before it finished; it is carrying on where it stopped."
+                if resumed else "The process running this stopped before it finished. Start it again.",
+                resumed_as=resumed.name if resumed else None,
+            )
+            found.append(resumed or folder)
     return found
 
 
@@ -279,8 +314,14 @@ def interrupt_orphans(upload_dir: str, owner: str = "inline") -> list[Path]:
     for folder in all_jobs(upload_dir):
         state = read_state(folder)
         if state.get("state") in (RUNNING, QUEUED) and state.get("owner", owner) == owner and (folder / CLAIM_FILE).exists():
-            mark_interrupted(folder, "The server restarted before this finished. Start it again.")
-            found.append(folder)
+            resumed = resume(folder)
+            mark_interrupted(
+                folder,
+                "The server restarted before this finished; it is carrying on where it stopped."
+                if resumed else "The server restarted before this finished. Start it again.",
+                resumed_as=resumed.name if resumed else None,
+            )
+            found.append(resumed or folder)
     return found
 
 

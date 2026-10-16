@@ -1210,6 +1210,15 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   reload picks a search up from its first event. A worker that dies leaves a stale heartbeat and its job is marked
   interrupted; inline jobs a restarted API was running are marked interrupted at start-up. Refusals still happen in
   the route, before any job is written, and a job's failure answers with the same status and code the route did.
+- **An interrupted search carries on where it stopped (#104).** Every cross-validation, settings search and
+  importance measurement of a search job is journalled (JSON, in the job's folder). When the job's runner dies, the
+  job that resumes it runs the loop again from the top with the journal in replay: each call whose arguments match the
+  next recorded one -- the estimator's full parameters, the training rows hashed, every option -- returns its recorded
+  result without fitting, so the finished rounds take seconds and the loop makes the same decisions. The first call
+  that differs switches replay off, and a journal for different data is never replayed. The test: a search
+  interrupted after round 2 resumes and ends with exactly the uninterrupted run's model, settings, score and trail.
+  The page follows the new job, the trail says the search was resumed and how much was restored, a time limit counts
+  the time already spent, and a job that dies three times is left interrupted rather than looping.
 - **Projects kept until deleted (#120).** A session its owner chose to keep, named, never swept, deleted only by its
   owner (every file and the Redis checkpoint). Its token is always required, even in development mode, can be
   rotated, and is shown once; the browser lists kept projects from `localStorage`. Checkpoints no longer expire on

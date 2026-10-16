@@ -65,7 +65,7 @@ from app.graph.nodes.audit_agent import mark_report_stale_if_written
 from app.dependencies import get_graph_if_any
 from app.api.sse import sse_response
 from app.api import job_runner
-from app.services import jobs
+from app.services import jobs, search_journal
 from app.services.session_store import (
     current_dataset_version_in,
     read_session_meta,
@@ -1046,10 +1046,24 @@ def _improve_job(folder, payload: dict, emit) -> dict:
     target = (goal.target_column or "").strip()
     point = _operating_point(request)
     started = time.perf_counter()
+    # Every expensive call is journalled in the job's folder, so an interruption can resume (#104). A resumed job
+    # replays the journal of the one it carries on from.
+    from pathlib import Path
+
+    previous = payload.get("resume_of")
+    journal = search_journal.Journal(
+        Path(folder) / search_journal.JOURNAL_FILE,
+        fingerprint=model_store.fingerprint_frame(df),
+        previous=(Path(folder).parent / previous / search_journal.JOURNAL_FILE) if previous else None,
+    )
+    journal.resumed_from = previous
+    if previous:
+        emit({"type": "stage", "name": "resuming",
+              "description": "Resuming the interrupted search: the rounds it finished are restored from its journal."})
     try:
         return _improve_and_save(
             df, target=target, task=task, request=request, point=point, directory=directory, route=route,
-            action_log=payload.get("action_log"),
+            action_log=payload.get("action_log"), journal=journal,
             on_progress=lambda entry: emit({"type": "round", "round": entry.as_dict()}),
             on_stage=lambda name, description: emit({"type": "stage", "name": name, "description": description}),
             goal_text=_goal_text(goal), cost_limit=cost_limit,
@@ -1088,6 +1102,7 @@ def _improve_and_save(
     on_stage=None,
     goal_text: str = "",
     cost_limit: int | None = None,
+    journal=None,
 ) -> dict:
     """`_search_and_save`, with a marker on disk while it runs (search_markers.py).
 
@@ -1108,7 +1123,7 @@ def _improve_and_save(
         return _search_and_save(
             df, target=target, task=task, request=request, point=point, directory=directory, route=route,
             action_log=action_log, on_progress=progress, on_stage=on_stage, goal_text=goal_text,
-            cost_limit=cost_limit,
+            cost_limit=cost_limit, journal=journal,
         )
 
 
@@ -1126,6 +1141,7 @@ def _search_and_save(
     on_stage=None,
     goal_text: str = "",
     cost_limit: int | None = None,
+    journal=None,
     save: bool = True,
 ) -> dict:
     """Search, rebuild the winner the normal way, and save it. Runs in a worker thread.
@@ -1175,6 +1191,7 @@ def _search_and_save(
         sealed_holdout=request.sealed_holdout,
         test_size=request.test_size,
         time_gap_days=request.time_gap_days,
+        journal=journal,
     )
     best = found["best"]
     # Plain constructor names, not the `model__`-prefixed pipeline paths the search uses.
@@ -1229,6 +1246,10 @@ def _search_and_save(
         "cv_score": best["cv_score"],
         "cv_std": best["cv_std"],
         "settings": best["params"],
+        # An interrupted search that carried on (#104): how much of the earlier run's work was replayed.
+        "resumed": getattr(journal, "resumed_from", None) and {
+            "from_job": journal.resumed_from, **journal.summary(),
+        },
     }
     rebuilt["features"]["excluded"] = list(request.excluded_columns)
     removed = best.get("removed_columns") or []

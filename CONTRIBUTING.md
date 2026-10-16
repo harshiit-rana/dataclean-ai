@@ -90,6 +90,11 @@ are both running locally, you're ready to make changes.
   `start(..., files=...)`, written before the job becomes visible to a worker. Failures are `jobs.JobError` with the
   route's own status and code. Tests run inline; `tests/unit/test_jobs.py` runs a worker in a thread for the
   worker path.
+- **An expensive call in the search goes through the journal (#104).** Inside `improvement.improve`, use the local
+  `score_config`, `search`, `importance_of` and `expected_costs`, not `tuning.*` directly: they are what a resumed
+  search replays. A new kind of expensive call gets the same wrapper (`through_journal`). The loop must stay
+  deterministic for a given input (fixed seeds, no wall-clock-dependent decisions beyond the time limit), or a resumed
+  search stops matching its journal and computes afresh -- correct, but slow.
 - **Security: a kept project always needs its token (#120).** `verify_session_access` enforces it whatever
   `APP_ENV` says. Anything a session stores goes inside its folder under `UPLOAD_DIR`, so deleting the project
   (`delete_session_files`) and the sweep remove it; state kept anywhere else must be deleted in `DELETE
