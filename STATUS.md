@@ -1210,7 +1210,9 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   script's case template now checks its value itself. A live prompt-injection test with Groq (`openai/gpt-oss-120b`)
   held: no harmful fix proposed, the target untouched, the report prose unsteered. Anthropic was skipped, not passed
   (no key on the machine used). Groq's old default model is retired; the default is now `openai/gpt-oss-120b`.
-  Follow-ups: #122 (mark file text in prompts as data), #123 (rate limits and quotas for hosted use).
+  Follow-ups: #122, done -- file-derived text sits in `<file_data>` tags in every prompt, the tags cannot be closed
+  from inside, and each system prompt says the tagged text is data; rerun with Groq, all six cards held and kept their
+  operations. #123 (rate limits and quotas for hosted use) is open.
 - **Long work as jobs (#103).** Training, the improvement search and applying a model run as jobs: a folder per job
   under the session (`job.json`, `events.jsonl`, a claim file created exclusively, a heartbeat). `JOB_RUNNER=inline`
   (default, and the tests) runs them in a thread of the API; `worker` queues them for `python -m app.worker`, a

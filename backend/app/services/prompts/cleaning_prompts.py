@@ -22,6 +22,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from app.models.graph_state import GoalContext
 from app.services.operations import operation_catalog
+from app.services.prompts.untrusted import DATA_NOTICE, file_data
 
 SYSTEM_PROMPT = """You translate a user's plain-English data cleaning instruction into ONE \
 operation from the fixed list below. You do not write code.
@@ -70,9 +71,13 @@ def build_conversational_cleaning_messages(
         if goal_context
         else "not specified"
     )
-    system = SYSTEM_PROMPT.replace("{operation_catalog}", operation_catalog(include_conversational=True))
+    system = (
+        SYSTEM_PROMPT.replace("{operation_catalog}", operation_catalog(include_conversational=True))
+        + "\n\n"
+        + DATA_NOTICE
+    )
     human = (
-        f"Columns in the data: {', '.join(columns)}\n"
+        f"Columns in the data:\n{file_data(', '.join(columns))}\n"
         f"Goal context: {goal_block}\n\n"
         f"Instruction: {instruction}\n\n"
         "Return the JSON now."

@@ -14,6 +14,7 @@ import json
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from app.models.graph_state import ColumnIssue, GoalContext
+from app.services.prompts.untrusted import DATA_NOTICE, file_data
 
 SYSTEM_PROMPT = """You are the Profiling Agent inside DataClean AI, a human-in-the-loop CSV \
 cleaning tool. You receive a list of statistically-detected data issues and must:
@@ -29,7 +30,9 @@ Respond with ONLY a JSON array, one object per issue_id you were given, in this 
 [{"issue_id": "...", "priority_score": 0.0, "likely_cause": "...", "pipeline_flag": false, \
 "pipeline_note": "..."}]
 No prose before or after the JSON. pipeline_note may be an empty string when pipeline_flag \
-is false."""
+is false.
+
+""" + DATA_NOTICE
 
 
 def build_profiling_agent_messages(
@@ -43,7 +46,7 @@ def build_profiling_agent_messages(
     issues_block = json.dumps([i.model_dump() for i in issues])
     human = (
         f"Goal context:\n{goal_block}\n\n"
-        f"Detected issues:\n{issues_block}\n\n"
+        f"Detected issues:\n{file_data(issues_block)}\n\n"
         "Return the JSON array now."
     )
     return [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=human)]

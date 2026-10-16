@@ -21,6 +21,7 @@ import json
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from app.models.graph_state import GoalContext
+from app.services.prompts.untrusted import DATA_NOTICE, file_data
 
 SYSTEM_PROMPT = """You are the Audit Agent inside DataClean AI. You are documenting a data \
 cleaning session for a report the user may attach to a model card, show to stakeholders, or \
@@ -83,13 +84,13 @@ def build_audit_report_messages(
     ]
 
     human = (
-        f"Dataset: {file_name}\n"
+        f"Dataset:\n{file_data(file_name)}\n"
         f"Goal context: {goal_block}\n"
         f"Issues detected during profiling: {issue_count}\n\n"
-        f"Action log:\n{json.dumps(actions, indent=2)}\n\n"
+        f"Action log:\n{file_data(json.dumps(actions, indent=2))}\n\n"
         "Write the report JSON now."
     )
-    return [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=human)]
+    return [SystemMessage(content=SYSTEM_PROMPT + "\n\n" + DATA_NOTICE), HumanMessage(content=human)]
 
 
 def build_retry_messages(

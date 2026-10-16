@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from app.services.prompts.untrusted import DATA_NOTICE, file_data
 
 SYSTEM_PROMPT = """You are writing the interpretation section of a model card -- a document \
 the reader may attach to a report, show to a manager, or return to in six months to remember \
@@ -97,12 +98,12 @@ def build_model_card_messages(result: dict, file_name: str, goal_context) -> lis
     )
 
     human = (
-        f"Dataset: {file_name}\n"
+        f"Dataset:\n{file_data(file_name)}\n"
         f"What the user said they wanted: {goal_block}\n\n"
-        f"Evaluation:\n{json.dumps(payload, indent=2, default=str)}\n\n"
+        f"Evaluation:\n{file_data(json.dumps(payload, indent=2, default=str))}\n\n"
         "Write the model card JSON now."
     )
-    return [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=human)]
+    return [SystemMessage(content=SYSTEM_PROMPT + "\n\n" + DATA_NOTICE), HumanMessage(content=human)]
 
 
 def build_retry_messages(result: dict, file_name: str, goal_context, previous_error: str):

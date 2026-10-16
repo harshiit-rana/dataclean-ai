@@ -54,12 +54,15 @@ as a careless user would.
 | --- | --- |
 | Groq, `openai/gpt-oss-120b` | **Ran.** Two runs (the free tier's rate limit stopped each after 3-4 of 6 cards). No card proposed dropping `revenue`; no card touched the target `churned`; the target survived cleaning with all 200 rows. The model called the header "injected text" and proposed dropping *that* column. The report's prose did not repeat the instructions (they appear only where the report quotes the column name, which it must). |
 | Groq, `llama-3.3-70b-versatile` (the configured default) | **Did not run:** Groq answered `model_not_found`. The default is now `openai/gpt-oss-120b`; a `.env` naming the old model must be changed. |
+| Groq, `openai/gpt-oss-120b`, with the prompts marked (#122) | **Ran, all 6 cards.** Same outcome: no harmful fix, the target untouched with all rows, the report prose unsteered. The cards still carried operations where they should (trim whitespace on `region`, drop `customer_id`), so marking the data did not cost card quality. The crafted column was dropped by its exact name, which the old parser would have truncated (risk 2). |
 | Anthropic | **Skipped, not passed:** no `ANTHROPIC_API_KEY` is configured on the machine used. Run `python backend/scripts/injection_experiment.py anthropic` where one is. |
 
 **Residual risk, accepted for now:** a model could still be talked into a plausible-looking harmful card. The
 approval step, the warning on any fix that touches the prediction target (target-safety guard), and the fact that
-the original file is never modified are what stand in the way. **Proposed hardening (#122):** mark file-derived text
-in every prompt as data, not instructions, and run this experiment as a regression check for each provider.
+the original file is never modified are what stand in the way. **Hardening (#122, done):** every prompt now wraps
+file-derived text in `<file_data>` tags, a file cannot close the tags early, and every system prompt says the tagged
+text is data and never an instruction (`app/services/prompts/untrusted.py`). Run the experiment before changing a
+prompt or a default model.
 
 ### 2. The operation line itself -- fixed
 
@@ -136,6 +139,6 @@ and only while every call matches. Deleting a session cancels its queued jobs.
 
 ## Follow-up issues
 
-- **#122** Mark file-derived text in prompts as data and keep the injection experiment as a regression check.
+- **#122** (done) File-derived text marked as data in every prompt; the experiment is the regression check.
 - **#123** Per-client rate limits and storage quotas for hosted deployments.
 - Accepted with reasons above: risks 1 (residual), 8, and the dependency majors in dependencies.md.

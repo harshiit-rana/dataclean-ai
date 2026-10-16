@@ -13,6 +13,7 @@ from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 
 from app.models.graph_state import ColumnIssue, GoalContext
 from app.services.operations import operation_catalog
+from app.services.prompts.untrusted import DATA_NOTICE, file_data
 
 SECTION_MARKERS = ("FOUND:", "PROPOSED_ACTION:", "REASONING:", "TRADEOFF:", "OPERATION:")
 
@@ -101,15 +102,18 @@ def build_explanation_messages(
         goal_block = "use_case=unspecified (no goal context was provided)"
     human = (
         f"Goal context: {goal_block}\n\n"
-        f"Issue:\n"
-        f"- column: {issue.column_name}\n"
-        f"- type: {issue.issue_type}\n"
-        f"- severity: {issue.severity}\n"
-        f"- description: {issue.description}\n"
-        f"- stats: {issue.stats}\n\n"
+        "Issue:\n"
+        + file_data(
+            f"- column: {issue.column_name}\n"
+            f"- type: {issue.issue_type}\n"
+            f"- severity: {issue.severity}\n"
+            f"- description: {issue.description}\n"
+            f"- stats: {issue.stats}"
+        )
+        + "\n\n"
         "Write the suggestion card now."
     )
-    system = SYSTEM_PROMPT.format(operation_catalog=operation_catalog())
+    system = SYSTEM_PROMPT.format(operation_catalog=operation_catalog()) + "\n\n" + DATA_NOTICE
     return [SystemMessage(content=system), HumanMessage(content=human)]
 
 
