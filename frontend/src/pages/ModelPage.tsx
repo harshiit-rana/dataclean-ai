@@ -9,6 +9,7 @@ import { ImprovementTrail } from "@/components/model/ImprovementTrail";
 import { LiveImprovement } from "@/components/model/LiveImprovement";
 import { ModelPlanForm, type Preselect } from "@/components/model/ModelPlanForm";
 import { ModelResults } from "@/components/model/ModelResults";
+import { ReplaceModel } from "@/components/model/ReplaceModel";
 import { RunHistory } from "@/components/model/RunHistory";
 import { TrainingProblem } from "@/components/model/TrainingProblem";
 import {
@@ -572,6 +573,17 @@ export function ModelPage() {
           fetchComparison={sessionId ? (a, b) => compareRuns(sessionId, a, b) : undefined}
           onReproduce={handleReproduce}
           reproducing={reproducing}
+        />
+      )}
+
+      {history && result && sessionId && !training && !improving && (
+        <ReplaceModel
+          sessionId={sessionId}
+          runs={history.runs}
+          storedRunIds={history.stored_run_ids}
+          currentRunId={history.current_run_id}
+          task={result.task}
+          onModelChanged={() => void load()}
         />
       )}
 

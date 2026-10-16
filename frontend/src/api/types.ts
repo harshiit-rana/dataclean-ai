@@ -1315,3 +1315,54 @@ export interface ExportAcceptance {
   at?: string;
   error?: string;
 }
+
+/** Replacing the model in use (backend promotion.py). */
+export type PromotionMetric = "accuracy" | "precision" | "recall" | "f1" | "roc_auc" | "brier" | "r2" | "mae" | "rmse";
+
+export type PromotionConstraint =
+  | { kind: "metric_at_least"; metric: PromotionMetric; value: number }
+  | { kind: "metric_at_most"; metric: PromotionMetric; value: number }
+  | { kind: "no_worse_than_champion"; metric: PromotionMetric; tolerance: number }
+  | { kind: "no_new_required_columns" };
+
+export interface PromotionCriteria {
+  deciding_metric: PromotionMetric;
+  min_improvement: number;
+  constraints: PromotionConstraint[];
+}
+
+export interface CriterionResult {
+  kind: string;
+  metric?: string;
+  passed: boolean;
+  evidence: string;
+}
+
+export interface Comparison {
+  comparison_id: string;
+  created_at: string;
+  champion_run_id: string;
+  challenger_run_id: string;
+  criteria: PromotionCriteria;
+  status: "open" | "evaluated" | "decided";
+  evaluation: {
+    rows_compared: number;
+    rows_excluded: Record<string, number>;
+    metrics: { champion: Record<string, number>; challenger: Record<string, number> };
+    deciding: CriterionResult & { improvement?: number; improvement_low?: number; improvement_high?: number };
+    constraints: CriterionResult[];
+    all_passed: boolean;
+  } | null;
+}
+
+export interface PromotionDecision {
+  decision_id: string;
+  at: string;
+  decision: "promoted" | "rejected" | "rolled_back";
+  champion_run_id?: string;
+  challenger_run_id?: string;
+  from_run_id?: string;
+  to_run_id?: string;
+  override?: boolean;
+  reason?: string | null;
+}

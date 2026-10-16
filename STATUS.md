@@ -975,6 +975,16 @@ A promotion can be undone (#84). `POST /api/model/{id}/rollback` puts back the c
 after checking its stored model against its checksum (#74) and by the restore rule (#67), and records the rollback in
 the decision log with the user's reason. A promotion is rolled back once; without one there is nothing to roll back.
 
+On the model page, *Replace the model in use* walks through it in the order that keeps it honest: pick a challenger
+from the stored runs, set the deciding metric, the minimum improvement and any constraints, and fix them; only then
+upload the labelled file; read each criterion with its evidence and the rows left out and why; promote (with an
+override and a reason when a criterion failed) or keep the model in use; and see every decision, with a rollback after
+a promotion. The walkthrough, which an end-to-end API test follows: train a champion when the data holds months 1-3;
+month 4 arrives and a challenger trains on months 1-4; fix the criteria; evaluate both on month 5, which neither has
+seen; promote; a rollback is then refused, because the old champion learned from data that is no longer the data.
+There is no automatic promotion: the decision route, which a person calls, is the only place a run is put in use as
+a promotion, and a test checks it.
+
 ### Where test information could reach a decision — an audit
 
 Prompted by a roadmap review that made the rule explicit: *the final test set must never be used

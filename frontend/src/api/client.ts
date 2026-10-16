@@ -3,6 +3,7 @@
 
 import type {
   ApplyResult,
+  Comparison,
   BusinessRule,
   CorrelationResult,
   ErrorResponse,
@@ -12,6 +13,8 @@ import type {
   ImproveRequest,
   ExportAcceptance,
   ModelHistory,
+  PromotionCriteria,
+  PromotionDecision,
   Reproduction,
   RunPairComparison,
   VersionDiff,
@@ -271,6 +274,68 @@ export async function verifyExport(sessionId: string): Promise<ExportAcceptance>
 export async function fetchExportVerification(sessionId: string): Promise<ExportAcceptance> {
   const response = await sessionFetch(sessionId, `/api/export/${sessionId}/verify`);
   return handleResponse<ExportAcceptance>(response);
+}
+
+/** Starts a comparison of the model in use (or `championRunId`) with a challenger, on criteria fixed now. */
+export async function startComparison(
+  sessionId: string,
+  challengerRunId: string,
+  criteria: PromotionCriteria,
+  championRunId?: string
+): Promise<Comparison> {
+  const response = await sessionFetch(sessionId, `/api/model/${sessionId}/comparisons`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challenger_run_id: challengerRunId, champion_run_id: championRunId, criteria }),
+  });
+  return handleResponse<Comparison>(response);
+}
+
+/** Scores both models on the same rows of a labelled file and checks the criteria. */
+export async function evaluateComparison(sessionId: string, comparisonId: string, file: File): Promise<Comparison> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await sessionFetch(
+    sessionId,
+    `/api/model/${sessionId}/comparisons/${encodeURIComponent(comparisonId)}/evaluate`,
+    { method: "POST", body: formData }
+  );
+  return handleResponse<Comparison>(response);
+}
+
+/** Promotes or rejects the challenger; the reason is stored as written. */
+export async function decideComparison(
+  sessionId: string,
+  comparisonId: string,
+  decision: "promote" | "reject",
+  reason: string,
+  override: boolean
+): Promise<PromotionDecision> {
+  const response = await sessionFetch(
+    sessionId,
+    `/api/model/${sessionId}/comparisons/${encodeURIComponent(comparisonId)}/decision`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision, reason: reason || null, override }),
+    }
+  );
+  return handleResponse<PromotionDecision>(response);
+}
+
+export async function fetchDecisions(sessionId: string): Promise<PromotionDecision[]> {
+  const response = await sessionFetch(sessionId, `/api/model/${sessionId}/decisions`);
+  return (await handleResponse<{ decisions: PromotionDecision[] }>(response)).decisions;
+}
+
+/** Puts back the champion the last promotion replaced. */
+export async function rollBack(sessionId: string, reason: string): Promise<PromotionDecision> {
+  const response = await sessionFetch(sessionId, `/api/model/${sessionId}/rollback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ reason: reason || null }),
+  });
+  return handleResponse<PromotionDecision>(response);
 }
 
 export async function fetchModelCard(sessionId: string): Promise<string> {
