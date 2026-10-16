@@ -63,6 +63,8 @@ class Settings(BaseSettings):
     # now something a setup says out loud: .env.example and docker-compose.yml set it for the local setup.
     app_env: str = "production"
     log_level: str = "INFO"
+    # "text" (the default) or "json": one JSON object per line, with the request id, for a log collector.
+    log_format: str = "text"
 
     # Require the token issued at upload on every request scoped to that session. On unless development is
     # explicitly enabled (APP_ENV=development) or this is set to false, because a session id alone should not be

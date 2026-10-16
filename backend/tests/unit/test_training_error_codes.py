@@ -115,7 +115,7 @@ class TestOverHttp:
         response = client.post(f"/api/model/{sid}/train", json={"include_deep_diagnostics": False})
         assert response.status_code == 422
         assert response.json()["code"] == "data_blocked"
-        assert set(response.json()) == {"error", "detail", "code"}
+        assert set(response.json()) == {"error", "detail", "code", "request_id"}
 
     def test_the_stream_refuses_a_blocked_run_with_the_code_too(self):
         rng = np.random.default_rng(5)

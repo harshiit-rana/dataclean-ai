@@ -16,6 +16,8 @@ class ErrorResponse(BaseModel):
     detail: str
     # Present only on the errors a page can offer a next step for (see routes_model's docstring).
     code: Optional[str] = None
+    # The request's id, which every server log line for it carries: what to quote when reporting a problem.
+    request_id: Optional[str] = None
 
 
 class UploadResponse(BaseModel):

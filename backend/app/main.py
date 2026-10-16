@@ -26,6 +26,7 @@ from app.api import (
     routes_undo,
     routes_upload,
 )
+from app.core.request_context import RequestIdMiddleware
 from app.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
@@ -75,7 +76,7 @@ def warn_if_tokens_are_off(settings) -> bool:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     settings = get_settings()
-    configure_logging(settings.log_level)
+    configure_logging(settings.log_level, settings.log_format)
     warn_if_tokens_are_off(settings)
 
     async with build_checkpointer(settings) as checkpointer:
@@ -113,6 +114,8 @@ def create_app() -> FastAPI:
     )
 
     register_exception_handlers(app)
+    # Outermost, so the id is set before anything else runs and reaches every response, errors included.
+    app.add_middleware(RequestIdMiddleware)
 
     # No session yet, so nothing to check against.
     app.include_router(health.router)

@@ -9,6 +9,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
+from app.core.request_context import current_request_id
 from app.models.api_schemas import ErrorResponse
 
 logger = logging.getLogger(__name__)
@@ -143,9 +144,9 @@ def register_exception_handlers(app: FastAPI) -> None:
     async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
         return JSONResponse(
             status_code=exc.status_code,
-            content=ErrorResponse(error=exc.error, detail=exc.detail, code=exc.code).model_dump(
-                exclude_none=True
-            ),
+            content=ErrorResponse(
+                error=exc.error, detail=exc.detail, code=exc.code, request_id=current_request_id(request)
+            ).model_dump(exclude_none=True),
         )
 
     @app.exception_handler(Exception)
@@ -154,7 +155,10 @@ def register_exception_handlers(app: FastAPI) -> None:
         traceback only in the server's stdout -- painful to debug behind Docker. Always log
         it, and in development echo the exception back so the cause is visible from the
         client too. Never leaks internals when APP_ENV isn't development."""
-        logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+        logger.exception(
+            "Unhandled error on %s %s", request.method, request.url.path,
+            extra={"request_id": current_request_id(request)},
+        )
 
         detail = "Something went wrong on our end. Please try again."
         if get_settings().app_env == "development":
@@ -162,5 +166,7 @@ def register_exception_handlers(app: FastAPI) -> None:
 
         return JSONResponse(
             status_code=500,
-            content=ErrorResponse(error="Internal server error", detail=detail).model_dump(),
+            content=ErrorResponse(
+                error="Internal server error", detail=detail, request_id=current_request_id(request)
+            ).model_dump(exclude_none=True),
         )

@@ -1190,6 +1190,10 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   current install it could not even be imported.
 - **Degrade, don't crash.** A failed LLM call, an operation that can't run, a PDF that won't
   render — none of these end a session that already touched your data.
+- **Request ids (#110).** Every request gets an id -- the caller's `X-Request-Id` when it is a plain token, a new one
+  otherwise -- carried on every log line logged while it is handled (worker threads included), returned in the
+  `X-Request-Id` header and put in every error body as `request_id`, including an unexpected 500's, whose log line
+  carries the same id. `LOG_FORMAT=json` writes one JSON object per line for a log collector.
 - **Static checks in CI (#116).** A `backend-static` job runs `ruff check app` (syntax errors and pyflakes) and
   `mypy app` at mypy's default strictness. Starting it found four unused imports and placeholders and 167 type errors,
   mostly annotation noise on dict-heavy code; the recent modules were fixed and 22 older modules are a documented
