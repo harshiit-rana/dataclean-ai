@@ -194,7 +194,9 @@ def test_the_denial_does_not_say_which_way_it_failed(monkeypatch):
     missing = client.get(f"/api/preview/{session_id}")
     wrong = client.get(f"/api/preview/{session_id}", headers={HEADER_NAME: "nope"})
     assert missing.status_code == wrong.status_code == 403
-    assert missing.json() == wrong.json()
+    # Identical but for each request's own id, which says nothing about why it was refused.
+    assert {k: v for k, v in missing.json().items() if k != "request_id"} == {
+        k: v for k, v in wrong.json().items() if k != "request_id"}
 
 
 def test_an_unknown_session_is_still_a_404(monkeypatch):
