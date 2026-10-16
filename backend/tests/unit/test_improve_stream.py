@@ -166,7 +166,8 @@ class TestFailuresMidRun:
         monkeypatch.setattr(improvement, "improve", breaks)
         _response, events = _stream(_session())
         assert events[-1]["type"] == "error"
-        assert "disk full" in events[-1]["detail"]
+        # A stable message and the request id to quote, never the exception's own text (#111).
+        assert "stopped unexpectedly" in events[-1]["detail"] and "disk full" not in events[-1]["detail"]
 
 
 class TestKeepalive:
