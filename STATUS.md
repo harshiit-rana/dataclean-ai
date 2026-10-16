@@ -1345,6 +1345,14 @@ neural networks deferred. Deferred is not abandoned: a dedicated deep-learning e
 reproducibility, validation and evaluation standards, once the platform work (#102) gives it background jobs and
 durable storage. No dependency is added without a clear reason.
 
+**Platform architecture (decided 16 October 2026, #102).** Option (b), in
+[`docs/decisions/0004-platform-architecture.md`](docs/decisions/0004-platform-architecture.md): a project is a session
+its owner chose to keep, kept until explicitly deleted, protected by its token (32 random bytes, only the hash stored,
+always enforced on a kept project) and with no user accounts. Storage stays one configurable folder (`UPLOAD_DIR`),
+unencrypted at rest, which the record states plainly. Long work becomes jobs recorded on disk, run inline or by a
+separate worker container, so a search survives an API restart and an interrupted one resumes from its last round.
+The work is #120 (projects), #103 (jobs), #104 (resume) and #105 (the sweep), then the threat review (#114).
+
 The direction below is unchanged; the issues are its concrete form. The end state is an
 *honest* AutoML — not a button that hands back a leaderboard score, but a system that takes a
 raw file to a working model, and an honest answer about whether it works, while showing its
