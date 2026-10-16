@@ -350,7 +350,7 @@ def check_rule(df: pd.DataFrame, rule: Rule) -> Check:
         reason = (
             f"'{missing[0]}' is not in the data."
             if missing
-            else f"The columns this rule compares hold no values it can order."
+            else "The columns this rule compares hold no values it can order."
         )
         return Check(
             name=rule.name,

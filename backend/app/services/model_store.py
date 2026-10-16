@@ -588,7 +588,7 @@ def save_run_predictions(directory: Path, run_id: str, held_out: dict) -> None:
     try:
         folder = directory / PREDICTIONS_DIR
         folder.mkdir(parents=True, exist_ok=True)
-        arrays = {
+        arrays: dict[str, Any] = {
             "row_ids": np.asarray(held_out["row_ids"]),
             "truth": np.asarray(held_out["truth"]).astype(str),
             "called": np.asarray(held_out["called"]).astype(str),
@@ -680,7 +680,7 @@ def _paired_comparison(directory: Path, newer: dict, older: dict, metric: str | 
                 "scores": None if b.get("scores") is None else b["scores"][position],
             },
             task,
-            metric,
+            str(metric),  # set: the same-rows check above requires one
             positive_label=label,
             groups=a.get("groups"),
         )

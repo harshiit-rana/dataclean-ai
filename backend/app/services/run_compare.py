@@ -106,7 +106,7 @@ def summary(diff: list[dict], able: dict, primary: dict | None, metric: str | No
     if verdict in ("better", "worse"):
         direction = "raised" if verdict == "better" else "lowered"
         detail = ""
-        if primary.get("method") == "paired" and primary.get("low") is not None:
+        if primary and primary.get("method") == "paired" and primary.get("low") is not None:
             detail = f" (by {primary['difference']:+.3f}; 95% range {primary['low']:+.3f} to {primary['high']:+.3f})"
         return f"{what} {direction} {metric} beyond the noise{detail}."
     return f"{what} moved {metric}, but there is no range to judge the difference by."

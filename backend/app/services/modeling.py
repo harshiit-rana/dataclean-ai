@@ -1286,7 +1286,6 @@ def baseline_score(y_train, y_test, task: str, positive_label: str | None = None
     For two classes it also carries the Brier score of always predicting the training base rate
     as the probability, which is what a model's Brier score has to be read against: 0.18 is
     excellent when the base rate gives 0.25 and poor when it gives 0.19."""
-    from sklearn import metrics as sk
 
     if task == "regression":
         return _regression_baselines(y_train, y_test)

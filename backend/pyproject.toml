@@ -9,3 +9,49 @@ addopts = "-m 'not slow'"
 [tool.coverage.run]
 source = ["app"]
 omit = ["app/graph/nodes/cleaning_agent.py", "app/graph/nodes/conversational_loop.py", "app/graph/nodes/audit_agent.py"]
+
+# Static checks, run in CI (`ruff check app` and `mypy app`). See CONTRIBUTING.md.
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+# Conservative on purpose: syntax errors and pyflakes (unused imports, undefined names, shadowed names), the class
+# of mistake that reaches master unnoticed. Style rules can be added one at a time, each with its fixes.
+select = ["E9", "F"]
+
+[tool.mypy]
+python_version = "3.12"
+# Strictness: mypy's defaults -- annotated functions are checked, unannotated ones are not -- with third-party
+# libraries that ship no types treated as untyped rather than as errors.
+ignore_missing_imports = true
+warn_unused_configs = true
+
+# The baseline: modules that had type errors when checking started (#116), most of them annotation noise on
+# dict-heavy code (`best = next(...)` with no annotation, Optional values the code has already ruled out). They
+# are not checked until fixed; take a module off this list when it passes. New modules are always checked.
+[[tool.mypy.overrides]]
+module = [
+    "app.api.routes_apply",
+    "app.api.routes_model",
+    "app.api.routes_preview",
+    "app.api.routes_profile",
+    "app.api.routes_resume",
+    "app.graph.nodes.explanation_agent",
+    "app.services.audit_report",
+    "app.services.cleaning_export",
+    "app.services.diagnostics",
+    "app.services.improvement",
+    "app.services.llm_client",
+    "app.services.ml_readiness",
+    "app.services.model_card",
+    "app.services.model_export",
+    "app.services.modeling",
+    "app.services.operations",
+    "app.services.profiling",
+    "app.services.prompts.model_prompts",
+    "app.services.scoring",
+    "app.services.tuning",
+    "app.services.validation_advice",
+    "app.services.why_this_model",
+]
+ignore_errors = true

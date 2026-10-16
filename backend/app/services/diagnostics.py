@@ -421,9 +421,7 @@ def cross_validate_pipeline(
     """
     from sklearn.model_selection import (
         GroupKFold,
-        KFold,
         StratifiedGroupKFold,
-        StratifiedKFold,
         cross_val_score,
     )
 

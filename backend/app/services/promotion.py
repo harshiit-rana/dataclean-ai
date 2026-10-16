@@ -16,7 +16,7 @@ import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Annotated, Literal, Union
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -117,7 +117,7 @@ def create(directory: Path, *, champion_run_id: str, challenger_run_id: str, cri
     """A new comparison, open for its criteria to be adjusted until it is evaluated."""
     if champion_run_id == challenger_run_id:
         raise ComparisonError("The champion and the challenger are the same run.", "same_run")
-    record = {
+    record: dict[str, Any] = {
         "comparison_id": uuid.uuid4().hex[:12],
         "created_at": _now(),
         "champion_run_id": champion_run_id,
@@ -189,6 +189,8 @@ def _scored(directory: Path, run_id: str, new, original, fallback_actions) -> di
     from app.services import model_store, replay, scoring, validation
 
     result = model_store.load_run(directory, run_id)
+    if result is None:
+        raise ComparisonError(f"Run {run_id} is no longer stored.", "run_not_found")
     pipeline, notes = model_store.load_run_pipeline(directory, run_id)
     actions = (result.get("run_metadata") or {}).get("actions")
     if actions is None:
@@ -321,7 +323,7 @@ def evaluate(directory: Path, comparison_id: str, new, *, file_fingerprint: str,
                                            positive_label=positive)
     sign = -1.0 if deciding in LOWER_IS_BETTER else 1.0
     if paired is None:
-        deciding_result = {"metric": deciding, "passed": False,
+        deciding_result: dict[str, Any] = {"metric": deciding, "passed": False,
                            "evidence": f"{deciding} could not be computed for both models on these rows"}
     else:
         improvement = sign * paired["difference"]

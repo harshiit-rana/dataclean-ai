@@ -57,6 +57,12 @@ are both running locally, you're ready to make changes.
 
 ## Conventions worth knowing
 
+- **Static checks run in CI.** `pip install -r requirements-dev.txt`, then from `backend/`: `ruff check app`
+  (syntax errors and pyflakes: unused imports, undefined and shadowed names) and `mypy app` (mypy's default
+  strictness: annotated functions are checked). Both must pass. Modules that had type errors when checking started
+  are listed in `pyproject.toml` as a baseline that is not checked; fix one and take it off the list. A new module
+  is never added to that list.
+
 - **Graph state is JSON-native.** `GraphState` holds `list[dict]`, not nested Pydantic
   models — nested models get serialized into checkpoint envelopes that don't reliably
   reconstruct, which breaks resuming a session. Validate into the real models at node

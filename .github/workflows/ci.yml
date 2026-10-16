@@ -12,6 +12,28 @@ on:
     branches: [main, master]
 
 jobs:
+  # Lint and type checks, apart from the tests so they fail in seconds rather than after the suite.
+  backend-static:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Lint
+        run: ruff check app
+
+      - name: Type check
+        run: mypy app
+
   backend-tests:
     runs-on: ubuntu-24.04
     defaults:

@@ -1,0 +1,3 @@
+# Static checks run in CI (see CONTRIBUTING.md). Not needed to run the app or its tests.
+ruff>=0.6,<1
+mypy>=1.11,<2
