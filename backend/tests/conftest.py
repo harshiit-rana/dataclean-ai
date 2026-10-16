@@ -2,7 +2,16 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+
+# One thread per test worker when the suite runs in parallel (pytest-xdist). The forests fit with n_jobs=-1 and
+# gradient boosting uses every OpenMP thread, so four workers on a four-core CI runner were sixteen-plus busy threads
+# fighting over four cores, and the parallel run took longer than the serial one. Set before scikit-learn and numpy
+# are imported, which read these at start-up. The fits are the same whatever the thread count.
+if os.environ.get("PYTEST_XDIST_WORKER"):
+    for _variable in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS", "LOKY_MAX_CPU_COUNT"):
+        os.environ.setdefault(_variable, "1")
 
 import pytest
 
