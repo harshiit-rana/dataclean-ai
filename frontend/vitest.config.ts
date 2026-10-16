@@ -12,6 +12,8 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
+    // CSS is stubbed in tests, except the theme tokens: theme-contrast.test.ts reads them to check text contrast.
+    css: { include: [/styles\/globals\.css/] },
     include: ["src/**/*.test.{ts,tsx}"],
   },
 });

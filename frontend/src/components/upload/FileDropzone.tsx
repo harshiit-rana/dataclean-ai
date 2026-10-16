@@ -29,7 +29,8 @@ export function FileDropzone({ onFileSelected, selectedFile }: FileDropzoneProps
         isDragActive && "border-primary bg-muted"
       )}
     >
-      <input {...getInputProps()} />
+      {/* Hidden by the dropzone, but still a form control: it needs a name a screen reader can read (#101). */}
+      <input {...getInputProps()} aria-label="Choose a CSV file" />
       {selectedFile ? (
         <p className="text-sm font-medium">{selectedFile.name}</p>
       ) : (

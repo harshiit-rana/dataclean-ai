@@ -1242,6 +1242,15 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   given an earlier run's file flags every timing more than 30% slower. A separate `Benchmark` workflow runs it weekly
   and on demand -- never on a push, since a timing is not a pass or fail for a change -- compares with the last
   successful run on the same runner image, and keeps the results as an artifact.
+- **Accessibility pass (#101).** axe runs in the frontend suite on the Upload, Review, Clean, Model, Apply and
+  Export pages and on the model results, and found real problems, now fixed: the app had no landmarks (the pages
+  now sit in `<main>`, the theme toggle in `<header>`); card titles were `<h3>` straight under the page's `<h1>`
+  (now `<h2>`); three tables had an empty corner header; the upload's file input had no accessible name. A token test
+  checks every text-on-background pairing against WCAG AA in both themes -- axe cannot measure contrast in jsdom --
+  and three light-theme pairings failed (grey helper text on the muted background, red error text, text on red
+  fills); those tokens are darker now. A change beyond the noise in the run history now says so in words as well as
+  colour, a kept round says "kept", and the live search announces one short line per finished round instead of the
+  whole card on every update. Still to do: a manual keyboard walkthrough of the running app in a browser.
 - **Static checks in CI (#116).** A `backend-static` job runs `ruff check app` (syntax errors and pyflakes) and
   `mypy app` at mypy's default strictness. Starting it found four unused imports and placeholders and 167 type errors,
   mostly annotation noise on dict-heavy code; the recent modules were fixed and 22 older modules are a documented

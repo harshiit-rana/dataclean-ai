@@ -18,6 +18,23 @@ const round = (overrides: Partial<ImprovementRound>): ImprovementRound =>
     ...overrides,
   }) as ImprovementRound;
 
+describe("LiveImprovement — what a screen reader hears (#101)", () => {
+  it("announces only the latest finished round, briefly", () => {
+    render(
+      <LiveImprovement
+        rounds={[round({}), round({ name: "hyperparameters", label: "Settings", accepted: false })]}
+        stage="Trying other models."
+      />
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Round finished: Settings, not kept.");
+  });
+
+  it("says a kept round is kept in words, not only colour", () => {
+    render(<LiveImprovement rounds={[round({ accepted: true })]} stage={null} />);
+    expect(screen.getByText("kept")).toBeInTheDocument();
+  });
+});
+
 describe("LiveImprovement", () => {
   it("says what it is doing before any round has finished", () => {
     render(<LiveImprovement rounds={[]} stage={null} />);

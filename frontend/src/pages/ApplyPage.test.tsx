@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ApplyResult } from "@/api/types";
+import { axeViolations } from "@/test/axe";
 
 const applyToNewFile = vi.fn();
 vi.mock("@/api/client", async (original) => ({
@@ -65,9 +66,12 @@ const RESULT: ApplyResult = {
 function renderPage() {
   render(
     <MemoryRouter initialEntries={["/apply/s1"]}>
-      <Routes>
-        <Route path="/apply/:sessionId" element={<ApplyPage />} />
-      </Routes>
+      {/* The app shell's landmark, as App.tsx renders every page. */}
+      <main>
+        <Routes>
+          <Route path="/apply/:sessionId" element={<ApplyPage />} />
+        </Routes>
+      </main>
     </MemoryRouter>
   );
 }
@@ -82,6 +86,16 @@ async function runWith(result: ApplyResult) {
 
 describe("ApplyPage", () => {
   beforeEach(() => applyToNewFile.mockReset());
+
+  it("has no accessibility violations, before and after a file is applied", async () => {
+    renderPage();
+    expect(await axeViolations(document.body)).toEqual([]);
+    fireEvent.click(screen.getByText("pick file"));
+    applyToNewFile.mockResolvedValueOnce(RESULT);
+    fireEvent.click(screen.getByRole("button", { name: /Clean and predict/ }));
+    await screen.findByText("59 of 60 rows kept");
+    expect(await axeViolations(document.body)).toEqual([]);
+  });
 
   it("won't run without a file", () => {
     renderPage();

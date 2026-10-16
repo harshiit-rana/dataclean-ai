@@ -142,7 +142,9 @@ function Applied({
           <table className="w-full border-collapse text-sm">
             <thead>
               <tr>
-                <th className="border-b border-border px-2 py-1.5 text-left font-medium">&nbsp;</th>
+                <th className="border-b border-border px-2 py-1.5 text-left font-medium">
+                  <span className="sr-only">Measure</span>
+                </th>
                 <th className="border-b border-border px-2 py-1.5 text-right font-medium">Before</th>
                 <th className="border-b border-border px-2 py-1.5 text-right font-medium">After</th>
               </tr>

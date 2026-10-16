@@ -505,6 +505,13 @@ export function RunHistory({
                               within the noise
                             </span>
                           )}
+                          {/* Said in words as well as colour: a reader who cannot tell green from red
+                              still needs to know the change is real (#101). */}
+                          {(verdict === "better" || verdict === "worse") && (
+                            <span className="mt-0.5 block text-xs text-muted-foreground">
+                              {verdict}, beyond the noise
+                            </span>
+                          )}
                           {comparison?.method === "paired" &&
                             comparison.low != null &&
                             comparison.high != null && (

@@ -195,7 +195,9 @@ function HeldOutScores({
         </caption>
         <thead>
           <tr>
-            <th className="border-b border-border px-2 py-1.5 text-left font-medium">&nbsp;</th>
+            <th className="border-b border-border px-2 py-1.5 text-left font-medium">
+                  <span className="sr-only">Score</span>
+                </th>
             {keys.map((key) => (
               <th key={key} className="border-b border-border px-2 py-1.5 text-right font-medium">
                 {METRIC_LABELS[key] ?? key}
@@ -584,7 +586,9 @@ function SealedHoldout({
                 </caption>
                 <thead>
                   <tr>
-                    <th className="border-b border-border px-2 py-1.5 text-left font-medium">&nbsp;</th>
+                    <th className="border-b border-border px-2 py-1.5 text-left font-medium">
+                  <span className="sr-only">Score</span>
+                </th>
                     {shown.map((key) => (
                       <th key={key} className="border-b border-border px-2 py-1.5 text-right font-medium">
                         {METRIC_LABELS[key] ?? key}

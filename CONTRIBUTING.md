@@ -57,6 +57,10 @@ are both running locally, you're ready to make changes.
 
 ## Conventions worth knowing
 
+- **Accessibility is checked in the suite.** A page or a substantial component gets an axe case
+  (`axeViolations` from `src/test/axe.ts`, rendered inside `<main>` as the app shell renders it). A new colour
+  token used for text gets a pairing in `src/test/theme-contrast.test.ts`. Never say something with colour alone:
+  a status needs words or an icon too. A live region announces a short line, not a whole card.
 - **Static checks run in CI.** `pip install -r requirements-dev.txt`, then from `backend/`: `ruff check app`
   (syntax errors and pyflakes: unused imports, undefined and shadowed names) and `mypy app` (mypy's default
   strictness: annotated functions are checked). Both must pass. Modules that had type errors when checking started

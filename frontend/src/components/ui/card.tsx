@@ -21,7 +21,8 @@ CardHeader.displayName = "CardHeader";
 
 export const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HTMLHeadingElement>>(
   ({ className, ...props }, ref) => (
-    <h3 ref={ref} className={cn("text-lg font-semibold leading-none", className)} {...props} />
+    // h2: a card is a section of the page, whose title is the h1. An h3 here skipped a level (#101).
+    <h2 ref={ref} className={cn("text-lg font-semibold leading-none", className)} {...props} />
   )
 );
 CardTitle.displayName = "CardTitle";

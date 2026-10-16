@@ -16,7 +16,11 @@ const ModelPage = lazy(() =>
 export default function App() {
   return (
     <>
-      <ThemeToggle />
+      {/* Landmarks, so a screen reader can jump straight to the page's content (#101). */}
+      <header>
+        <ThemeToggle />
+      </header>
+      <main id="main">
       <Routes>
         <Route path="/" element={<UploadPage />} />
         <Route path="/review/:sessionId" element={<ReviewPage />} />
@@ -39,6 +43,7 @@ export default function App() {
         <Route path="/apply/:sessionId" element={<ApplyPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      </main>
     </>
   );
 }

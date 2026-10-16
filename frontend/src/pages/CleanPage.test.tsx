@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { axeViolations } from "@/test/axe";
 import { CleanPage } from "./CleanPage";
 import type { ActionLogEntry } from "@/api/client";
 
@@ -60,15 +61,24 @@ function entry(overrides: Partial<ActionLogEntry> = {}): ActionLogEntry {
 function renderReloaded() {
   render(
     <MemoryRouter initialEntries={["/clean/session-1"]}>
-      <Routes>
-        <Route path="/clean/:sessionId" element={<CleanPage />} />
-      </Routes>
+      <main>
+        <Routes>
+          <Route path="/clean/:sessionId" element={<CleanPage />} />
+        </Routes>
+      </main>
     </MemoryRouter>
   );
 }
 
 describe("CleanPage after a reload", () => {
   beforeEach(() => fetchActionLog.mockReset());
+
+  it("has no accessibility violations", async () => {
+    fetchActionLog.mockResolvedValue({ actions: [entry()] });
+    renderReloaded();
+    await screen.findByText("Your cleaned data");
+    expect(await axeViolations(document.body)).toEqual([]);
+  });
 
   it("recovers a session that was already cleaned", async () => {
     fetchActionLog.mockResolvedValue({ actions: [entry()] });

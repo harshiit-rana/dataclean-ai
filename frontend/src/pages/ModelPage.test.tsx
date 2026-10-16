@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { axeViolations } from "@/test/axe";
 import type { ModelPlan } from "@/api/types";
 
 const trainModel = vi.fn();
@@ -41,9 +42,11 @@ const PLAN = {
 function renderPage(address = "/model/s1") {
   render(
     <MemoryRouter initialEntries={[address]}>
-      <Routes>
-        <Route path="/model/:sessionId" element={<ModelPage />} />
-      </Routes>
+      <main>
+        <Routes>
+          <Route path="/model/:sessionId" element={<ModelPage />} />
+        </Routes>
+      </main>
     </MemoryRouter>
   );
 }
@@ -114,5 +117,14 @@ describe("ModelPage — set up from a readiness check (#100)", () => {
     renderPage("/model/s1?split=time&exclude=x");
     const shown = await screen.findByTestId("preselect");
     expect(JSON.parse(shown.textContent!)).toEqual({ exclude: ["x"] });
+  });
+});
+
+describe("ModelPage — accessibility (#101)", () => {
+  it("has no accessibility violations with the plan shown", async () => {
+    fetchModelPlan.mockResolvedValue(PLAN);
+    renderPage();
+    await screen.findByText("train now");
+    expect(await axeViolations(document.body)).toEqual([]);
   });
 });

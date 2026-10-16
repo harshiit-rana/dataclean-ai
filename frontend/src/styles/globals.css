@@ -11,8 +11,10 @@
     --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
     --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --destructive: 0 84% 60%;
+    /* Both darker than the scaffold's: grey helper text on the muted background and red error text on white
+       fell short of WCAG AA's 4.5:1 (theme-contrast.test.ts checks every text pairing, #101). */
+    --muted-foreground: 215 19% 41%;
+    --destructive: 0 72% 48%;
     --destructive-foreground: 210 40% 98%;
     --border: 214 32% 91%;
     --radius: 0.5rem;

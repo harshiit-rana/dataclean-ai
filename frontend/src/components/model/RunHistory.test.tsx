@@ -176,6 +176,8 @@ describe("RunHistory — a change is only coloured when it is real", () => {
       pair(0.75)
     );
     expect(screen.getByText("-0.0500")).toHaveClass("text-destructive");
+    // In words as well as colour (#101).
+    expect(screen.getByText("worse, beyond the noise")).toBeInTheDocument();
   });
 
   it("leaves a change inside the noise uncoloured and says so", () => {

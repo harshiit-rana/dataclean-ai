@@ -20,8 +20,14 @@ interface LiveImprovementProps {
  * Rejected rounds are shown as they land, not tidied away. "Tuning didn't help" arriving live
  * is the same finding as it is in the final trail, just sooner. */
 export function LiveImprovement({ rounds, stage }: LiveImprovementProps) {
+  const latest = rounds[rounds.length - 1];
   return (
-    <Card aria-live="polite">
+    <Card>
+      {/* One short announcement per finished round, not the whole card on every change: the stage line updates
+          often, and a live region around it all would read the page aloud over and over (#101). */}
+      <p role="status" aria-live="polite" className="sr-only">
+        {latest ? `Round finished: ${latest.label}, ${latest.accepted ? "kept" : "not kept"}.` : ""}
+      </p>
       <CardHeader>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <CardTitle className="text-base">Searching for a better model</CardTitle>
@@ -42,7 +48,11 @@ export function LiveImprovement({ rounds, stage }: LiveImprovementProps) {
             )}
           >
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <span className="font-medium">{round.label}</span>
+              <span className="font-medium">
+                {round.label}
+                {/* The highlight says it in colour; this says it in words. */}
+                {round.accepted && <span className="ml-2 text-xs font-normal text-primary">kept</span>}
+              </span>
               <span className="tabular-nums text-muted-foreground">
                 {round.score != null ? round.score.toFixed(3) : "—"}
                 {round.gain != null && (

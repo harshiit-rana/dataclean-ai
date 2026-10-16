@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
+import { axeViolations } from "@/test/axe";
 import { ModelResults } from "./ModelResults";
 import { HeldOutUse, ScoreLabel } from "./ScoreLabel";
 import type { EvaluationStatus, ModelResult } from "@/api/types";
@@ -871,5 +872,13 @@ describe("ModelResults — the cannot-judge states (#96)", () => {
   it("shows nothing about the cut-off when none was asked for", () => {
     render(<ModelResults result={result({ evaluation: EVAL(1, "independent") })} />);
     expect(screen.queryByText("Where the cut-off sits")).not.toBeInTheDocument();
+  });
+});
+
+describe("ModelResults — accessibility (#101)", () => {
+  it("has no accessibility violations, the held-out table open", async () => {
+    const { container } = render(<main><ModelResults result={result()} /></main>);
+    fireEvent.click(screen.getByRole("button", { name: /Show held-out scores for every model/ }));
+    expect(await axeViolations(container)).toEqual([]);
   });
 });
