@@ -187,6 +187,13 @@ class TestPlan:
         assert "joined" in plan["date_columns"]
         assert {o["value"] for o in plan["split_options"]} == {"random", "time", "group"}
 
+    def test_the_plan_offers_extra_trees_for_its_own_kind_of_target_only(self):
+        """#53: each task's candidates, and the other task's extra trees nowhere in them."""
+        names = [m["name"] for m in client.get(f"/api/model/{_session()}/plan").json()["candidate_models"]]
+        assert "extra_trees_classifier" in names
+        assert "extra_trees_regressor" not in names
+        assert names.index("extra_trees_classifier") == names.index("random_forest_classifier") + 1
+
     def test_a_session_without_a_target_is_refused_with_an_explanation(self):
         session_id = _session(target_column=None)
         response = client.get(f"/api/model/{session_id}/plan")

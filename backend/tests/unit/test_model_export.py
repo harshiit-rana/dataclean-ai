@@ -169,6 +169,15 @@ class TestScriptActuallyRuns:
         assert match, f"no accuracy line in the script's output:\n{output}"
         assert float(match.group(1)) == pytest.approx(reported, abs=1e-4)
 
+    def test_extra_trees_reproduces_its_metrics_too(self, tmp_path, classification_data):
+        """#53: a randomised forest reproduces only if the seed and every setting reach the script."""
+        result = _train(classification_data, "outcome", "classification", ["extra_trees_classifier"])
+        output = self._run(tmp_path, classification_data, result)
+
+        match = re.search(r"Accuracy:\s+([0-9.]+)", output)
+        assert match, f"no accuracy line in the script's output:\n{output}"
+        assert float(match.group(1)) == pytest.approx(result["results"][0]["metrics"]["accuracy"], abs=1e-4)
+
     def test_the_regression_script_reproduces_r2(self, tmp_path, regression_data):
         result = _train(regression_data, "price", "regression", ["linear_regression"])
         output = self._run(tmp_path, regression_data, result)

@@ -55,6 +55,16 @@ SEARCH_SPACES: dict[str, dict[str, list[Any]]] = {
         "model__max_features": ["sqrt", "log2", None],
         "model__class_weight": [None, "balanced", "balanced_subsample"],
     },
+    "extra_trees_classifier": {
+        # The random forest's space without its bootstrap choice: extra trees fit on every row by default, and
+        # their randomness is in the split points, so leaf size and how many columns a split may try are what
+        # move the score.
+        "model__n_estimators": [150, 300],
+        "model__max_depth": [None, 6, 10, 16],
+        "model__min_samples_leaf": [1, 2, 4, 8],
+        "model__max_features": ["sqrt", "log2", None],
+        "model__class_weight": [None, "balanced", "balanced_subsample"],
+    },
     "gradient_boosting_classifier": {
         "model__learning_rate": [0.02, 0.05, 0.1, 0.2],
         "model__max_iter": [100, 200, 400],
@@ -68,6 +78,12 @@ SEARCH_SPACES: dict[str, dict[str, list[Any]]] = {
     "random_forest_regressor": {
         # 800 trees is out: on data this size it lands inside the fold noise of 400 and costs
         # twice as long, and this search is something someone is waiting on.
+        "model__n_estimators": [150, 300],
+        "model__max_depth": [None, 6, 10, 16],
+        "model__min_samples_leaf": [1, 2, 4, 8],
+        "model__max_features": ["sqrt", "log2", None],
+    },
+    "extra_trees_regressor": {
         "model__n_estimators": [150, 300],
         "model__max_depth": [None, 6, 10, 16],
         "model__min_samples_leaf": [1, 2, 4, 8],

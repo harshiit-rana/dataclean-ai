@@ -248,7 +248,8 @@ box and the readiness panel carries a warning before anything is trained. The re
 function of the counts only, never of which rows end up held back. A sealed holdout keeps its fixed
 70 / 15 / 15 parts and ignores it.
 
-**Training.** Six models across classification and regression. All preprocessing lives *inside*
+**Training.** Eight models across classification and regression: for each, a linear model, a random forest,
+extra trees (#53, added under the registry criteria) and gradient boosting. All preprocessing lives *inside*
 the sklearn `Pipeline`, so `fit` sees only the training fold — there's a test asserting the
 fitted imputer's median came from training rows alone.
 

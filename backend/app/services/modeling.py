@@ -209,9 +209,25 @@ MODELS: dict[str, ModelSpec] = {
             complexity_rank=2,
         ),
         ModelSpec(
+            "extra_trees_classifier",
+            "Extra trees",
+            "A forest whose splits are drawn at random. Often as accurate as a random forest, "
+            "faster to fit and steadier on small, noisy files.",
+            "classification",
+            "sklearn.ensemble",
+            "ExtraTreesClassifier",
+            {
+                "n_estimators": 200,
+                "class_weight": "balanced",
+                "random_state": RANDOM_STATE,
+                "n_jobs": -1,
+            },
+            complexity_rank=2,
+        ),
+        ModelSpec(
             "gradient_boosting_classifier",
             "Gradient boosting",
-            "Typically the most accurate of the three on tabular data, and the slowest to "
+            "Typically the most accurate on tabular data, and the slowest to "
             "train.",
             "classification",
             "sklearn.ensemble",
@@ -236,6 +252,17 @@ MODELS: dict[str, ModelSpec] = {
             "regression",
             "sklearn.ensemble",
             "RandomForestRegressor",
+            {"n_estimators": 200, "random_state": RANDOM_STATE, "n_jobs": -1},
+            complexity_rank=2,
+        ),
+        ModelSpec(
+            "extra_trees_regressor",
+            "Extra trees",
+            "A forest whose splits are drawn at random. Often as accurate as a random forest, "
+            "faster to fit and steadier on small, noisy files.",
+            "regression",
+            "sklearn.ensemble",
+            "ExtraTreesRegressor",
             {"n_estimators": 200, "random_state": RANDOM_STATE, "n_jobs": -1},
             complexity_rank=2,
         ),
@@ -987,7 +1014,7 @@ def build_pipeline(
                         ("impute", SimpleImputer(strategy="most_frequent")),
                         # Categories seen only in the test set must not blow up prediction.
                         # sparse_output=False because HistGradientBoosting refuses sparse
-                        # input -- without it the strongest of the three models silently
+                        # input -- without it gradient boosting silently
                         # fails to train on any dataset that has a categorical column. The
                         # matrix is safe to keep dense: MAX_CATEGORIES_TO_ENCODE caps how
                         # wide the encoding can get.
@@ -1825,8 +1852,10 @@ def source_column_importance(importances: list[dict], columns: list[str]) -> lis
 # new random model is one line here.
 _SEEDED_MODELS = {
     "random_forest_classifier",
+    "extra_trees_classifier",
     "gradient_boosting_classifier",
     "random_forest_regressor",
+    "extra_trees_regressor",
     "gradient_boosting_regressor",
 }
 for _name in _SEEDED_MODELS:
@@ -1840,6 +1869,9 @@ for _name in _SEEDED_MODELS:
 _COST_WEIGHTS = {
     "random_forest_classifier": 40,
     "random_forest_regressor": 40,
+    # Timed at 20,000 rows against logistic and ridge regression: 0.8 to 0.95 of the forest's time (#53).
+    "extra_trees_classifier": 35,
+    "extra_trees_regressor": 35,
     "gradient_boosting_classifier": 25,
     "gradient_boosting_regressor": 25,
     # Fits every member: as dear as the dearest two families together, at most.

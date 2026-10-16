@@ -51,7 +51,24 @@ the benchmark in hand, not before. The owner's words: no dependencies without a 
 
 | Candidate | Decision | Why |
 | --- | --- | --- |
-| **Extra Trees** (`ExtraTreesClassifier`/`Regressor`) | **Accepted** (#53) | In scikit-learn, so no dependency; same shape as the random forest (criteria 1 to 4, 6, 7 follow from it); usually matches a random forest on tabular data at lower fit cost and lower variance on small noisy files (criteria 5 and 8, to be shown by the one benchmark comparison the issue asks for); placed after the forests in registry order. |
+| **Extra Trees** (`ExtraTreesClassifier`/`Regressor`) | **Accepted** (#53), built 16 October 2026 | In scikit-learn, so no dependency; same shape as the random forest (criteria 1 to 4, 6, 7 follow from it); placed after the forests in registry order. Criteria 5 and 8 as measured when it was built, below. |
+
+**Extra Trees as measured (#53).** Fit time at 20,000 rows: 0.8 to 0.95 of the random forest's (cost weight 35
+against the forest's 40). Fold-based comparison (cross-validated, all four families of the task, the app's own
+`train_candidates`):
+
+| File / target | Linear | Random forest | Extra trees | Gradient boosting |
+| --- | --- | --- | --- | --- |
+| subscription_churn / churned (AUC) | **0.795** ± 0.027 | 0.754 ± 0.033 | 0.735 ± 0.024 | 0.725 ± 0.036 |
+| retail_orders / returned (AUC; no signal) | 0.463 ± 0.055 | 0.404 ± 0.052 | 0.445 ± 0.067 | 0.473 ± 0.072 |
+| retail_orders / order_total (R²) | 0.884 ± 0.016 | 0.988 ± 0.004 | **0.990** ± 0.003 | 0.989 ± 0.005 |
+| synthetic, 3,000 rows / outcome (AUC) | **0.857** ± 0.023 | 0.843 ± 0.022 | 0.817 ± 0.027 | 0.835 ± 0.023 |
+
+On these four files it was chosen once (the regression, where it ties the forest and boosting within the fold
+spread, with the smallest spread) and was weaker than the forest on both classification files with a signal. That is
+thin evidence for criterion 8: cheaper than the forest, not shown to be better. It is kept because the owner decided
+to build it first; the reference benchmark set, when it exists, is where it should be re-judged, and taking it out is
+one registry entry.
 | **XGBoost, LightGBM, CatBoost** | **Deferred** | `HistGradientBoosting*` is the same algorithm family and is already in scikit-learn, so a new dependency would have to beat it on the benchmark first, and none has been shown to. Revisit when the benchmark exists. |
 | **SVM** | **Not planned** | Slow to fit as rows grow (fails criterion 5 at 20,000 rows), needs scaling and a kernel choice that the curated search would have to carry, and gives probabilities only through an extra calibration step; a poor fit for the app's one-click comparison. |
 | **k-NN** | **Not planned** | Its cost sits in prediction, which the app does for every scored row; it is sensitive to scaling and to many inputs; it stores the training data in the exported model, which is a data-handling cost the others do not carry. |
