@@ -855,6 +855,20 @@ describe("ModelResults — the cannot-judge states (#96)", () => {
     expect(box).toHaveTextContent("There isn't enough held-back data to judge this model.");
   });
 
+  it("calls a strong score on few test rows promising, not working (#119)", () => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.assessment = {
+      verdict: "insufficient_evidence",
+      held_back_from: "useful",
+      min_test_rows_for_useful: 60,
+      headline: "This model's score (AUC 0.84) clears the bar this app sets on 40 test rows, but that is too few rows to call the model reliable.",
+    };
+    render(<ModelResults result={r} />);
+    expect(screen.getByText("Promising, but too few test rows to call it reliable")).toBeInTheDocument();
+    expect(screen.queryByText("This model works")).not.toBeInTheDocument();
+    expect(screen.getByText(/too few rows to call the model reliable/)).toBeInTheDocument();
+  });
+
   it("says why a requested cut-off was not chosen instead of showing nothing", () => {
     const r = result({ evaluation: EVAL(1, "independent") });
     r.operating_point = null;

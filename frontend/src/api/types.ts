@@ -1020,8 +1020,11 @@ export interface ModelResult {
   /** Absent on results from before models were chosen on training folds. */
   selection?: ModelSelection;
   assessment: {
-    verdict: "useful" | "marginal" | "no_better_than_guessing" | "not_enough_test_data";
+    verdict: "useful" | "marginal" | "no_better_than_guessing" | "not_enough_test_data" | "insufficient_evidence";
     headline: string;
+    /** On `insufficient_evidence`: the verdict it would have had with enough test rows, and how many that is. */
+    held_back_from?: "useful";
+    min_test_rows_for_useful?: number;
     /** Present exactly when the verdict is `not_enough_test_data`. */
     not_judged?: NotJudgedBlock;
     /** True when the headline carries a note that the held-out rows have been reused. */

@@ -123,6 +123,7 @@ const VERDICT_TEXT: Record<string, string> = {
   marginal: "Weak",
   no_better_than_guessing: "No better than guessing",
   not_enough_test_data: "Can't tell",
+  insufficient_evidence: "Promising, not proven",
 };
 
 function Provenance({ run }: { run: ModelRun }) {

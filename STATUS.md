@@ -304,6 +304,13 @@ not work", which is just as much a claim about the test set as "this model works
 distinction matters because the two failures look identical from the outside and call for
 opposite responses: a bad model needs different columns, an unjudgeable one needs more rows.
 
+And one above the floor (#119): **promising, but too few test rows to call it reliable**. Between 30 and 59
+test rows a result that would have been "useful" is held back as `insufficient_evidence`. On 30 test rows the
+noise bar for three candidates is about 0.73, above the 0.70 cut-off for "useful", so any lucky run that cleared
+it got the strongest verdict; the #35 simulation saw that on pure noise. Sixty rows is a safeguard, not a proof:
+how uncertain a score is depends on how many examples of each answer there are, their balance and the score
+itself, and the headline says that reaching 60 would not make the verdict certain either.
+
 **Inputs built from the columns, not just chosen among them.** Tuning can only move a score
 as far as the columns allow, and the app was throwing columns away: a date was dropped
 wholesale for having too many distinct values, and free text was misfiled as an identifier.

@@ -1424,6 +1424,13 @@ _Z_BY_CANDIDATE_COUNT = {1: 1.645, 2: 1.96, 3: 2.13, 4: 2.24, 5: 2.33}
 MIN_TEST_ROWS_TO_JUDGE = 30
 MIN_TEST_ROWS_PER_CLASS_TO_JUDGE = 10
 
+# Below this, nothing is called "useful" (#119). On 30 test rows the two-answer noise bar is 0.73 with three
+# candidates, above the 0.70 cut-off for "useful", so the "marginal" band vanished and any lucky run that cleared
+# the bar got the strongest verdict; the #35 simulation saw it happen on pure noise. A safeguard, not a proof: how
+# uncertain a score is depends on how many examples of each answer there are, their balance and the score itself,
+# so 60 rows does not make a verdict reliable either, and the wording never says it does.
+MIN_TEST_ROWS_FOR_USEFUL = 60
+
 # A regression is "useful" only when even the pessimistic end of its R² interval reaches this.
 R2_USEFUL_FLOOR = 0.3
 
@@ -1539,7 +1546,59 @@ def _regression_verdict_from_interval(r2: float, low: float, high: float, test_r
     }
 
 
+def _score_phrase(metrics: dict, task: str) -> str:
+    """The score a verdict stands on, as a reader would name it."""
+    if task == "regression":
+        return f"R² {float(metrics.get('r2', 0.0)):.2f}"
+    if metrics.get("roc_auc") is not None:
+        return f"AUC {float(metrics['roc_auc']):.2f}"
+    if metrics.get("roc_auc_ovr_macro") is not None:
+        return f"macro AUC {float(metrics['roc_auc_ovr_macro']):.2f}"
+    return f"accuracy {float(metrics.get('accuracy', 0.0)):.0%}"
+
+
+def _hold_back_useful(assessment: dict, metrics: dict, task: str, test_rows: int | None) -> dict:
+    """A "useful" verdict on fewer than `MIN_TEST_ROWS_FOR_USEFUL` test rows becomes "insufficient evidence".
+
+    The other verdicts stand: "marginal" and "no better than guessing" claim less, and below
+    `MIN_TEST_ROWS_TO_JUDGE` the verdict is already "not enough test data".
+    """
+    if assessment.get("verdict") != "useful" or not test_rows or test_rows >= MIN_TEST_ROWS_FOR_USEFUL:
+        return assessment
+    return {
+        "verdict": "insufficient_evidence",
+        "held_back_from": "useful",
+        "min_test_rows_for_useful": MIN_TEST_ROWS_FOR_USEFUL,
+        "headline": f"This model's score ({_score_phrase(metrics, task)}) clears the bar this app sets on "
+        f"{test_rows} test rows, but that is too few rows to call the model reliable: a test set this small "
+        f"can produce a strong-looking score by chance, and how uncertain the score is also depends on how many "
+        f"examples of each answer it holds. The app does not call a model useful on fewer than "
+        f"{MIN_TEST_ROWS_FOR_USEFUL} test rows, and reaching {MIN_TEST_ROWS_FOR_USEFUL} would not make it "
+        f"certain either. Treat it as promising, not proven, and get more labelled rows before relying on it.",
+    }
+
+
 def assess_result(
+    metrics: dict,
+    baseline: dict,
+    task: str,
+    *,
+    test_rows: int | None = None,
+    class_counts: list[int] | None = None,
+    model_count: int = 2,
+    intervals: dict | None = None,
+    ovr_auc_floor: float | None = None,
+) -> dict:
+    """Is this model actually worth anything? See `_assess` for the rules; on fewer than
+    `MIN_TEST_ROWS_FOR_USEFUL` test rows a "useful" verdict is held back as "insufficient evidence" (#119)."""
+    assessment = _assess(
+        metrics, baseline, task, test_rows=test_rows, class_counts=class_counts, model_count=model_count,
+        intervals=intervals, ovr_auc_floor=ovr_auc_floor,
+    )
+    return _hold_back_useful(assessment, metrics, task, test_rows)
+
+
+def _assess(
     metrics: dict,
     baseline: dict,
     task: str,

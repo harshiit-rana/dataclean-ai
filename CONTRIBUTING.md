@@ -215,6 +215,10 @@ are both running locally, you're ready to make changes.
   as `useful` is, and neither can be made from twelve rows. Related: `_auc_noise_threshold` is
   deliberately uncapped. The `min(0.75, ...)` that used to be there fired only on the smallest
   test sets — the exact case the formula exists to be strict about — and lowered the bar.
+- **No "useful" on fewer than 60 test rows.** `assess_result` wraps every verdict in `_hold_back_useful`: from
+  30 to 59 test rows a result that would have been `useful` is `insufficient_evidence` (#119), for every kind
+  of target. A new verdict path goes inside `_assess`, so the hold-back still applies to it. The 60 is a
+  safeguard, not a proof; never word it as a guarantee of reliability.
 - **A regression verdict stands on the lower end of the R² interval.** `assess_result` takes the
   held-out metrics' `intervals` and `_regression_verdict_from_interval` uses `low`: at or below 0
   is guessing, below `R2_USEFUL_FLOOR` (0.3) is marginal, otherwise useful. Pass the intervals

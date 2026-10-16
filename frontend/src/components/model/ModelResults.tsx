@@ -97,6 +97,12 @@ const VERDICT_STYLES: Record<string, { title: string; className: string }> = {
     title: "There isn't enough data to judge this model",
     className: "border-sky-500/40 bg-sky-500/5",
   },
+  // A result that would have been "useful" on fewer than 60 test rows (#119). Promising, not proven, and
+  // styled as "cannot tell yet" for the same reason as above.
+  insufficient_evidence: {
+    title: "Promising, but too few test rows to call it reliable",
+    className: "border-sky-500/40 bg-sky-500/5",
+  },
 };
 
 /** The "no model at all" rows: the main naive strategy, then any others. Every row has a value
