@@ -1168,6 +1168,12 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   development is switched on explicitly by `.env.example` and `docker-compose.yml` for the local
   setup, and the app logs a warning at every start while tokens are off.
 - **Retention.** Files deleted 24 hours after last use, swept hourly in-process.
+- **Uploads bounded by shape, not only bytes (#115).** A 50 MB file can still hold hundreds of thousands of columns or
+  one enormous cell, enough to exhaust memory in parsing, profiling or one-hot encoding. Every uploaded file (the
+  upload, an application, an evaluation file) is refused with a 413 and a message naming the limit when it has more
+  than `MAX_COLUMNS` columns (1,000; checked from the header before parsing), `MAX_ROWS` rows (2,000,000) or a cell
+  longer than `MAX_CELL_CHARS` characters (32,767, Excel's own limit, with the column and row named). The shipped
+  samples are well within them, which a test checks.
 - **CSV downloads a spreadsheet cannot run (#112).** A text cell from the uploaded data that begins with `=`, `+`,
   `-`, `@`, a tab or a carriage return is read by Excel or Sheets as a formula (CSV injection). Every CSV download --
   the cleaned file, the bundle's copy, an application's cleaned and predictions files -- writes such cells with a

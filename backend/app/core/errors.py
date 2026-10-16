@@ -41,6 +41,16 @@ class FileTooLargeError(AppError):
         super().__init__("File too large", f"File exceeds the {max_mb}MB limit.")
 
 
+class FileShapeTooLargeError(AppError):
+    """A file within the byte limit whose shape would still exhaust memory: too many columns, too many rows, or one
+    enormous cell. 413 (content too large). The detail says which limit and how to raise it."""
+
+    status_code = 413
+
+    def __init__(self, detail: str):
+        super().__init__("File too large to process", detail)
+
+
 class UnparseableCSVError(AppError):
     def __init__(self):
         super().__init__("File could not be read as CSV", "File could not be read as CSV.")

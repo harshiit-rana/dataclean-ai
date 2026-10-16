@@ -25,6 +25,13 @@ class Settings(BaseSettings):
 
     upload_dir: str = "./uploads"
     max_file_size_mb: int = 50
+    # The byte limit alone lets a 50 MB file hold hundreds of thousands of columns or one enormous cell, either of
+    # which can exhaust memory in parsing, profiling (a loop per column) or one-hot encoding. Checked on every
+    # uploaded file: the columns from the header before the file is parsed, the rest straight after.
+    max_columns: int = 1000
+    max_rows: int = 2_000_000
+    # The longest a single cell may be, in characters. Excel's own limit for a cell.
+    max_cell_chars: int = 32_767
 
     # The most work one training request may be estimated to do, in "row-fits": one row fitted by the
     # cheapest model counts as one, and the forests and boosted trees count as many (see
