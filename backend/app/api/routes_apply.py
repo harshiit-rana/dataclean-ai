@@ -193,6 +193,10 @@ def _run(directory, session_id: str, new: pd.DataFrame, action_log: list[dict], 
     }
     # The distribution of what was predicted, kept with the application to compare across applications.
     response["prediction_summary"] = prediction_tracking.summarise(predicted, result)
+    reference = prediction_tracking.reference(
+        model_store.load_run_predictions(directory, model_store.current_run_id(directory) or ""), result
+    )
+    prediction_change = prediction_tracking.compare(reference, response["prediction_summary"])
 
     target_column = result.get("target_column")
     if target_column and target_column in applied.frame.columns and len(X_new):
@@ -211,7 +215,39 @@ def _run(directory, session_id: str, new: pd.DataFrame, action_log: list[dict], 
                     f"in the file this model was built from, so they were left out of the check."
                 )
 
+    response["findings"] = _three_findings(response.get("drift"), prediction_change, response.get("answers"))
     return response
+
+
+def _three_findings(drift: dict | None, predictions: dict, answers: dict | None) -> dict:
+    """The report as three separate questions, because each answer means something different: the inputs moving
+    does not mean the predictions got worse, and stable inputs do not mean the model still works -- the relationship
+    can change. Performance is only stated when there are enough answers to judge it."""
+    inputs = {"verdict": (drift or {}).get("verdict") or "unknown",
+              "headline": (drift or {}).get("headline") or "The inputs could not be compared."}
+    if answers and answers.get("now") is not None:
+        performance = {"verdict": "measured", "headline": answers.get("headline")}
+    elif answers and answers.get("not_judged"):
+        performance = {"verdict": "too_few_answers", "headline": answers.get("headline")}
+    else:
+        performance = {"verdict": "unknown", "headline": "Unknown -- this file has no answers yet."}
+    moved_inputs = inputs["verdict"] in ("shifted", "different")
+    moved_predictions = predictions.get("verdict") == "changed"
+    if performance["verdict"] == "measured":
+        summary = "The answers say how the model is doing; the inputs and the predictions say why it might have changed."
+    elif moved_inputs and moved_predictions:
+        summary = ("The inputs and the predictions have both moved, and there are no answers yet to say whether the "
+                   "model is worse. Check the answers when they arrive.")
+    elif moved_predictions:
+        summary = ("The predictions moved although the inputs look similar, and there are no answers yet. Look at "
+                   "what changed in the rows themselves.")
+    elif moved_inputs:
+        summary = ("The inputs moved but the predictions look much as they did, and there are no answers yet to say "
+                   "whether the model still works.")
+    else:
+        summary = ("Neither the inputs nor the predictions show a clear change. Without answers that is not proof "
+                   "the model still works, only that nothing visible moved.")
+    return {"inputs": inputs, "predictions": predictions, "performance": performance, "summary": summary}
 
 
 def _rows_seen_at_build(new: pd.DataFrame, original: pd.DataFrame, target_column: str) -> set[int]:

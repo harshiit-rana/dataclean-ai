@@ -9,6 +9,7 @@ import { ApiError, applyToNewFile } from "@/api/client";
 import { OPERATION_LABELS } from "@/lib/operations";
 import { cn } from "@/lib/utils";
 import { NotJudged } from "@/components/NotJudged";
+import { FindingsCard } from "@/components/apply/FindingsCard";
 import { ValidationCard } from "@/components/apply/ValidationCard";
 import { PreviousApplications } from "@/components/apply/PreviousApplications";
 import type { AppliedStep, ApplyResult, DriftColumn, DriftReport } from "@/api/types";
@@ -186,6 +187,8 @@ export function ApplyPage() {
               ))}
             </CardContent>
           </Card>
+
+          {result.findings && <FindingsCard findings={result.findings} />}
 
           {result.validation && <ValidationCard validation={result.validation} />}
 

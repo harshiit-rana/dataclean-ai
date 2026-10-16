@@ -1277,6 +1277,8 @@ export interface ApplyResult {
   notes: string[];
   /** Absent for a model saved before input schemas were kept. */
   validation?: FileValidation | null;
+  /** Inputs, predictions and performance as separate findings; absent without a model. */
+  findings?: ApplyFindings | null;
   drift: DriftReport | null;
   predictions: {
     count: number;
@@ -1392,4 +1394,12 @@ export interface PredictionHistory {
   run_id: string | null;
   reference: PredictionSummary | null;
   applications: { apply_id: string; file_name: string | null; at: string; prediction_summary: PredictionSummary }[];
+}
+
+/** The apply report in three questions (backend routes_apply._three_findings). */
+export interface ApplyFindings {
+  inputs: { verdict: string; headline: string };
+  predictions: { verdict: string; headline: string };
+  performance: { verdict: string; headline: string };
+  summary: string;
 }

@@ -934,6 +934,14 @@ model's own held-out predictions at training time, at the cut-off it answers at,
 page shows the table: a jump in the share flagged is often the first sign something changed, before any answers
 arrive.
 
+The apply report answers three separate questions (#85), because each answer means something different: inputs that
+moved do not mean worse predictions, and stable inputs do not mean the model still works. **Inputs** is the drift
+check; **predictions** compares this file's predictions with the training-time reference by a stated rule (for two
+classes, the 95% interval of the difference in the share flagged excludes zero; for several, the class mix moved by at
+least 10% of rows; for values, the median moved by more than half the reference's interquartile range); and
+**performance** is stated only when the file has answers -- otherwise *unknown, no answers yet*. A one-line summary
+says what the combination means, and the Apply page shows the three side by side.
+
 The export bundle has a `predict.py` that does what the app's *use this on a new file* does (#88): the approved
 cleaning with every learned value written in, the check against `schema.json` with the same blocking rule and message,
 the derived inputs, `model.joblib` checked against `model.json`, the stored cut-off, and every input row written back

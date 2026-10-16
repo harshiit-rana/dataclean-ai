@@ -73,3 +73,53 @@ def reference(held_out: dict | None, result: dict) -> dict | None:
     called = pd.Series(np.asarray(held_out["called"]).astype(str))
     shares = called.value_counts(normalize=True)
     return {"kind": "classes", "rows": int(len(called)), "shares": {str(k): round(float(v), 4) for k, v in shares.items()}}
+
+
+# How much a distribution of values may move before it counts as changed: its median, by this share of the
+# reference's interquartile range.
+VALUE_SHIFT_IQR = 0.5
+# How different two sets of class shares may be (total variation distance) before they count as changed.
+CLASS_SHIFT = 0.1
+
+
+def compare(reference: dict | None, current: dict | None) -> dict:
+    """Whether this file's predictions differ from the training-time reference, by a rule stated per kind: for two
+    classes, the 95% interval of the difference in the share flagged excludes zero; for several, the total variation
+    distance between the class shares is at least `CLASS_SHIFT`; for values, the median moved by more than
+    `VALUE_SHIFT_IQR` of the reference's interquartile range."""
+    if not reference or not current or reference.get("kind") != current.get("kind"):
+        return {"verdict": "unknown", "headline": "There is no training-time reference to compare the predictions with."}
+    kind = current["kind"]
+    if kind == "binary":
+        p1, n1 = reference.get("positive_rate"), reference.get("rows") or 0
+        p2, n2 = current.get("positive_rate"), current.get("rows") or 0
+        if p1 is None or p2 is None or not n1 or not n2:
+            return {"verdict": "unknown", "headline": "Too few rows to compare the share flagged."}
+        gap = p2 - p1
+        margin = 1.96 * ((p1 * (1 - p1) / n1 + p2 * (1 - p2) / n2) ** 0.5)
+        changed = abs(gap) > margin
+        return {
+            "verdict": "changed" if changed else "no_clear_change",
+            "difference": round(gap, 4), "low": round(gap - margin, 4), "high": round(gap + margin, 4),
+            "headline": (
+                f"{round(p2 * 100)}% of rows flagged as {current.get('positive')}, against {round(p1 * 100)}% on the "
+                f"held-out rows at training"
+                + (": a change beyond what the number of rows explains." if changed else ", within what the number of rows explains.")
+            ),
+        }
+    if kind == "classes":
+        shares1, shares2 = reference.get("shares") or {}, current.get("shares") or {}
+        distance = 0.5 * sum(abs(shares1.get(k, 0) - shares2.get(k, 0)) for k in set(shares1) | set(shares2))
+        changed = distance >= CLASS_SHIFT
+        return {"verdict": "changed" if changed else "no_clear_change", "distance": round(distance, 4),
+                "headline": f"The mix of predicted classes moved by {distance:.0%} of rows from the training-time mix"
+                            + ("." if changed else ", a small change.")}
+    q1, q2 = reference.get("quantiles") or {}, current.get("quantiles") or {}
+    if not q1 or not q2:
+        return {"verdict": "unknown", "headline": "Too few values to compare."}
+    spread = (q1.get("0.75", 0) - q1.get("0.25", 0)) or 1e-9
+    shift = q2.get("0.5", 0) - q1.get("0.5", 0)
+    changed = abs(shift) > VALUE_SHIFT_IQR * spread
+    return {"verdict": "changed" if changed else "no_clear_change", "median_shift": round(shift, 4),
+            "headline": f"The median prediction is {q2.get('0.5')} against {q1.get('0.5')} at training"
+                        + (", a shift larger than half the usual spread." if changed else ", within the usual spread.")}
