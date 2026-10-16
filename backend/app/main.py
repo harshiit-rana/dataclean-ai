@@ -33,6 +33,7 @@ from app.core.logging import configure_logging
 from app.dependencies import verify_session_access
 from app.graph.checkpointer import build_checkpointer, delete_thread
 from app.graph.workflow import build_graph
+from app.services import jobs
 from app.services.session_store import purge_expired_session_ids
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,13 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_format)
     warn_if_tokens_are_off(settings)
+
+    if settings.job_runner != "worker":
+        # Jobs an earlier process was running inline died with it (#103): say so now, so a page waiting on one is
+        # told instead of waiting for a heartbeat to go stale.
+        orphans = await asyncio.to_thread(jobs.interrupt_orphans, settings.upload_dir)
+        if orphans:
+            logger.warning("Marked %d job(s) interrupted by the restart", len(orphans))
 
     async with build_checkpointer(settings) as checkpointer:
         app.state.graph = build_graph(checkpointer)

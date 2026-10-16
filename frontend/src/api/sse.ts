@@ -59,16 +59,34 @@ export function streamImprove(
   return streamPost(`${API_BASE_URL}/api/model/${sessionId}/improve/stream`, request, handlers, sessionId);
 }
 
+/** Picks up a job's stream again (#103), skipping the first `after` events the page already has. A GET: it starts
+ * nothing, so it is safe to repeat after a dropped connection or a reload. */
+export function streamJob(
+  sessionId: string,
+  jobId: string,
+  after: number,
+  handlers: StreamHandlers<ImproveStreamEvent>
+): AbortController {
+  return streamPost(
+    `${API_BASE_URL}/api/model/${sessionId}/jobs/${encodeURIComponent(jobId)}/stream?after=${after}`,
+    undefined,
+    handlers,
+    sessionId,
+    "GET"
+  );
+}
+
 export function streamPost<T>(
   url: string,
   body: unknown,
   { onEvent, onError, onClose }: StreamHandlers<T>,
-  sessionId: string
+  sessionId: string,
+  method: "POST" | "GET" = "POST"
 ): AbortController {
   const controller = new AbortController();
 
   fetchEventSource(url, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json", ...sessionHeaders(sessionId) },
     body: body === undefined ? undefined : JSON.stringify(body),
     signal: controller.signal,

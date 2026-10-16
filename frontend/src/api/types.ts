@@ -1103,6 +1103,8 @@ export interface ImproveRequest extends TrainRequest {
 
 /** What POST /api/model/{id}/improve/stream sends, one per `data:` line. */
 export type ImproveStreamEvent =
+  /** First, always: the search runs as this job (#103), and the page can reconnect to it. */
+  | { type: "job"; job_id: string }
   /** A round -- or the final refit, `name: "rebuilding"` -- is starting. */
   | { type: "stage"; name: string; description: string }
   /** A round finished, kept or not. Same shape as the result's improvement.rounds. */

@@ -174,7 +174,7 @@ class TestKeepalive:
     def test_a_long_silence_is_filled_with_a_comment_line(self, monkeypatch):
         """Proxies close connections that look idle. A comment line is ignored by every SSE
         client and keeps the connection looking alive."""
-        from app.api import routes_model
+        from app.api import job_runner
 
         real = improvement.improve
 
@@ -183,7 +183,7 @@ class TestKeepalive:
             return real(*args, **kwargs)
 
         monkeypatch.setattr(improvement, "improve", slow)
-        monkeypatch.setattr(routes_model, "KEEPALIVE_SECONDS", 0.05)
+        monkeypatch.setattr(job_runner, "KEEPALIVE_SECONDS", 0.05)
         response, events = _stream(_session())
-        assert ": still searching" in response.text
+        assert ": still working" in response.text
         assert events[-1]["type"] == "result"  # and it still finishes properly

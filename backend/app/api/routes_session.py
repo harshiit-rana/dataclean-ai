@@ -12,7 +12,7 @@ from app.core.errors import AppError, SessionNotFoundError
 from app.dependencies import get_graph, get_graph_if_any
 from app.graph.checkpointer import delete_thread, persist_thread, thread_config
 from app.models.api_schemas import SessionStatusResponse
-from app.services import version_diff
+from app.services import jobs, version_diff
 from app.services.session_access import META_KEY, issue_token
 from app.services.session_store import (
     KEPT_KEY,
@@ -160,6 +160,9 @@ async def delete_session(
     (uploads, cleaned versions, runs and fitted models, reports, the sidecar holding the token hash). Irreversible.
     Files are unlinked, not securely erased; copies in backups remain (see the README)."""
     _meta_or_404(settings, session_id)
+    # Unfinished jobs first (#103), so a worker does not pick one up as the folder goes. One already running
+    # cannot be stopped mid-fit; it fails when it finds the folder gone.
+    jobs.cancel_session_jobs(session_dir(settings.upload_dir, session_id))
     checkpoint_deleted = await delete_thread(getattr(graph, "checkpointer", None), session_id)
     removed = await asyncio.to_thread(delete_session_files, settings.upload_dir, session_id)
     return {"deleted": session_id, "files_removed": removed["files"], "bytes_removed": removed["bytes"],

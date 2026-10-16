@@ -25,6 +25,8 @@ services:
       # The bundled setup is for trying the app locally: development turns session tokens off (and the app logs a
       # warning saying so). A hosted instance must not run with this -- the default, unset, requires tokens.
       APP_ENV: ${APP_ENV:-development}
+      # Long work goes to the worker below, so restarting this container does not lose a search (#103).
+      JOB_RUNNER: worker
     depends_on:
       redis:
         condition: service_healthy
@@ -37,6 +39,24 @@ services:
       start_period: 10s
     ports:
       - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app
+      - backend_uploads:/app/uploads
+
+  # Runs the training, searches and applications the API queues (#103, docs/decisions/0004). Same image and the same
+  # uploads volume as the backend: jobs are folders in it, claimed by exclusive create, so more workers can be added
+  # with `docker compose up --scale worker=2`.
+  worker:
+    build: ./backend
+    command: python -m app.worker
+    env_file: .env
+    environment:
+      REDIS_HOST: redis
+      APP_ENV: ${APP_ENV:-development}
+      JOB_RUNNER: worker
+    depends_on:
+      redis:
+        condition: service_healthy
     volumes:
       - ./backend/app:/app/app
       - backend_uploads:/app/uploads

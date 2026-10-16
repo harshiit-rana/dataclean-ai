@@ -1202,6 +1202,14 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   that forgot to set it served everything to anyone holding an id. Unset now means production;
   development is switched on explicitly by `.env.example` and `docker-compose.yml` for the local
   setup, and the app logs a warning at every start while tokens are off.
+- **Long work as jobs (#103).** Training, the improvement search and applying a model run as jobs: a folder per job
+  under the session (`job.json`, `events.jsonl`, a claim file created exclusively, a heartbeat). `JOB_RUNNER=inline`
+  (default, and the tests) runs them in a thread of the API; `worker` queues them for `python -m app.worker`, a
+  fourth container under Docker Compose, so restarting the API does not lose a search. Progress is read from the
+  events file, so a page that drops its stream reconnects (`/jobs/{id}/stream?after=N`, up to three tries) and a
+  reload picks a search up from its first event. A worker that dies leaves a stale heartbeat and its job is marked
+  interrupted; inline jobs a restarted API was running are marked interrupted at start-up. Refusals still happen in
+  the route, before any job is written, and a job's failure answers with the same status and code the route did.
 - **Projects kept until deleted (#120).** A session its owner chose to keep, named, never swept, deleted only by its
   owner (every file and the Redis checkpoint). Its token is always required, even in development mode, can be
   rotated, and is shown once; the browser lists kept projects from `localStorage`. Checkpoints no longer expire on
@@ -1377,8 +1385,8 @@ working at every step. Roughly in order of how much they'd be worth:
 - **Several targets in one session.** The RSNA data had twelve; the app does one.
 - **Time-series awareness** beyond a date-ordered split: lags, rolling windows, and the
   honesty about horizon that goes with them.
-- **A job queue**, so a long search survives a restart and the retention sweep can leave the
-  app process. This is also what unblocks multi-worker deployment.
+- ~~**A job queue**, so a long search survives a restart.~~ Done (#103): jobs on disk, run inline or by a worker
+  container. The retention sweep leaving the app process is #105.
 - **Accounts and a session history**, which today is a deliberate scope choice rather than an
   oversight.
 - **Deployment artifacts beyond a joblib**: a scoring endpoint, an image, a batch script —

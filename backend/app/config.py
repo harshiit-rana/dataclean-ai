@@ -57,6 +57,12 @@ class Settings(BaseSettings):
     # How often the sweep runs. Not a precision job; the point is that it happens at all.
     cleanup_interval_seconds: int = 3600
 
+    # How long work runs (#103): "inline" runs training, searches and applications in a thread of the API process,
+    # recorded as jobs on disk; "worker" only queues them, for `python -m app.worker` (a container of its own under
+    # Docker Compose) to run, so restarting the API does not lose a search. Both read progress from the job's
+    # events file. See services/jobs.py and docs/decisions/0004-platform-architecture.md.
+    job_runner: str = "inline"
+
     chroma_persist_dir: str = "./chroma_db"  # reserved, currently unused — see README
 
     # "production" unless set. It used to default to "development", which turned session tokens off -- so a hosted

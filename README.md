@@ -32,6 +32,11 @@ docker-compose up
 - Backend: http://localhost:8000 (health check at `/health`)
 - Frontend: http://localhost:5173
 
+Four containers start: Redis, the backend API, a **worker** that runs training, improvement searches and
+applications, and the frontend. Long work runs in the worker, so `docker compose restart backend` does not lose a
+search, and a page that loses its connection picks the progress up again. Add workers with
+`docker compose up --scale worker=2`.
+
 Try it with one of the messy datasets in `samples/` (`customers.csv`,
 `sales_transactions.csv`, `employee_records.csv`) -- each has a mix of missing values,
 duplicates, inconsistent formats, mixed types, and outliers baked in.
@@ -59,6 +64,10 @@ pip install -r requirements.txt
 uvicorn app.main:app --reload
 ```
 
+Without Docker, long work runs inside the API process (`JOB_RUNNER=inline`, the default), recorded as jobs on disk
+like the worker's. To run it in a separate process instead, set `JOB_RUNNER=worker` and start
+`python -m app.worker` beside the API.
+
 **Frontend:**
 ```bash
 cd frontend
@@ -79,6 +88,9 @@ npm run dev
 - **Profiling**: deterministic pandas/IQR-based detectors
   (which is wrapped defensively and never allowed to crash a session) -- the LLM only adds
   semantic interpretation and goal-aware re-prioritization on top.
+- **Jobs**: training, improvement searches and applications run as jobs, each a folder under the session
+  (`jobs/<id>/job.json` and `events.jsonl`), run inline or by the worker (`app/worker.py`), with progress streamed
+  from the events file. See `docs/decisions/0004-platform-architecture.md`.
 - **Frontend**: React + Vite + Tailwind, SSE consumed via `@microsoft/fetch-event-source`
   (native `EventSource` can't do POST, and starting the graph requires one).
 

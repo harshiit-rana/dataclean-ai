@@ -83,6 +83,13 @@ are both running locally, you're ready to make changes.
 - **Security: safe by default.** A setting that weakens protection (session tokens, error details) is off unless
   it is switched on explicitly; `APP_ENV` unset means production. Tests run with `APP_ENV=development` from
   `tests/conftest.py`; a test about the protection sets its own mode.
+- **Long work goes through a job (#103).** A route that trains, searches or scores refuses what it can first, then
+  calls `job_runner.start(...)` and `wait` or `stream`. The handler (registered with `jobs.register`) must run from
+  its payload alone, in another process: read the session from disk, take request settings from the payload, and
+  never rely on objects from the request (the graph, a dependency override). Files it needs go in through
+  `start(..., files=...)`, written before the job becomes visible to a worker. Failures are `jobs.JobError` with the
+  route's own status and code. Tests run inline; `tests/unit/test_jobs.py` runs a worker in a thread for the
+  worker path.
 - **Security: a kept project always needs its token (#120).** `verify_session_access` enforces it whatever
   `APP_ENV` says. Anything a session stores goes inside its folder under `UPLOAD_DIR`, so deleting the project
   (`delete_session_files`) and the sweep remove it; state kept anywhere else must be deleted in `DELETE

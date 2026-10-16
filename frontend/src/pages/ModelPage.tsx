@@ -26,7 +26,7 @@ import {
   restoreRun,
   trainModel,
 } from "@/api/client";
-import { StreamRequestError, streamImprove } from "@/api/sse";
+import { StreamRequestError, streamImprove, streamJob, type StreamHandlers } from "@/api/sse";
 import type {
   ImprovementRound,
   CalibrationMethod,
@@ -35,6 +35,7 @@ import type {
   ModelPlan,
   ModelResult,
   TrainRequest,
+  ImproveStreamEvent,
 } from "@/api/types";
 
 /** The request that produced a stored result, rebuilt from the result itself.
@@ -121,6 +122,19 @@ export function ModelPage() {
   // Leaving the page stops listening. The search itself carries on server-side and saves
   // its result, so coming back finds it.
   useEffect(() => () => streamRef.current?.abort(), []);
+
+  // The search runs as a job (#103). Its id is kept for this tab, so a dropped connection or a reload picks the
+  // progress up again instead of saying "come back later".
+  const jobKey = sessionId ? `dataclean.job.${sessionId}` : null;
+  const rememberJob = (jobId: string | null) => {
+    if (!jobKey) return;
+    try {
+      if (jobId) sessionStorage.setItem(jobKey, jobId);
+      else sessionStorage.removeItem(jobKey);
+    } catch {
+      // Storage blocked: reconnecting after a reload is lost, nothing else.
+    }
+  };
 
   const load = useCallback(async () => {
     if (!sessionId) return;
@@ -296,16 +310,41 @@ export function ModelPage() {
     setLiveRounds([]);
     setLiveStage(null);
 
+    streamRef.current?.abort();
+    streamRef.current = streamImprove(sessionId, request, followSearch());
+  };
+
+  /** Handlers for a search's stream, shared by the first request and every reconnection. Counts the events it has
+   * shown, so a reconnection asks only for the rest, and reconnects a few times before giving up. */
+  const followSearch = (resumeFrom?: { jobId: string; seen: number }): StreamHandlers<ImproveStreamEvent> => {
     let finished = false;
+    let jobId = resumeFrom?.jobId ?? null;
+    let seen = resumeFrom?.seen ?? 0;
+    let attempts = 0;
     const finish = () => {
       finished = true;
       setImproving(false);
       setLiveStage(null);
+      rememberJob(null);
     };
-
-    streamRef.current?.abort();
-    streamRef.current = streamImprove(sessionId, request, {
+    const reconnect = (): boolean => {
+      if (!sessionId || !jobId || attempts >= 3) return false;
+      attempts += 1;
+      const id = jobId;
+      window.setTimeout(() => {
+        streamRef.current = streamJob(sessionId, id, seen, handlers);
+      }, 1000 * attempts);
+      return true;
+    };
+    const handlers: StreamHandlers<ImproveStreamEvent> = {
       onEvent: (event) => {
+        if (event.type === "job") {
+          jobId = event.job_id;
+          rememberJob(jobId);
+          return;
+        }
+        seen += 1;
+        attempts = 0;
         if (event.type === "stage") {
           setLiveStage(event.description);
         } else if (event.type === "round") {
@@ -314,9 +353,10 @@ export function ModelPage() {
           finish();
           setResult(event.result);
           setShowPlan(false);
-          void fetchModelHistory(sessionId)
-            .then(setHistory)
-            .catch(() => undefined);
+          if (sessionId)
+            void fetchModelHistory(sessionId)
+              .then(setHistory)
+              .catch(() => undefined);
           window.scrollTo({ top: 0, behavior: "smooth" });
         } else if (event.type === "error") {
           finish();
@@ -325,23 +365,46 @@ export function ModelPage() {
       },
       onError: (err) => {
         if (finished) return;
+        // Refused outright (a 4xx): there is nothing to reconnect to. A dropped connection is worth another try.
+        const refused = err instanceof StreamRequestError && err.status < 500;
+        if (!refused && reconnect()) return;
         finish();
         setError(err.message, err instanceof StreamRequestError ? (err.code ?? null) : null);
       },
       onClose: () => {
         if (finished) return;
-        // The connection closed without a result or an error. The search is still running
-        // on the server and saves its result when it finishes, so this is "come back for
-        // it", not "it failed" -- and saying it failed would send the user to start a
-        // second search that competes with the first.
+        // The connection closed without a result or an error. The search is still running on the server and saves
+        // its result when it finishes, so first try to pick the stream up again; only then say "come back for it",
+        // never "it failed", which would send the user to start a second search that competes with the first.
+        if (reconnect()) return;
         finish();
         setError(
           "Lost the connection to the search. It keeps running on the server and its result " +
             "will be here when you refresh the page in a minute or two."
         );
       },
-    });
+    };
+    return handlers;
   };
+
+  // After a reload: a search this tab started and has not seen finish is picked up where it was. The rounds it
+  // already reported are replayed from the start, so the page shows the whole trail again.
+  useEffect(() => {
+    if (!sessionId || !jobKey) return;
+    let jobId: string | null = null;
+    try {
+      jobId = sessionStorage.getItem(jobKey);
+    } catch {
+      jobId = null;
+    }
+    if (!jobId) return;
+    setImproving(true);
+    setLiveRounds([]);
+    setLiveStage(null);
+    streamRef.current = streamJob(sessionId, jobId, 0, followSearch({ jobId, seen: 0 }));
+    // Once, on arrival; followSearch reads state through setters only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
 
   /** Retrains the model that is on screen with its probabilities calibrated (or not). A model the
    * improvement loop tuned is rebuilt by the loop again, since a plain train would lose its

@@ -27,12 +27,10 @@ for every other request in the process, including the SSE streams.
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import time
 import uuid
 from datetime import datetime, timezone
-from collections.abc import AsyncIterator
 
 import pandas as pd
 from fastapi import APIRouter, Depends, Query
@@ -66,6 +64,8 @@ from app.api.routes_rules import stored_rules
 from app.graph.nodes.audit_agent import mark_report_stale_if_written
 from app.dependencies import get_graph_if_any
 from app.api.sse import sse_response
+from app.api import job_runner
+from app.services import jobs
 from app.services.session_store import (
     current_dataset_version_in,
     read_session_meta,
@@ -958,46 +958,120 @@ async def train_model(
     settings: Settings = Depends(get_settings),
     graph=Depends(get_graph_if_any),
 ) -> dict:
+    """Trains the candidates and saves the result. Runs as a job (#103): in a thread of this process, or by the
+    worker under JOB_RUNNER=worker, in which case a restart of the API does not lose it and the saved result is
+    there when the page comes back. Refusals happen here, before the job is written."""
     df, goal, directory, rules = _load_session(settings, session_id)
     log = await action_log_service.read(graph, session_id)
-    target = (goal.target_column or "").strip()
     task = _refuse_or_record(
         df, goal, rules, directory, route="train", request=request, cost_limit=settings.training_cost_limit
     )
+    _operating_point(request)  # refused here, not in the job, when it cannot be read
+    folder = job_runner.start(settings, directory, "train", {
+        "request": request.model_dump(mode="json"), "task": task, "action_log": log,
+        "cost_limit": settings.training_cost_limit,
+    })
+    return await job_runner.wait(folder)
 
+
+def _job_session(folder) -> tuple[Settings, str]:
+    """The settings and session id a job runs under. The session is the folder two levels up, so a worker with the
+    volume mounted elsewhere still finds it; the upload dir is its parent."""
+    from pathlib import Path
+
+    session = Path(folder).parents[1]
+    return get_settings().model_copy(update={"upload_dir": str(session.parent)}), session.name
+
+
+def _failed(detail: str, code: str | None) -> jobs.JobError:
+    return jobs.JobError(detail, code, TrainingFailedError.status_code, "Model could not be trained")
+
+
+def _as_job_errors(handler):
+    """A job handler whose app errors (a session gone, a file that no longer reads) fail the job with their own
+    title, message, code and status, as the route would have answered."""
+
+    def wrapped(folder, payload, emit):
+        try:
+            return handler(folder, payload, emit)
+        except AppError as exc:
+            raise jobs.JobError(exc.detail, exc.code, exc.status_code, exc.error) from exc
+
+    return wrapped
+
+
+@_as_job_errors
+def _train_job(folder, payload: dict, emit) -> dict:
+    settings, session_id = _job_session(folder)
+    df, goal, directory, _ = _load_session(settings, session_id)
+    request = TrainRequest.model_validate(payload["request"])
+    task, cost_limit = payload["task"], payload.get("cost_limit")
+    target = (goal.target_column or "").strip()
     point = _operating_point(request)
-
-    def run() -> dict:
-        return _train_result(df, target=target, task=task, request=request, point=point,
-                             cost_limit=settings.training_cost_limit)
-
     started = time.perf_counter()
     try:
-        # Off the event loop: fitting is CPU-bound and would otherwise stall every other
-        # request in this process, including in-flight SSE streams.
-        result = await asyncio.to_thread(run)
+        result = _train_result(df, target=target, task=task, request=request, point=point, cost_limit=cost_limit)
     except modeling.ModelingError as exc:
         _record_attempt(
             directory, df, goal=goal, route="train", request=request, started=started,
-            cost_limit=settings.training_cost_limit, detail=str(exc), code=exc.code, task=task,
+            cost_limit=cost_limit, detail=str(exc), code=exc.code, task=task,
         )
-        raise TrainingFailedError(str(exc), code=exc.code) from exc
+        raise _failed(str(exc), exc.code) from exc
     except Exception as exc:  # noqa: BLE001 -- surface the reason rather than a bare 500
         logger.exception("Training failed for session %s", session_id)
         detail = unexpected_detail("Training")
         _record_attempt(
             directory, df, goal=goal, route="train", request=request, started=started,
-            cost_limit=settings.training_cost_limit, detail=detail, code="training_error", task=task,
+            cost_limit=cost_limit, detail=detail, code="training_error", task=task,
         )
-        raise TrainingFailedError(detail, code="training_error") from exc
+        raise _failed(detail, "training_error") from exc
 
     # Recorded so the plan can show what was excluded last time and the model card can say
     # which columns were deliberately withheld.
     result["features"]["excluded"] = list(request.excluded_columns)
     return _save_and_record(
-        directory, result, df, route="train", action_log=log, goal_text=_goal_text(goal), request=request,
-        started=started, cost_limit=settings.training_cost_limit,
+        directory, result, df, route="train", action_log=payload.get("action_log"), goal_text=_goal_text(goal),
+        request=request, started=started, cost_limit=cost_limit,
     )
+
+
+@_as_job_errors
+def _improve_job(folder, payload: dict, emit) -> dict:
+    """The search, as a job. Progress goes to the job's events: a line as each round starts, and each round as it
+    finishes, kept or not."""
+    settings, session_id = _job_session(folder)
+    df, goal, directory, _ = _load_session(settings, session_id)
+    request = ImproveRequest.model_validate(payload["request"])
+    task, cost_limit, route = payload["task"], payload.get("cost_limit"), payload.get("route", "improve")
+    target = (goal.target_column or "").strip()
+    point = _operating_point(request)
+    started = time.perf_counter()
+    try:
+        return _improve_and_save(
+            df, target=target, task=task, request=request, point=point, directory=directory, route=route,
+            action_log=payload.get("action_log"),
+            on_progress=lambda entry: emit({"type": "round", "round": entry.as_dict()}),
+            on_stage=lambda name, description: emit({"type": "stage", "name": name, "description": description}),
+            goal_text=_goal_text(goal), cost_limit=cost_limit,
+        )
+    except modeling.ModelingError as exc:
+        _record_attempt(
+            directory, df, goal=goal, route=route, request=request, started=started,
+            cost_limit=cost_limit, detail=str(exc), code=exc.code, task=task,
+        )
+        raise _failed(str(exc), exc.code) from exc
+    except Exception as exc:  # noqa: BLE001 -- the reason goes to the page, not a 500
+        logger.exception("Improvement failed for session %s", session_id)
+        detail = unexpected_detail("Improving the model")
+        _record_attempt(
+            directory, df, goal=goal, route=route, request=request, started=started,
+            cost_limit=cost_limit, detail=detail, code="training_error", task=task,
+        )
+        raise _failed(detail, "training_error") from exc
+
+
+jobs.register("train", _train_job)
+jobs.register("improve", _improve_job)
 
 
 def _improve_and_save(
@@ -1188,55 +1262,20 @@ async def improve_model(
     """Search for a better model, then rebuild the result the normal way.
 
     The blocking form: one response when it is done. The page uses `/improve/stream` instead;
-    this stays for anything calling the API directly, and for the tests.
+    this stays for anything calling the API directly, and for the tests. A job either way (#103).
     """
     df, goal_context, directory, rules = _load_session(settings, session_id)
-    target = (goal_context.target_column or "").strip()
     task = _refuse_or_record(
         df, goal_context, rules, directory, route="improve", request=request,
         cost_limit=settings.training_cost_limit,
     )
-    point = _operating_point(request)
+    _operating_point(request)
     log = await action_log_service.read(graph, session_id)
-
-    started = time.perf_counter()
-    try:
-        return await asyncio.to_thread(
-            _improve_and_save,
-            df,
-            target=target,
-            task=task,
-            request=request,
-            point=point,
-            directory=directory,
-            action_log=log,
-            goal_text=_goal_text(goal_context),
-            cost_limit=settings.training_cost_limit,
-        )
-    except modeling.ModelingError as exc:
-        _record_attempt(
-            directory, df, goal=goal_context, route="improve", request=request, started=started,
-            cost_limit=settings.training_cost_limit, detail=str(exc), code=exc.code, task=task,
-        )
-        raise TrainingFailedError(str(exc), code=exc.code) from exc
-    except Exception as exc:  # noqa: BLE001 -- surface the reason rather than a bare 500
-        logger.exception("Improvement failed for session %s", session_id)
-        detail = unexpected_detail("Improving the model")
-        _record_attempt(
-            directory, df, goal=goal_context, route="improve", request=request, started=started,
-            cost_limit=settings.training_cost_limit, detail=detail, code="training_error", task=task,
-        )
-        raise TrainingFailedError(detail, code="training_error") from exc
-
-
-# Seconds of silence before the stream sends a comment line. A settings search can run for
-# most of a minute without finishing a round, and proxies close connections that look idle
-# for far less than that.
-KEEPALIVE_SECONDS = 15.0
-
-
-def _frame(payload: dict) -> str:
-    return f"data: {json.dumps(payload, default=str)}\n\n"
+    folder = job_runner.start(settings, directory, "improve", {
+        "request": request.model_dump(mode="json"), "task": task, "action_log": log,
+        "cost_limit": settings.training_cost_limit, "route": "improve",
+    })
+    return await job_runner.wait(folder)
 
 
 @router.post("/api/model/{session_id}/improve/stream")
@@ -1266,86 +1305,56 @@ async def improve_model_stream(
     rather than as an event inside a 200.
     """
     df, goal_context, directory, rules = _load_session(settings, session_id)
-    target = (goal_context.target_column or "").strip()
     task = _refuse_or_record(
         df, goal_context, rules, directory, route="improve_stream", request=request,
         cost_limit=settings.training_cost_limit,
     )
-    point = _operating_point(request)
+    _operating_point(request)
     log = await action_log_service.read(graph, session_id)
+    folder = job_runner.start(settings, directory, "improve", {
+        "request": request.model_dump(mode="json"), "task": task, "action_log": log,
+        "cost_limit": settings.training_cost_limit, "route": "improve_stream",
+    })
+    # The search is a job (#103): it runs on whether or not this stream stays open, saves its result itself, and
+    # the page can reconnect with `/jobs/{job_id}/stream?after=N`.
+    return sse_response(job_runner.stream(folder))
 
-    loop = asyncio.get_running_loop()
-    queue: asyncio.Queue[dict] = asyncio.Queue()
 
-    def push(event: dict) -> None:
-        # Called from the worker thread; the queue belongs to the event loop.
-        loop.call_soon_threadsafe(queue.put_nowait, event)
+@router.get("/api/model/{session_id}/jobs/{job_id}")
+async def get_job(session_id: str, job_id: str, settings: Settings = Depends(get_settings)) -> dict:
+    """Where a job is: queued, running, done, failed, interrupted or cancelled, and what it was."""
+    folder = _job_folder(settings, session_id, job_id)
+    state = jobs.read_state(folder)
+    return {k: state.get(k) for k in ("job_id", "kind", "state", "created_at", "started_at", "finished_at",
+                                      "detail", "code")}
 
-    def on_progress(entry) -> None:
-        push({"type": "round", "round": entry.as_dict()})
 
-    def on_stage(name: str, description: str) -> None:
-        push({"type": "stage", "name": name, "description": description})
+@router.get("/api/model/{session_id}/jobs/{job_id}/stream")
+async def stream_job(
+    session_id: str,
+    job_id: str,
+    after: int = Query(default=0, ge=0),
+    settings: Settings = Depends(get_settings),
+):
+    """A job's progress again, skipping the first `after` events the page already has: how a page that lost its
+    stream, or reloaded, picks it up. Ends with the job's result or error, at once if it has already finished."""
+    return sse_response(job_runner.stream(_job_folder(settings, session_id, job_id), after=after))
 
-    def record_failure(detail: str, code: str | None) -> None:
-        _record_attempt(
-            directory, df, goal=goal_context, route="improve_stream", request=request, started=started,
-            cost_limit=settings.training_cost_limit, detail=detail, code=code, task=task,
-        )
 
-    started = time.perf_counter()
+class JobNotFoundError(AppError):
+    status_code = 404
 
-    async def work() -> None:
-        try:
-            result = await asyncio.to_thread(
-                _improve_and_save,
-                df,
-                target=target,
-                task=task,
-                request=request,
-                point=point,
-                directory=directory,
-                route="improve_stream",
-                action_log=log,
-                on_progress=on_progress,
-                on_stage=on_stage,
-                goal_text=_goal_text(goal_context),
-                cost_limit=settings.training_cost_limit,
-            )
-            await queue.put({"type": "result", "result": result})
-        except modeling.ModelingError as exc:
-            record_failure(str(exc), exc.code)
-            # `code` only when there is one, like the HTTP errors, so an uncoded failure is the event it always was.
-            await queue.put({"type": "error", "detail": str(exc), **({"code": exc.code} if exc.code else {})})
-        except Exception:  # noqa: BLE001 -- the reason goes to the page, not a 500
-            logger.exception("Streamed improvement failed for session %s", session_id)
-            detail = unexpected_detail("Improving the model")
-            record_failure(detail, "training_error")
-            await queue.put(
-                {
-                    "type": "error",
-                    "detail": detail,
-                    "code": "training_error",
-                }
-            )
+    def __init__(self):
+        super().__init__("No such job", "This session has no job with that id.", code="job_not_found")
 
-    async def events() -> AsyncIterator[str]:
-        # Held in a variable so the task is not garbage-collected mid-run. It is deliberately
-        # not cancelled when the client goes away: the worker thread cannot be interrupted
-        # anyway, and letting it finish is what gets the result saved.
-        task_handle = asyncio.create_task(work())
-        while True:
-            try:
-                event = await asyncio.wait_for(queue.get(), timeout=KEEPALIVE_SECONDS)
-            except asyncio.TimeoutError:
-                yield ": still searching\n\n"
-                continue
-            yield _frame(event)
-            if event["type"] in ("result", "error"):
-                break
-        await task_handle
 
-    return sse_response(events())
+def _job_folder(settings: Settings, session_id: str, job_id: str):
+    if not job_id.isalnum():
+        raise JobNotFoundError()
+    folder = jobs.job_dir(session_dir(settings.upload_dir, session_id), job_id)
+    if not (folder / jobs.STATE_FILE).exists():
+        raise JobNotFoundError()
+    return folder
 
 
 @router.get("/api/model/{session_id}/result")

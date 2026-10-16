@@ -102,6 +102,25 @@ jobs:
           curl --fail --silent http://localhost:8000/health/ready
           curl --fail --silent --output /dev/null http://localhost:5173
 
+      # Training goes through the worker container (#103), and a kept project is deleted with its checkpoint in a
+      # real Redis (#120): the two things the unit tests can only fake.
+      - name: Train through the worker, keep and delete a project
+        run: |
+          set -e
+          upload=$(curl --fail --silent --show-error -F "file=@samples/subscription_churn.csv" http://localhost:8000/api/upload)
+          sid=$(echo "$upload" | python3 -c 'import json,sys; print(json.load(sys.stdin)["session_id"])')
+          tok=$(echo "$upload" | python3 -c 'import json,sys; print(json.load(sys.stdin)["session_token"])')
+          auth="X-Session-Token: $tok"
+          curl --fail --silent --show-error -H "$auth" -H 'Content-Type: application/json'             -d '{"use_case":"ml_training","expected_output":"churn model","target_column":"churned"}'             "http://localhost:8000/api/goal/$sid"
+          curl --fail --silent --show-error -H "$auth" -H 'Content-Type: application/json' --max-time 600             -d '{"model_names":["logistic_regression"],"include_deep_diagnostics":false,"excluded_columns":["customer_id","first_name","last_name","email"]}'             "http://localhost:8000/api/model/$sid/train" > train.json
+          python3 -c 'import json; r=json.load(open("train.json")); assert r["best_model"]=="logistic_regression", r'
+          docker compose logs worker | grep -q "Running job"
+          curl --fail --silent --show-error -H "$auth" -H 'Content-Type: application/json' -d '{"name":"CI project"}'             "http://localhost:8000/api/session/$sid/keep" | grep -q '"kept":true'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' "http://localhost:8000/api/session/$sid/project")" = 403
+          curl --fail --silent --show-error -H "$auth" -X DELETE "http://localhost:8000/api/session/$sid" > deleted.json
+          python3 -c 'import json; r=json.load(open("deleted.json")); assert r["checkpoint_deleted"] is True and r["files_removed"] > 0, r'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' -H "$auth" "http://localhost:8000/api/session/$sid/project")" = 404
+
       - name: Logs on failure
         if: failure()
         run: docker compose logs --no-color

@@ -15,7 +15,6 @@ joining predictions back onto their own data by row needs to know which rows hav
 
 from __future__ import annotations
 
-import asyncio
 import time
 import logging
 import re
@@ -36,6 +35,8 @@ from app.core.errors import (
 )
 from app.core.request_context import unexpected_detail
 from app.dependencies import get_graph
+from app.api import job_runner
+from app.services import jobs
 from app.graph.nodes.audit_agent import mark_report_stale_if_written
 from app.services import (
     action_log, drift, evaluation_ledger, label_delay, model_store, prediction_tracking, replay, scoring,
@@ -378,24 +379,50 @@ async def apply_to_new_file(
     raw = await file.read()
     if len(raw) > settings.max_file_size_bytes:
         raise FileTooLargeError(settings.max_file_size_mb)
-    new = read_csv_bytes(raw)
+    read_csv_bytes(raw)  # refused here, before any job, when it does not read as a CSV
 
     goal = meta.get("goal_context") or {}
     target = (goal.get("target_column") or "").strip() or None
     log = await _action_log(graph, session_id)
     directory = session_dir(settings.upload_dir, session_id)
 
+    # A job (#103): the uploaded file is kept in the job's folder so a worker can read it, and the application runs
+    # in this process or the worker's. The response is the same either way.
+    folder = job_runner.start(settings, directory, "apply", {
+        "file_name": file.filename, "target": target, "outcome_window_days": outcome_window_days,
+        "action_log": log,
+    }, files={UPLOAD_FILE: raw})
+    return await job_runner.wait(folder)
+
+
+UPLOAD_FILE = "upload.csv"
+
+
+def _apply_job(folder, payload: dict, emit) -> dict:
+    from pathlib import Path
+
+    directory = Path(folder).parents[1]
+    raw = (Path(folder) / UPLOAD_FILE).read_bytes()
     try:
-        # Off the event loop: replay and prediction are CPU-bound pandas and sklearn.
-        response = await asyncio.to_thread(_run, directory, session_id, new, log, target, outcome_window_days)
-    except (AppError, UnparseableCSVError):
-        raise
+        new = read_csv_bytes(raw)
+        # Off the event loop already: a job runs in a thread or in the worker.
+        response = _run(directory, directory.name, new, payload.get("action_log") or [], payload.get("target"),
+                        payload.get("outcome_window_days"))
+    except (AppError, UnparseableCSVError) as exc:
+        raise jobs.JobError(exc.detail, exc.code, exc.status_code, exc.error) from exc
     except Exception as exc:  # noqa: BLE001 -- the reason goes back, not a bare 500
-        logger.exception("Applying session %s to a new file failed", session_id)
-        raise ScoringFailedError(unexpected_detail("Applying the model")) from exc
-    response["file_name"] = file.filename
+        logger.exception("Applying session %s to a new file failed", directory.name)
+        failure = ScoringFailedError(unexpected_detail("Applying the model"))
+        raise jobs.JobError(failure.detail, failure.code, failure.status_code, failure.error) from exc
+    finally:
+        # The upload is the user's data; once read it is not kept in the job folder as well.
+        (Path(folder) / UPLOAD_FILE).unlink(missing_ok=True)
+    response["file_name"] = payload.get("file_name")
     _write_summary(directory, response)
     return response
+
+
+jobs.register("apply", _apply_job)
 
 
 SUMMARY_FILE = "summary.json"
