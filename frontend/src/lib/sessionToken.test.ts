@@ -1,9 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getSessionToken, sessionHeaders, storeSessionToken } from "./sessionToken";
+import {
+  forgetSession,
+  getSessionToken,
+  listKeptProjects,
+  rememberKeptProject,
+  replaceSessionToken,
+  sessionHeaders,
+  storeSessionToken,
+} from "./sessionToken";
 
 describe("session tokens", () => {
   beforeEach(() => {
     sessionStorage.clear();
+    localStorage.clear();
     vi.restoreAllMocks();
   });
 
@@ -47,5 +56,35 @@ describe("session tokens", () => {
       throw new DOMException("denied");
     });
     expect(getSessionToken("abc")).toBeNull();
+  });
+
+  it("finds a kept project's token after the tab's own storage is gone (#120)", () => {
+    rememberKeptProject({ id: "p1", name: "Churn", keptAt: null }, "tok-p1");
+    sessionStorage.clear();
+    expect(getSessionToken("p1")).toBe("tok-p1");
+    expect(listKeptProjects()).toEqual([{ id: "p1", name: "Churn", keptAt: null }]);
+  });
+
+  it("replaces a rotated token wherever it is held, and nowhere it is not", () => {
+    storeSessionToken("s1", "old");
+    rememberKeptProject({ id: "s1", name: "One", keptAt: null }, "old");
+    replaceSessionToken("s1", "new");
+    expect(sessionStorage.getItem("dataclean.session.s1")).toBe("new");
+    expect(localStorage.getItem("dataclean.project.s1")).toBe("new");
+    replaceSessionToken("s2", "new");
+    expect(getSessionToken("s2")).toBeNull();
+  });
+
+  it("forgets a deleted project completely", () => {
+    storeSessionToken("s1", "tok");
+    rememberKeptProject({ id: "s1", name: "One", keptAt: null }, "tok");
+    forgetSession("s1");
+    expect(getSessionToken("s1")).toBeNull();
+    expect(listKeptProjects()).toEqual([]);
+  });
+
+  it("reads a damaged list as empty rather than failing", () => {
+    localStorage.setItem("dataclean.projects", "{ not json");
+    expect(listKeptProjects()).toEqual([]);
   });
 });

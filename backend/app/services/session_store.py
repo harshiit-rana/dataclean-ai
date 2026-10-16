@@ -13,6 +13,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from app.services.session_access import META_KEY as TOKEN_HASH_KEY
+
 logger = logging.getLogger(__name__)
 
 # Serialises read-modify-write of the meta sidecar *within this process*. The deployment is a
@@ -26,6 +28,9 @@ _META_LOCK = threading.Lock()
 # is always kept, with the newest versions after it; `dataset_versions_dropped` says how many
 # fell off so the gap is stated rather than hidden.
 MAX_DATASET_VERSIONS = 200
+
+# Set in the sidecar of a session its owner chose to keep as a project (#120). See docs/decisions/0004.
+KEPT_KEY = "kept"
 
 
 def new_session_id() -> str:
@@ -243,34 +248,88 @@ def _last_touched(directory: Path) -> float:
     return newest
 
 
-def purge_expired_sessions(upload_dir: str, retention_seconds: int, *, now: float | None = None) -> int:
-    """Deletes session folders untouched for longer than retention_seconds. Returns how many
-    were removed.
+def is_kept(directory: Path) -> bool:
+    """Whether the session in `directory` is a project its owner chose to keep (#120). Kept projects are never
+    swept. An unreadable sidecar reads as not kept only when there is no sidecar at all: a sidecar that exists but
+    cannot be parsed is treated as kept, because deleting someone's project over a parse error is the one mistake
+    the sweep must not make."""
+    path = Path(directory) / "meta.json"
+    if not path.exists():
+        return False
+    try:
+        return bool(json.loads(path.read_text()).get(KEPT_KEY))
+    except (OSError, ValueError):
+        return True
+
+
+def purge_expired_session_ids(upload_dir: str, retention_seconds: int, *, now: float | None = None) -> list[str]:
+    """Deletes session folders untouched for longer than retention_seconds, except kept projects. Returns the ids
+    removed, so the caller can delete their checkpoints too (the checkpoint no longer expires on its own, #120).
 
     Never raises: this runs unattended in the background, and a permission error on one
     folder must not stop the rest being swept or take the app down with it. A retention of 0
     disables expiry entirely.
     """
     if retention_seconds <= 0:
-        return 0
+        return []
 
     root = Path(upload_dir)
     if not root.exists():
-        return 0
+        return []
 
     cutoff = (time.time() if now is None else now) - retention_seconds
-    removed = 0
+    removed: list[str] = []
 
     for directory in root.iterdir():
         if not directory.is_dir():
             continue
         try:
-            if _last_touched(directory) >= cutoff:
+            if is_kept(directory) or _last_touched(directory) >= cutoff:
                 continue
             shutil.rmtree(directory)
-            removed += 1
+            removed.append(directory.name)
             logger.info("Purged expired session directory %s", directory.name)
         except OSError:
             logger.warning("Could not purge session directory %s", directory.name, exc_info=True)
 
     return removed
+
+
+def purge_expired_sessions(upload_dir: str, retention_seconds: int, *, now: float | None = None) -> int:
+    """`purge_expired_session_ids`, counted."""
+    return len(purge_expired_session_ids(upload_dir, retention_seconds, now=now))
+
+
+def delete_session_files(upload_dir: str, session_id: str) -> dict:
+    """Removes the session's folder and everything in it: the upload, cleaned versions, run folders and fitted
+    models, job records, reports and the sidecar (#120). Returns what was there, for the caller to report."""
+    directory = Path(upload_dir) / session_id
+    if not directory.is_dir():
+        return {"files": 0, "bytes": 0}
+    files = [p for p in directory.rglob("*") if p.is_file()]
+    size = sum(p.stat().st_size for p in files)
+    with _META_LOCK:
+        shutil.rmtree(directory)
+    return {"files": len(files), "bytes": size}
+
+
+def keep_session(upload_dir: str, session_id: str, name: str, *, token_hash: str | None = None) -> dict:
+    """Marks the session as a project kept until deleted, under `name`. `token_hash` replaces the stored hash when
+    given (a session from before tokens had none). Returns the updated sidecar."""
+    with _META_LOCK:
+        meta = read_session_meta(upload_dir, session_id) or {}
+        if not meta.get(KEPT_KEY):
+            meta["kept_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        meta[KEPT_KEY] = True
+        meta["project_name"] = name
+        if token_hash:
+            meta[TOKEN_HASH_KEY] = token_hash
+        _write_meta_file(_meta_path(upload_dir, session_id), meta)
+    return meta
+
+
+def replace_token_hash(upload_dir: str, session_id: str, token_hash: str) -> None:
+    with _META_LOCK:
+        meta = read_session_meta(upload_dir, session_id) or {}
+        meta[TOKEN_HASH_KEY] = token_hash
+        _write_meta_file(_meta_path(upload_dir, session_id), meta)

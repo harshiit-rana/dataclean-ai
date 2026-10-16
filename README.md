@@ -125,14 +125,33 @@ a test asserting the original is byte-identical after a run.
 
 ## Data retention
 
-Uploaded CSVs, cleaned copies and audit reports are deleted 24 hours after a session was last
-touched (`UPLOAD_RETENTION_SECONDS`), so the files and the Redis checkpoint that refers to
-them expire together. A background sweep runs hourly inside the backend process — no cron job
-or sidecar to set up. Set the retention to `0` to keep files indefinitely, which is handy
-while debugging one session and a bad idea anywhere real.
+An ordinary session's files (the uploaded CSV, cleaned copies, models and audit reports) and its saved state in
+Redis are deleted 24 hours after the session was last used (`UPLOAD_RETENTION_SECONDS`). A background sweep runs
+hourly inside the backend process, with no cron job or sidecar to set up. Set the retention to `0` to keep files
+indefinitely, which is handy while debugging one session and a bad idea anywhere real.
 
 Redis persists to a named volume with `appendonly` enabled, so sessions survive a container
 restart or a `docker compose down`.
+
+## Projects
+
+Work you want to come back to can be kept as a **project**: press "Keep this project" at the top of any page and
+give it a name. A project is kept until you delete it, and from then on its key is always required, even in
+development mode. The key is shown once, when you keep the project: save it, because it is the only way back in
+from another browser and there is no recovery (there are no accounts). This browser remembers your projects and
+lists them on the upload page; "Open a project with its key" brings one back elsewhere. "New key" replaces a key
+that has been shared or exposed, and "Delete project" removes every file and the saved state for good.
+
+### Where your data lives, and what that means
+
+Everything is stored in one folder, `UPLOAD_DIR` (the `backend_uploads` volume under Docker Compose), one
+sub-folder per session or project. The files are **not encrypted at rest**. The project key protects the app's
+HTTP interface; it does not protect the disk. Anyone with access to the host, the Docker volume, or a backup of
+either can read every project. Deleting a project unlinks its files; it does not securely erase them, and copies
+in backups or snapshots remain. On a shared or hosted machine, put `UPLOAD_DIR` on an encrypted volume, restrict it
+to the app's user, and treat backups as holding your users' data. See
+[`docs/security/local-storage.md`](docs/security/local-storage.md) and
+[`docs/decisions/0004-platform-architecture.md`](docs/decisions/0004-platform-architecture.md).
 
 ## Light and dark
 

@@ -110,6 +110,41 @@ export async function uploadCsv(file: File): Promise<UploadResponse> {
   return body;
 }
 
+export interface ProjectInfo {
+  kept: boolean;
+  name: string | null;
+  kept_at: string | null;
+  file_name: string | null;
+}
+
+/** Whether this session is a project kept until deleted (#120). */
+export async function fetchProject(sessionId: string): Promise<ProjectInfo> {
+  return handleResponse<ProjectInfo>(await sessionFetch(sessionId, `/api/session/${sessionId}/project`));
+}
+
+/** Keeps the session as a project under `name`, or renames it. `token` is set only when the server had to issue one. */
+export async function keepProject(sessionId: string, name: string): Promise<ProjectInfo & { token: string | null }> {
+  return handleResponse(
+    await sessionFetch(sessionId, `/api/session/${sessionId}/keep`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    })
+  );
+}
+
+/** A new key for the project; the old one stops working at once. */
+export async function rotateProjectToken(sessionId: string): Promise<{ token: string }> {
+  return handleResponse(await sessionFetch(sessionId, `/api/session/${sessionId}/token/rotate`, { method: "POST" }));
+}
+
+/** Deletes the session or project for good: every file and its saved state. */
+export async function deleteSession(
+  sessionId: string
+): Promise<{ deleted: string; files_removed: number; bytes_removed: number; checkpoint_deleted: boolean }> {
+  return handleResponse(await sessionFetch(sessionId, `/api/session/${sessionId}`, { method: "DELETE" }));
+}
+
 /** Cleans a new CSV the way this session's file was cleaned, and scores it if a model was
  * trained. The session's token goes with it -- the new file is read against this session's
  * data and model. */

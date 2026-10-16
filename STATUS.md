@@ -1202,6 +1202,11 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   that forgot to set it served everything to anyone holding an id. Unset now means production;
   development is switched on explicitly by `.env.example` and `docker-compose.yml` for the local
   setup, and the app logs a warning at every start while tokens are off.
+- **Projects kept until deleted (#120).** A session its owner chose to keep, named, never swept, deleted only by its
+  owner (every file and the Redis checkpoint). Its token is always required, even in development mode, can be
+  rotated, and is shown once; the browser lists kept projects from `localStorage`. Checkpoints no longer expire on
+  their own: the sweep deletes a session's checkpoint with its files. The local-disk implications (unencrypted at
+  rest, deletion is not secure erasure, backups keep copies) are in `docs/security/local-storage.md` and the README.
 - **Retention.** Files deleted 24 hours after last use, swept hourly in-process. "Use" now includes reading (#118):
   a session's Redis checkpoint has its expiry refreshed on every read, while its files aged only by writes, so a
   session that was only viewed could keep its checkpoint and lose its files, and then half the routes worked and

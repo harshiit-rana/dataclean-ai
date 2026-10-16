@@ -13,7 +13,7 @@ from app.config import Settings, get_settings
 from app.core.errors import SessionAccessDeniedError, SessionNotFoundError
 from app.services.llm_client import get_llm_client as _get_llm_client
 from app.services.session_access import META_KEY, token_matches
-from app.services.session_store import read_session_meta, session_dir, touch_session
+from app.services.session_store import KEPT_KEY, read_session_meta, session_dir, touch_session
 
 
 @lru_cache
@@ -75,11 +75,14 @@ def verify_session_access(
         raise SessionNotFoundError(session_id)
     touch_session(session_dir(settings.upload_dir, session_id))
 
-    if not settings.session_tokens_required:
+    # A kept project always needs its token, whatever APP_ENV says (#120): it lives until deleted, so the
+    # development convenience of open sessions would leave it readable for as long as it exists.
+    kept = bool(meta.get(KEPT_KEY))
+    if not settings.session_tokens_required and not kept:
         return session_id
 
     expected = meta.get(META_KEY)
-    if not expected:
+    if not expected and not kept:
         return session_id
     if not token_matches(x_session_token, expected):
         raise SessionAccessDeniedError()

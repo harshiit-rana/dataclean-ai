@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { FileDropzone } from "@/components/upload/FileDropzone";
 import { GoalForm } from "@/components/upload/GoalForm";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { KeptProjects } from "@/components/project/KeptProjects";
 import { ApiError, submitGoalContext, uploadCsv } from "@/api/client";
 import type { GoalContext, UploadResponse } from "@/api/types";
 
@@ -91,6 +92,8 @@ export function UploadPage() {
       </Card>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
+
+      <KeptProjects />
     </div>
   );
 }

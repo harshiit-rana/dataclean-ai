@@ -78,6 +78,10 @@ are both running locally, you're ready to make changes.
 - **Security: safe by default.** A setting that weakens protection (session tokens, error details) is off unless
   it is switched on explicitly; `APP_ENV` unset means production. Tests run with `APP_ENV=development` from
   `tests/conftest.py`; a test about the protection sets its own mode.
+- **Security: a kept project always needs its token (#120).** `verify_session_access` enforces it whatever
+  `APP_ENV` says. Anything a session stores goes inside its folder under `UPLOAD_DIR`, so deleting the project
+  (`delete_session_files`) and the sweep remove it; state kept anywhere else must be deleted in `DELETE
+  /api/session/{id}` too. The sweep must never remove a kept project: `is_kept` reads an unparseable sidecar as kept.
 - **Security: a CSV for download goes through `spreadsheet_safe`.** `csv_download` (or `csv_bytes` for an archive)
   escapes formula-leading text cells; a test fails on any other `text/csv` response. Escape only on the way out --
   never the files the app itself reads, which must stay exactly the data.

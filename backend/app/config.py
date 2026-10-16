@@ -22,7 +22,8 @@ class Settings(BaseSettings):
 
     redis_host: str = "localhost"
     redis_port: int = 6379
-    redis_ttl_seconds: int = 86400
+    # REDIS_TTL_SECONDS is gone (#120): checkpoints no longer expire on their own; the sweep deletes a session's
+    # checkpoint with its files, and never a kept project's. An old .env that still sets it is ignored.
 
     upload_dir: str = "./uploads"
     max_file_size_mb: int = 50
@@ -48,11 +49,10 @@ class Settings(BaseSettings):
     # can run to tens of megabytes, so this is the disk a session can take for models. At least 1.
     max_stored_runs: int = 10
 
-    # Uploaded CSVs, cleaned copies and audit reports are deleted this long after a session
-    # was last touched. Matches redis_ttl_seconds by default so the files and the checkpoint
-    # that refers to them expire together -- a session whose state has already gone can't be
-    # resumed, and keeping the user's data on disk past that point is storage cost and
-    # privacy exposure for nothing. Set to 0 to keep files indefinitely.
+    # Uploaded CSVs, cleaned copies and audit reports are deleted this long after a session was last touched,
+    # together with the session's checkpoint in Redis -- a session whose state has gone can't be resumed, and
+    # keeping the user's data on disk past that point is storage cost and privacy exposure for nothing. A project
+    # its owner chose to keep (#120) is never deleted by this. Set to 0 to keep every session indefinitely.
     upload_retention_seconds: int = 86400
     # How often the sweep runs. Not a precision job; the point is that it happens at all.
     cleanup_interval_seconds: int = 3600

@@ -31,14 +31,14 @@ from app.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging
 from app.dependencies import verify_session_access
-from app.graph.checkpointer import build_checkpointer
+from app.graph.checkpointer import build_checkpointer, delete_thread
 from app.graph.workflow import build_graph
-from app.services.session_store import purge_expired_sessions
+from app.services.session_store import purge_expired_session_ids
 
 logger = logging.getLogger(__name__)
 
 
-async def _sweep_expired_sessions(settings) -> None:
+async def _sweep_expired_sessions(settings, checkpointer=None) -> None:
     """Deletes uploaded files whose session has aged out (NFR-12/13).
 
     Runs in-process rather than as a cron job or sidecar so a plain `docker compose up`
@@ -49,10 +49,13 @@ async def _sweep_expired_sessions(settings) -> None:
     while True:
         try:
             removed = await asyncio.to_thread(
-                purge_expired_sessions, settings.upload_dir, settings.upload_retention_seconds
+                purge_expired_session_ids, settings.upload_dir, settings.upload_retention_seconds
             )
+            # Checkpoints no longer expire on their own (#120): the sweep removes them with the files.
+            for session_id in removed:
+                await delete_thread(checkpointer, session_id)
             if removed:
-                logger.info("Session cleanup removed %d expired session(s)", removed)
+                logger.info("Session cleanup removed %d expired session(s)", len(removed))
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001 -- a broken sweep must not end the process
@@ -84,7 +87,7 @@ async def lifespan(app: FastAPI):
 
         cleanup_task: asyncio.Task | None = None
         if settings.upload_retention_seconds > 0:
-            cleanup_task = asyncio.create_task(_sweep_expired_sessions(settings))
+            cleanup_task = asyncio.create_task(_sweep_expired_sessions(settings, checkpointer))
         else:
             logger.warning(
                 "UPLOAD_RETENTION_SECONDS is 0 -- uploaded files will be kept indefinitely"
