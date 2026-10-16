@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import socket
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
@@ -34,30 +36,47 @@ from app.dependencies import verify_session_access
 from app.graph.checkpointer import build_checkpointer, delete_thread
 from app.graph.workflow import build_graph
 from app.api import job_runner
-from app.services import jobs
+from app.services import jobs, sweep_lock
 from app.services.session_store import purge_expired_session_ids
 
 logger = logging.getLogger(__name__)
 
 
+async def sweep_once(settings, checkpointer=None, *, owner: str | None = None) -> list[str] | None:
+    """One retention pass, under the deployment-wide lock (#105). Returns the sessions removed, or None when another
+    process holds the lock and this pass was left to it. Checkpoints no longer expire on their own (#120): the pass
+    deletes each removed session's checkpoint with its files."""
+    owner = owner or f"{socket.gethostname()}:{os.getpid()}"
+    with sweep_lock.held(settings.upload_dir, owner) as mine:
+        if not mine:
+            return None
+        removed = await asyncio.to_thread(
+            purge_expired_session_ids, settings.upload_dir, settings.upload_retention_seconds
+        )
+        for session_id in removed:
+            await delete_thread(checkpointer, session_id)
+    if removed:
+        logger.info("Session cleanup removed %d expired session(s)", len(removed))
+    return removed
+
+
+def sweeps_in_api(settings) -> bool:
+    """Whether the API process runs the retention sweep: not when a worker does (#105), and not when retention is
+    off."""
+    return settings.upload_retention_seconds > 0 and settings.job_runner != "worker"
+
+
 async def _sweep_expired_sessions(settings, checkpointer=None) -> None:
     """Deletes uploaded files whose session has aged out (NFR-12/13).
 
-    Runs in-process rather than as a cron job or sidecar so a plain `docker compose up`
-    doesn't quietly accumulate every CSV anyone ever uploaded. The sweep is blocking file
-    I/O, so it goes to a thread; failures are logged and the loop continues, because losing
+    Runs in-process for the single-container setup, so a plain run of the backend doesn't quietly accumulate every
+    CSV anyone ever uploaded. Each pass takes the sweep lock, so several API processes never sweep at once; under
+    the worker runner the worker sweeps instead (#105). Failures are logged and the loop continues, because losing
     cleanup is survivable and taking the API down over it is not.
     """
     while True:
         try:
-            removed = await asyncio.to_thread(
-                purge_expired_session_ids, settings.upload_dir, settings.upload_retention_seconds
-            )
-            # Checkpoints no longer expire on their own (#120): the sweep removes them with the files.
-            for session_id in removed:
-                await delete_thread(checkpointer, session_id)
-            if removed:
-                logger.info("Session cleanup removed %d expired session(s)", len(removed))
+            await sweep_once(settings, checkpointer)
         except asyncio.CancelledError:
             raise
         except Exception:  # noqa: BLE001 -- a broken sweep must not end the process
@@ -99,9 +118,9 @@ async def lifespan(app: FastAPI):
         app.state.graph = build_graph(checkpointer)
 
         cleanup_task: asyncio.Task | None = None
-        if settings.upload_retention_seconds > 0:
+        if sweeps_in_api(settings):
             cleanup_task = asyncio.create_task(_sweep_expired_sessions(settings, checkpointer))
-        else:
+        elif settings.upload_retention_seconds <= 0:
             logger.warning(
                 "UPLOAD_RETENTION_SECONDS is 0 -- uploaded files will be kept indefinitely"
             )

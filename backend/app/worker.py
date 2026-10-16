@@ -43,6 +43,33 @@ def run_once(upload_dir: str, owner: str) -> bool:
     return False
 
 
+def sweep(settings, owner: str) -> list[str] | None:
+    """One retention pass from the worker (#105), under the same lock as the API's, with the Redis checkpointer for
+    deleting the removed sessions' checkpoints. Never raises."""
+    import asyncio
+
+    from redis.exceptions import ConnectionError as RedisConnectionError
+
+    from app.graph.checkpointer import build_checkpointer
+    from app.main import sweep_once
+
+    async def one_pass():
+        try:
+            async with build_checkpointer(settings) as checkpointer:
+                return await sweep_once(settings, checkpointer, owner=owner)
+        except (OSError, RedisConnectionError):
+            # Redis unreachable: no pass at all. Removing the files without their checkpoints would orphan the
+            # checkpoints for good, since nothing else ever expires them (#120); the next pass catches up.
+            logger.warning("Skipping the retention sweep: Redis is unreachable", exc_info=True)
+            return None
+
+    try:
+        return asyncio.run(one_pass())
+    except Exception:  # noqa: BLE001 -- a failed sweep must not stop the worker
+        logger.exception("Retention sweep failed; trying again next interval")
+        return None
+
+
 def main() -> None:
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_format)
@@ -58,7 +85,11 @@ def main() -> None:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     logger.info("Worker %s watching %s", owner, settings.upload_dir)
+    next_sweep = 0.0
     while not stopping:
+        if settings.upload_retention_seconds > 0 and time.monotonic() >= next_sweep:
+            sweep(settings, owner)
+            next_sweep = time.monotonic() + settings.cleanup_interval_seconds
         try:
             ran = run_once(settings.upload_dir, owner)
         except Exception:  # noqa: BLE001 -- a broken pass must not end the worker

@@ -1210,6 +1210,11 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   reload picks a search up from its first event. A worker that dies leaves a stale heartbeat and its job is marked
   interrupted; inline jobs a restarted API was running are marked interrupted at start-up. Refusals still happen in
   the route, before any job is written, and a job's failure answers with the same status and code the route did.
+- **One retention sweep at a time (#105).** Each pass takes a lock file in `UPLOAD_DIR` (exclusive create, with an
+  expiry so a dead sweeper's lock is broken by an atomic rename only one process can win), so several API processes,
+  or an API and a worker, never sweep at once. Under `JOB_RUNNER=worker` the worker sweeps and the API does not; the
+  single-container setup keeps its in-process sweep. A worker that cannot reach Redis skips the pass rather than
+  remove files whose checkpoints it could not delete.
 - **An interrupted search carries on where it stopped (#104).** Every cross-validation, settings search and
   importance measurement of a search job is journalled (JSON, in the job's folder). When the job's runner dies, the
   job that resumes it runs the loop again from the top with the journal in replay: each call whose arguments match the
@@ -1395,7 +1400,7 @@ working at every step. Roughly in order of how much they'd be worth:
 - **Time-series awareness** beyond a date-ordered split: lags, rolling windows, and the
   honesty about horizon that goes with them.
 - ~~**A job queue**, so a long search survives a restart.~~ Done (#103): jobs on disk, run inline or by a worker
-  container. The retention sweep leaving the app process is #105.
+  container. The retention sweep left the app process too (#105).
 - **Accounts and a session history**, which today is a deliberate scope choice rather than an
   oversight.
 - **Deployment artifacts beyond a joblib**: a scoring endpoint, an image, a batch script —
