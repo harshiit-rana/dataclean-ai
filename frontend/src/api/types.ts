@@ -1381,3 +1381,15 @@ export interface ApplicationSummary {
   model_run_id: string | null;
   downloads: { cleaned?: string; predictions?: string };
 }
+
+/** A summary of what a model predicted on a set of rows (backend prediction_tracking.py). */
+export type PredictionSummary =
+  | { kind: "binary"; positive: string; rows: number; positive_rate: number | null; probability_quantiles: Record<string, number> }
+  | { kind: "values"; rows: number; mean: number; quantiles: Record<string, number> }
+  | { kind: "classes"; rows: number; shares: Record<string, number> };
+
+export interface PredictionHistory {
+  run_id: string | null;
+  reference: PredictionSummary | null;
+  applications: { apply_id: string; file_name: string | null; at: string; prediction_summary: PredictionSummary }[];
+}

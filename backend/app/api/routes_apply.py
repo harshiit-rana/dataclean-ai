@@ -16,6 +16,7 @@ joining predictions back onto their own data by row needs to know which rows hav
 from __future__ import annotations
 
 import asyncio
+import time
 import logging
 import re
 import uuid
@@ -36,7 +37,8 @@ from app.core.request_context import unexpected_detail
 from app.dependencies import get_graph
 from app.graph.nodes.audit_agent import mark_report_stale_if_written
 from app.services import (
-    action_log, drift, evaluation_ledger, model_store, replay, scoring, spreadsheet_safe, validation,
+    action_log, drift, evaluation_ledger, model_store, prediction_tracking, replay, scoring, spreadsheet_safe,
+    validation,
 )
 from app.services.encoding import read_csv_bytes
 from app.services.session_store import (
@@ -189,6 +191,8 @@ def _run(directory, session_id: str, new: pd.DataFrame, action_log: list[dict], 
         ],
         "cutoff": (result.get("operating_point") or {}).get("threshold"),
     }
+    # The distribution of what was predicted, kept with the application to compare across applications.
+    response["prediction_summary"] = prediction_tracking.summarise(predicted, result)
 
     target_column = result.get("target_column")
     if target_column and target_column in applied.frame.columns and len(X_new):
@@ -356,12 +360,15 @@ def _write_summary(directory, response: dict) -> None:
             "apply_id": response["apply_id"],
             "file_name": response.get("file_name"),
             "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            # For ordering: two applications in the same second still come out in the order they were made.
+            "at_epoch": time.time(),
             "rows_in": response.get("rows_in"),
             "rows_kept": response.get("rows_kept"),
             "drift_verdict": drift.get("verdict"),
             "rows_with_findings": validation.get("rows_with_findings"),
             "predictions": bool(response.get("predictions")),
             "answers_headline": (response.get("answers") or {}).get("headline"),
+            "prediction_summary": response.get("prediction_summary"),
             "model_run_id": model_store.current_run_id(directory),
             "downloads": response.get("downloads") or {},
         }
@@ -386,7 +393,7 @@ async def list_applications(session_id: str, settings: Settings = Depends(get_se
             found.append(json.loads(path.read_text(encoding="utf-8")))
         except (OSError, ValueError):
             continue
-    return {"applications": sorted(found, key=lambda a: a.get("at") or "", reverse=True)}
+    return {"applications": sorted(found, key=lambda a: (a.get("at") or "", a.get("at_epoch") or 0), reverse=True)}
 
 
 @router.get("/api/apply/{session_id}/{apply_id}/{kind}")
@@ -408,3 +415,33 @@ async def download_applied(
         raise AppliedFileNotFoundError()
     # Every uploaded column comes back in these files as uploaded: escaped for a spreadsheet on the way out.
     return spreadsheet_safe.csv_download(path, f"{kind}_{apply_id}.csv")
+
+
+@router.get("/api/model/{session_id}/prediction-history")
+async def prediction_history(session_id: str, settings: Settings = Depends(get_settings)) -> dict:
+    """What the model in use predicted at training time (its held-out rows, at its cut-off) and on each file it has
+    been applied to since, oldest first: a change in the share flagged or the typical value shows before answers
+    arrive."""
+    import json
+
+    if read_session_meta(settings.upload_dir, session_id) is None:
+        raise SessionNotFoundError(session_id)
+    directory = session_dir(settings.upload_dir, session_id)
+    result = model_store.load_result(directory)
+    run_id = model_store.current_run_id(directory) or (result or {}).get("run_id")
+    reference = (
+        prediction_tracking.reference(model_store.load_run_predictions(directory, run_id), result)
+        if result and run_id
+        else None
+    )
+    applications = []
+    root = directory / APPLIED_DIR
+    for path in root.glob(f"*/{SUMMARY_FILE}") if root.is_dir() else []:
+        try:
+            summary = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if summary.get("prediction_summary") and summary.get("model_run_id") == run_id:
+            applications.append({k: summary.get(k) for k in ("apply_id", "file_name", "at", "at_epoch", "prediction_summary")})
+    return {"run_id": run_id, "reference": reference,
+            "applications": sorted(applications, key=lambda a: (a.get("at") or "", a.get("at_epoch") or 0))}

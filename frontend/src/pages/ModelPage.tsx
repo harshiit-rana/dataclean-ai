@@ -9,6 +9,7 @@ import { ImprovementTrail } from "@/components/model/ImprovementTrail";
 import { LiveImprovement } from "@/components/model/LiveImprovement";
 import { ModelPlanForm, type Preselect } from "@/components/model/ModelPlanForm";
 import { ModelResults } from "@/components/model/ModelResults";
+import { PredictionHistory } from "@/components/model/PredictionHistory";
 import { ReplaceModel } from "@/components/model/ReplaceModel";
 import { RunHistory } from "@/components/model/RunHistory";
 import { TrainingProblem } from "@/components/model/TrainingProblem";
@@ -574,6 +575,10 @@ export function ModelPage() {
           onReproduce={handleReproduce}
           reproducing={reproducing}
         />
+      )}
+
+      {result && sessionId && !training && !improving && (
+        <PredictionHistory sessionId={sessionId} refreshKey={result.run_id} />
       )}
 
       {history && result && sessionId && !training && !improving && (

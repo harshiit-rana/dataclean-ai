@@ -927,6 +927,13 @@ name, when, rows in and kept, the input-drift verdict, how many rows the schema 
 predictions, the model it used), `GET /api/apply/{id}` lists them newest first, and the Apply page shows them with
 their downloads.
 
+What the model predicts is tracked across those files (#87). Each application's summary keeps the distribution of
+its predictions -- the share flagged and probability quantiles for two classes, the class shares for more, the mean
+and quantiles of a value -- and `GET /api/model/{id}/prediction-history` sets them against the same summary of the
+model's own held-out predictions at training time, at the cut-off it answers at, so the two are comparable. The model
+page shows the table: a jump in the share flagged is often the first sign something changed, before any answers
+arrive.
+
 The export bundle has a `predict.py` that does what the app's *use this on a new file* does (#88): the approved
 cleaning with every learned value written in, the check against `schema.json` with the same blocking rule and message,
 the derived inputs, `model.joblib` checked against `model.json`, the stored cut-off, and every input row written back

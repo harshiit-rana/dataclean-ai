@@ -14,6 +14,7 @@ import type {
   ImproveRequest,
   ExportAcceptance,
   ModelHistory,
+  PredictionHistory,
   PromotionCriteria,
   PromotionDecision,
   Reproduction,
@@ -124,6 +125,12 @@ export async function applyToNewFile(sessionId: string, file: File): Promise<App
 export async function fetchApplications(sessionId: string): Promise<ApplicationSummary[]> {
   const response = await sessionFetch(sessionId, `/api/apply/${sessionId}`);
   return (await handleResponse<{ applications: ApplicationSummary[] }>(response)).applications;
+}
+
+/** What the model in use predicted at training time and on each file since. */
+export async function fetchPredictionHistory(sessionId: string): Promise<PredictionHistory> {
+  const response = await sessionFetch(sessionId, `/api/model/${sessionId}/prediction-history`);
+  return handleResponse<PredictionHistory>(response);
 }
 
 export async function fetchPreview(sessionId: string): Promise<PreviewResponse> {
