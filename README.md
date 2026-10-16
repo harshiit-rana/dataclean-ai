@@ -185,6 +185,15 @@ The charts follow the same signal the rest of the page does (the `dark` class on
 never `prefers-color-scheme` directly. Both palettes were validated against the app's own
 surfaces rather than assumed.
 
+## Hosting it for other people
+
+The defaults suit one person on their own machine. On a shared or public instance, also: leave `APP_ENV` unset (so
+session tokens are required), put `UPLOAD_DIR` and the Redis volume on encrypted storage (see "Where your data lives"
+above), and turn on the limits that are off by default -- `RATE_LIMIT_PER_MINUTE` (work one client may start per
+minute; counted per API process, so add a proxy's rate limiting for a hard limit across several), `PROJECT_QUOTA_MB`
+(disk per project; over it new work is refused, nothing is deleted) and `MAX_UNFINISHED_JOBS_PER_SESSION`. The threat
+model is in `docs/security/threat-model.md`.
+
 ## Session access
 
 Session ids are server-generated UUIDs, which makes them unguessable but not private —

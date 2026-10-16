@@ -24,6 +24,7 @@ from typing import Optional
 import pandas as pd
 from fastapi import APIRouter, Depends, Form, UploadFile
 
+from app.api import limits
 from app.config import Settings, get_settings
 from app.core.errors import (
     AppError,
@@ -361,7 +362,7 @@ def _jsonable(value):
     return value
 
 
-@router.post("/api/apply/{session_id}")
+@router.post("/api/apply/{session_id}", dependencies=[Depends(limits.limit_work)])
 async def apply_to_new_file(
     session_id: str,
     file: UploadFile,

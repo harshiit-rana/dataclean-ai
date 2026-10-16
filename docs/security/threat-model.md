@@ -127,9 +127,11 @@ what is sent. Nothing goes to a provider during training, evaluation or applying
 ### 9. Denial of service -- partly mitigated, follow-up
 
 Size and shape limits bound one upload; the processing limit bounds one training request; the uploads folder can no
-longer be filled with empty folders (risk 3). **Not mitigated:** nothing limits how many uploads or training jobs one
-client starts, and kept projects never expire by design. Acceptable for the documented single-user setup; a hosted
-deployment needs per-client rate limits and storage quotas (#123).
+longer be filled with empty folders (risk 3). Kept projects never expire by design. **Optional limits (#123):**
+work one client may start per minute (`RATE_LIMIT_PER_MINUTE`, counted per API process), disk per project
+(`PROJECT_QUOTA_MB`; over it new work is refused and nothing deleted) and unfinished jobs per project
+(`MAX_UNFINISHED_JOBS_PER_SESSION`). All are off by default for the single-user setup; the README's hosting section
+says to turn them on, with a proxy's rate limiting in front for a hard limit across several API processes.
 
 ### 10. Jobs and the worker -- mitigated
 
@@ -140,5 +142,5 @@ and only while every call matches. Deleting a session cancels its queued jobs.
 ## Follow-up issues
 
 - **#122** (done) File-derived text marked as data in every prompt; the experiment is the regression check.
-- **#123** Per-client rate limits and storage quotas for hosted deployments.
+- **#123** (done) Optional per-client rate limits, storage quotas and a job cap for hosted deployments.
 - Accepted with reasons above: risks 1 (residual), 8, and the dependency majors in dependencies.md.

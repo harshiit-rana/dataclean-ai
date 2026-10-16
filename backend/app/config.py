@@ -65,6 +65,12 @@ class Settings(BaseSettings):
     # events file. See services/jobs.py and docs/decisions/0004-platform-architecture.md.
     job_runner: str = "inline"
 
+    # Limits for a hosted deployment, all off (0) by default (#123, api/limits.py): work one client may start per
+    # minute, disk one project may use, and queued or running jobs one session may have at once.
+    rate_limit_per_minute: int = 0
+    project_quota_mb: int = 0
+    max_unfinished_jobs_per_session: int = 0
+
     chroma_persist_dir: str = "./chroma_db"  # reserved, currently unused — see README
 
     # "production" unless set. It used to default to "development", which turned session tokens off -- so a hosted

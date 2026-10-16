@@ -36,6 +36,7 @@ import pandas as pd
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import FileResponse, PlainTextResponse
 
+from app.api import limits
 from app.config import Settings, get_settings
 from app.core.errors import AppError, ModelArtifactRefusedError, SessionNotFoundError, UnparseableCSVError
 from app.core.request_context import unexpected_detail
@@ -951,7 +952,7 @@ def _train_result(df, *, target: str, task: str, request: TrainRequest, point, c
     )
 
 
-@router.post("/api/model/{session_id}/train")
+@router.post("/api/model/{session_id}/train", dependencies=[Depends(limits.limit_work)])
 async def train_model(
     session_id: str,
     request: TrainRequest,
@@ -1273,7 +1274,7 @@ def _search_and_save(
     )
 
 
-@router.post("/api/model/{session_id}/improve")
+@router.post("/api/model/{session_id}/improve", dependencies=[Depends(limits.limit_work)])
 async def improve_model(
     session_id: str,
     request: ImproveRequest,
@@ -1299,7 +1300,7 @@ async def improve_model(
     return await job_runner.wait(folder)
 
 
-@router.post("/api/model/{session_id}/improve/stream")
+@router.post("/api/model/{session_id}/improve/stream", dependencies=[Depends(limits.limit_work)])
 async def improve_model_stream(
     session_id: str,
     request: ImproveRequest,
@@ -1668,7 +1669,7 @@ class NotReproducibleError(AppError):
         super().__init__("That run cannot be re-run", detail, code=code)
 
 
-@router.post("/api/model/{session_id}/runs/{run_id}/reproduce")
+@router.post("/api/model/{session_id}/runs/{run_id}/reproduce", dependencies=[Depends(limits.limit_work)])
 async def reproduce_run(
     session_id: str,
     run_id: str,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, UploadFile
 
+from app.api import limits
 from app.config import Settings, get_settings
 from app.core.errors import FileTooLargeError, UnsupportedFileTypeError
 from app.models.api_schemas import UploadResponse
@@ -19,7 +20,7 @@ from app.services.session_store import (
 router = APIRouter()
 
 
-@router.post("/api/upload", response_model=UploadResponse)
+@router.post("/api/upload", response_model=UploadResponse, dependencies=[Depends(limits.limit_uploads)])
 async def upload_csv(
     file: UploadFile,
     settings: Settings = Depends(get_settings),

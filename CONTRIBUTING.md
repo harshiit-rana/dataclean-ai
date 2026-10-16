@@ -83,6 +83,9 @@ are both running locally, you're ready to make changes.
 - **Security: safe by default.** A setting that weakens protection (session tokens, error details) is off unless
   it is switched on explicitly; `APP_ENV` unset means production. Tests run with `APP_ENV=development` from
   `tests/conftest.py`; a test about the protection sets its own mode.
+- **A route that starts work takes the limits (#123).** `dependencies=[Depends(limits.limit_work)]` on anything that
+  trains, searches or scores a session (upload uses `limits.limit_uploads`), so a hosted instance's rate limit, quota
+  and job cap cover it. Every limit is off by default.
 - **Long work goes through a job (#103).** A route that trains, searches or scores refuses what it can first, then
   calls `job_runner.start(...)` and `wait` or `stream`. The handler (registered with `jobs.register`) must run from
   its payload alone, in another process: read the session from disk, take request settings from the payload, and
