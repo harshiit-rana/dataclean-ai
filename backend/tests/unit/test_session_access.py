@@ -111,6 +111,31 @@ def test_with_nothing_set_a_token_is_required(monkeypatch):
     assert client.get(f"/api/preview/{session_id}").status_code == 403
 
 
+def test_a_blank_setting_follows_the_environment(monkeypatch):
+    """.env.example ships REQUIRE_SESSION_TOKENS= blank; that must mean "not set", not stop the app at startup."""
+    monkeypatch.setenv("REQUIRE_SESSION_TOKENS", "")
+    monkeypatch.setenv("APP_ENV", "development")
+    get_settings.cache_clear()
+    assert get_settings().require_session_tokens is None and get_settings().session_tokens_required is False
+    monkeypatch.setenv("APP_ENV", "production")
+    get_settings.cache_clear()
+    assert get_settings().session_tokens_required is True
+
+
+def test_the_shipped_env_example_loads(monkeypatch, tmp_path):
+    """Every value in .env.example, as shipped, is one Settings can read."""
+    from pathlib import Path
+
+    example = Path(__file__).resolve().parents[3] / ".env.example"
+    for line in example.read_text(encoding="utf-8").splitlines():
+        if "=" in line and not line.lstrip().startswith("#"):
+            key, value = line.split("=", 1)
+            if key not in {"UPLOAD_DIR"}:
+                monkeypatch.setenv(key.strip(), value.strip())
+    get_settings.cache_clear()
+    assert get_settings().max_columns > 0
+
+
 def test_an_explicit_setting_wins_over_the_environment(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("REQUIRE_SESSION_TOKENS", "false")

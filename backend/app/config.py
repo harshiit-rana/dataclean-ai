@@ -5,6 +5,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Optional
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -71,6 +72,14 @@ class Settings(BaseSettings):
     # enough to read someone's uploaded data; the app logs a warning at startup whenever it is off. See
     # services/session_access.py.
     require_session_tokens: Optional[bool] = None
+
+    @field_validator("require_session_tokens", mode="before")
+    @classmethod
+    def _blank_means_unset(cls, value):
+        """`REQUIRE_SESSION_TOKENS=` left blank, as .env.example ships it, means "follow APP_ENV". It used to fail
+        to parse as a boolean and stop the app at startup -- for anyone who copied .env.example as the README
+        says, which the compose job in CI was the first thing to do."""
+        return None if isinstance(value, str) and not value.strip() else value
 
     frontend_origin: str = "http://localhost:5173"
 
