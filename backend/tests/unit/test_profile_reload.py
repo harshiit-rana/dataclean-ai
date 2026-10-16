@@ -116,13 +116,25 @@ def test_the_replay_carries_the_issue_counts_the_page_shows(graph_slot):
 
 
 def test_a_session_already_cleaned_is_refused_rather_than_started_over(graph_slot):
-    graph = FakeGraph(_state([], issues=ISSUES, suggestion_cards=CARDS, action_log=[{}]))
+    graph = FakeGraph(_state([], issues=ISSUES, suggestion_cards=CARDS, action_log=[{}],
+                             cleaned_file_path="/data/s1/cleaned.csv"))
     app.state.graph = graph
     response, events = _profile(_session())
     assert response.status_code == 409
     assert events == []
     assert graph.runs == 0
     assert "cleaning page" in response.json()["detail"]
+
+
+def test_a_run_aborted_in_its_first_moments_is_started_not_refused(graph_slot):
+    """Found in the keyboard walkthrough (#101): React starts the review page's effect twice in development, so the
+    first run was aborted at once and left values with nothing next; the second was refused as "already cleaned" on
+    a brand-new session. A quick reload can do the same in production. Without a cleaned file it is not finished."""
+    graph = FakeGraph(_state([], session_id="s1", goal_context={"use_case": "analysis"}))
+    app.state.graph = graph
+    response, _events = _profile(_session())
+    assert response.status_code == 200
+    assert graph.runs == 1
 
 
 def test_a_session_that_never_ran_is_started(graph_slot):

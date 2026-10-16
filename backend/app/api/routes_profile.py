@@ -61,7 +61,11 @@ def _paused_for_review(state) -> bool:
 
 
 def _finished(state) -> bool:
-    return bool(state and state.values and not state.next)
+    """Reviewed and cleaned, so profiling again would throw the decisions away. Nothing left to run is not enough:
+    a run aborted in its first moments -- React starts the review page's effect twice in development, and a quick
+    reload does the same in production -- leaves a checkpoint with values and nothing next, and that used to be
+    refused as "already cleaned" on a brand-new session. Cleaning writes its file; that is the evidence (#101)."""
+    return bool(state and state.values and not state.next and state.values.get("cleaned_file_path"))
 
 
 async def _replay_review(values: dict, session_id: str) -> AsyncIterator[str]:
