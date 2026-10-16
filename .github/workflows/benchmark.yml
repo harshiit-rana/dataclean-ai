@@ -1,0 +1,55 @@
+name: Benchmark
+
+# Timings for profiling, a plain train and the improvement loop at 1k, 10k and 100k rows (backend/scripts/benchmark.py).
+# Never on a push: it takes a long time, and a timing is not a pass or a fail for a change. Weekly and on demand, its
+# results kept as an artifact; each run compares itself with the last successful one and marks timings more than 30%
+# slower. Same runner image every time, so runs are comparable.
+
+on:
+  workflow_dispatch:
+    inputs:
+      sizes:
+        description: "Row counts to time"
+        default: "1000 10000 100000"
+  schedule:
+    - cron: "0 3 * * 1"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Fetch the last results to compare with
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last=$(gh run list --workflow benchmark.yml --status success --limit 1 --json databaseId -q '.[0].databaseId' || true)
+          if [ -n "$last" ]; then gh run download "$last" -n benchmark -D baseline || true; fi
+
+      - name: Time it
+        run: |
+          baseline=""
+          if [ -f baseline/benchmark.json ]; then baseline="--baseline baseline/benchmark.json"; fi
+          python scripts/benchmark.py --sizes ${{ github.event.inputs.sizes || '1000 10000 100000' }} --out benchmark.json $baseline
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: benchmark
+          path: backend/benchmark.json

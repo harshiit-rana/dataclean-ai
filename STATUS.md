@@ -1237,6 +1237,11 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   The backend's healthcheck uses a new readiness endpoint, `GET /health/ready`, which answers 503 naming what is
   missing unless Redis answers and the graph was built; `/health` stays a constant liveness check. The frontend
   waits for a ready backend and has a healthcheck of its own.
+- **Benchmarks (#107).** `backend/scripts/benchmark.py` times profiling, a plain train and the improvement loop
+  (fixed budget) on synthetic files of 1,000, 10,000 and 100,000 rows by 20 columns, writes the timings as JSON, and
+  given an earlier run's file flags every timing more than 30% slower. A separate `Benchmark` workflow runs it weekly
+  and on demand -- never on a push, since a timing is not a pass or fail for a change -- compares with the last
+  successful run on the same runner image, and keeps the results as an artifact.
 - **Static checks in CI (#116).** A `backend-static` job runs `ruff check app` (syntax errors and pyflakes) and
   `mypy app` at mypy's default strictness. Starting it found four unused imports and placeholders and 167 type errors,
   mostly annotation noise on dict-heavy code; the recent modules were fixed and 22 older modules are a documented
