@@ -49,8 +49,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      # In parallel, one worker per CPU. --dist loadfile keeps each test file in one worker, so a file's module-level
+      # fixtures (trained models, a TestClient) are built once and nothing in a file runs concurrently with itself.
+      # Every test gets its own upload folder (tests/conftest.py), so files never share state on disk.
       - name: Run pytest
-        run: python -m pytest --cov=app
+        run: python -m pytest --cov=app -n auto --dist loadfile
         env:
           ANTHROPIC_API_KEY: test-key-not-real
 

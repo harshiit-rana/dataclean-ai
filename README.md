@@ -351,7 +351,7 @@ that changes later.
 
 ```bash
 cd backend
-python -m pytest --cov=app
+python -m pytest --cov=app -n auto --dist loadfile   # in parallel, as CI runs it
 ```
 
 Fixture datasets in `backend/tests/fixtures/` are built to guarantee specific issue types

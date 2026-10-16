@@ -34,4 +34,5 @@ python-dateutil>=2.9.0,<3
 pytest>=9.1,<10
 pytest-asyncio>=1.4,<2
 pytest-cov>=7.1,<8
+pytest-xdist>=3.8,<4  # parallel tests: `-n auto --dist loadfile`, as CI runs them
 httpx>=0.28.1,<0.29
