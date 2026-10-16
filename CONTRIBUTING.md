@@ -38,7 +38,9 @@ are both running locally, you're ready to make changes.
 ## Before opening a PR
 
 - Backend: `cd backend && python -m pytest -n auto --dist loadfile` should pass. The suite runs in parallel
-  (pytest-xdist), as CI runs it: about 28 minutes on four workers, against about two hours one test at a time.
+  (pytest-xdist), as CI runs it: about 68 minutes on CI's four cores (28 on a 16-core machine), against about two
+  hours one test at a time. Each worker runs on one thread (tests/conftest.py); without that the forests' n_jobs=-1
+  oversubscribed the cores and the parallel run was no faster.
   During development run the files you touched; CI runs everything on every push, and `master` requires the
   four CI checks before anything merges into it. A test must not depend on another test's files or on running
   alone: each gets its own upload folder from `tests/conftest.py`. On Windows with little memory, use `-n 4`
