@@ -212,6 +212,24 @@ def current_dataset_version_in(directory: Path, *, ensure: bool = False) -> Opti
     return version
 
 
+# Reading a session counts as using it: the guard on every session route touches this marker (session_access), so
+# a session someone is only viewing keeps its files for the retention period, in step with its Redis checkpoint,
+# whose expiry is refreshed on every read. Touched at most once a minute, not on every request.
+ACTIVITY_MARKER = ".last_active"
+ACTIVITY_GRANULARITY_SECONDS = 60
+
+
+def touch_session(directory: Path) -> None:
+    """Records that the session in `directory` was used now. Never raises: bookkeeping must not fail a request."""
+    try:
+        marker = Path(directory) / ACTIVITY_MARKER
+        if marker.exists() and time.time() - marker.stat().st_mtime < ACTIVITY_GRANULARITY_SECONDS:
+            return
+        marker.touch()
+    except OSError:
+        logger.debug("Could not record activity for %s", directory, exc_info=True)
+
+
 def _last_touched(directory: Path) -> float:
     """Newest mtime anywhere in the session folder. The directory's own mtime is not enough:
     on some filesystems rewriting cleaned.csv in place doesn't bump it, and a session someone

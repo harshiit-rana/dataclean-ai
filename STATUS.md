@@ -1167,7 +1167,11 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   that forgot to set it served everything to anyone holding an id. Unset now means production;
   development is switched on explicitly by `.env.example` and `docker-compose.yml` for the local
   setup, and the app logs a warning at every start while tokens are off.
-- **Retention.** Files deleted 24 hours after last use, swept hourly in-process.
+- **Retention.** Files deleted 24 hours after last use, swept hourly in-process. "Use" now includes reading (#118):
+  a session's Redis checkpoint has its expiry refreshed on every read, while its files aged only by writes, so a
+  session that was only viewed could keep its checkpoint and lose its files, and then half the routes worked and
+  the downloads failed. The guard on every session route touches an activity marker (at most once a minute), and a
+  session whose files are gone gets the same "Session expired" answer from every route.
 - **Uploads bounded by shape, not only bytes (#115).** A 50 MB file can still hold hundreds of thousands of columns or
   one enormous cell, enough to exhaust memory in parsing, profiling or one-hot encoding. Every uploaded file (the
   upload, an application, an evaluation file) is refused with a 413 and a message naming the limit when it has more

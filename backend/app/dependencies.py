@@ -13,7 +13,7 @@ from app.config import Settings, get_settings
 from app.core.errors import SessionAccessDeniedError, SessionNotFoundError
 from app.services.llm_client import get_llm_client as _get_llm_client
 from app.services.session_access import META_KEY, token_matches
-from app.services.session_store import read_session_meta, session_dir
+from app.services.session_store import read_session_meta, session_dir, touch_session
 
 
 @lru_cache
@@ -63,13 +63,20 @@ def verify_session_access(
 
     A session created before tokens were switched on has no stored hash. Those are allowed
     through rather than locked out, so enabling the setting doesn't strand work in progress.
-    """
-    if not settings.session_tokens_required:
-        return session_id
 
+    It is also where a session is kept alive and where an expired one is turned away. Every guarded request
+    touches the session's activity marker, so reading a session keeps its files for the retention period, in step
+    with its checkpoint (#118). A session whose files are gone -- swept after the retention period, while its
+    checkpoint may live on -- gets the same expired-session answer from every route, instead of some routes working
+    from the checkpoint and the downloads failing.
+    """
     meta = read_session_meta(settings.upload_dir, session_id)
     if meta is None:
         raise SessionNotFoundError(session_id)
+    touch_session(session_dir(settings.upload_dir, session_id))
+
+    if not settings.session_tokens_required:
+        return session_id
 
     expected = meta.get(META_KEY)
     if not expected:
