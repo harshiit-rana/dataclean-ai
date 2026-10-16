@@ -1318,22 +1318,25 @@ checks and diagnostics off the test rows, whole-file fixes no longer proposed fo
 (with training-only clipping instead), a property suite that flips every held-out answer, and a
 whole-session HTTP test. Statistical Reliability — confidence intervals first — is next.
 
-**Is the multiple-candidate correction still needed? (decision pending, #35).** The verdict raises the AUC bar
+**Is the multiple-candidate correction still needed? (decided 16 October 2026: keep it, #35).** The verdict raises the AUC bar
 with the number of candidates trained, which compensated for reporting the best of several test-set draws. A
 simulation (`backend/scripts/simulate_verdict_correction.py`) shows that choosing on training folds leaves the test
 AUC close to a single draw, but that relaxing the correction would find only about 2 more of 48 weak-signal datasets
 while raising the pure-noise false-positive rate from about 3% to about 11% in those runs. The recommendation, in
 [`docs/decisions/0002-multiple-candidate-correction.md`](docs/decisions/0002-multiple-candidate-correction.md), is to
-keep it; nothing has been changed, and the decision is the owner's. The note also records that on 30 test rows a lucky
-noise run can be called "useful" because the noise bar sits above the 0.70 cut-off, which is a separate question.
+keep it, and the owner accepted that: the bar is unchanged. The note also records that on 30 test rows a lucky
+noise run can be called "useful" because the noise bar sits above the 0.70 cut-off; that was decided separately (#119):
+no "useful" verdict on fewer than 60 test rows.
 
-**What a model family must meet to join the registry (decision pending, #52).** A recommendation in
+**What a model family must meet to join the registry (accepted 16 October 2026, #52).** The criteria in
 [`docs/decisions/0003-model-registry-criteria.md`](docs/decisions/0003-model-registry-criteria.md): eight criteria (it
 fits the pipeline, reproduces from the exported script, is reproducible, respects the folds, is affordable, has a small
 curated search space, can be explained, and earns its place on evidence after the verdict's candidate correction is
 counted) and the current decisions under them: Extra Trees accepted (#53), gradient-boosting libraries deferred because
-`HistGradientBoosting*` covers the same family without a new dependency, and SVM, k-NN, Naive Bayes and neural networks
-not planned. It is the owner's decision; #53 and #56 wait for it.
+`HistGradientBoosting*` covers the same family without a new dependency, SVM, k-NN and Naive Bayes not planned, and
+neural networks deferred. Deferred is not abandoned: a dedicated deep-learning engine can come later, held to the same
+reproducibility, validation and evaluation standards, once the platform work (#102) gives it background jobs and
+durable storage. No dependency is added without a clear reason.
 
 The direction below is unchanged; the issues are its concrete form. The end state is an
 *honest* AutoML — not a button that hands back a leaderboard score, but a system that takes a

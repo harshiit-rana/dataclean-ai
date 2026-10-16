@@ -1,8 +1,10 @@
 # 0002. Should the verdict's multiple-candidate correction be relaxed now that models are chosen on training folds?
 
-- **Status:** Recommendation only, 15 October 2026. The decision is the owner's (issue #35); nothing in
-  the app has been changed.
+- **Status:** Accepted by the owner, 16 October 2026 (issue #35): the correction stays as it is. The
+  recommendation below was written on 15 October and is kept unchanged as the reasoning.
 - **Recommendation:** keep the correction as it is.
+- **Follow-up:** the separate finding at the end, that a lucky run on 30 test rows can be called "useful",
+  was accepted too and is issue #119: no "useful" verdict on fewer than 60 test rows.
 - **Reproduce the numbers:** `backend/.venv/Scripts/python.exe backend/scripts/simulate_verdict_correction.py --runs 30 --weak-runs 12`
   (about 14 minutes; the defaults, 18 and 6, finish in under ten and are too few to settle a close question).
 
@@ -131,6 +133,12 @@ and a lucky noise run reads as the best verdict; under the relaxed rule the "mar
 each rule came to call one or two noise runs useful at 30 rows. The verdict logic checks `auc < noise_floor` first and
 `auc < 0.70` second, so on small test sets the middle band is missing or thin. Not changed here; it would be a small,
 separate change (for example, never call a result "useful" on fewer than about 60 test rows) and a decision of its own.
+
+**Decided 16 October 2026 (#119):** no "useful" verdict on fewer than 60 test rows; a result that would have been useful
+there says the evidence is insufficient to call the model reliable. The owner's condition, kept here so it is not lost:
+60 rows is a safeguard, not statistical proof. How uncertain an AUC is depends on how many examples of each answer there
+are, the balance between them and the score itself, so 60 rows does not make a verdict reliable and nothing should say it
+does.
 
 ## Limits of this evidence
 

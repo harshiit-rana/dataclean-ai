@@ -1,8 +1,8 @@
 # 0003. What a model family must meet to join the registry
 
-- **Status:** Recommendation only, 15 October 2026. The decision is the owner's (issue #52); nothing depends on
-  it being accepted except that #53 (Extra Trees) and #56 (stacking) wait for it. If it is accepted as written,
-  #53 can proceed.
+- **Status:** Accepted as written by the owner, 16 October 2026 (issue #52). Extra Trees (#53) is built first;
+  #56 (stacking) follows under the same evidence rule. The owner's two conditions are under "Deep learning later"
+  and "Dependencies" below.
 - **Context:** `modeling.MODELS` holds six `ModelSpec`s, three for each kind of target. Requests to add
   algorithms (XGBoost, LightGBM, CatBoost, SVM, k-NN, Naive Bayes, neural networks) will keep coming. Without
   written criteria each is argued from scratch, and a registry grows for appearance rather than benefit. Each
@@ -45,7 +45,7 @@ come first.
 A family that needs a new package is a dependency decision before it is a model decision: licence, install size,
 wheels on every platform the app runs on, and whether its results are stable across the library's versions (a
 reproducibility promise the export makes on the user's behalf). The default answer is no, and it is revisited with
-the benchmark in hand, not before.
+the benchmark in hand, not before. The owner's words: no dependencies without a clear reason.
 
 ## Decisions under these criteria
 
@@ -56,7 +56,17 @@ the benchmark in hand, not before.
 | **SVM** | **Not planned** | Slow to fit as rows grow (fails criterion 5 at 20,000 rows), needs scaling and a kernel choice that the curated search would have to carry, and gives probabilities only through an extra calibration step; a poor fit for the app's one-click comparison. |
 | **k-NN** | **Not planned** | Its cost sits in prediction, which the app does for every scored row; it is sensitive to scaling and to many inputs; it stores the training data in the exported model, which is a data-handling cost the others do not carry. |
 | **Naive Bayes** | **Not planned** | Its independence assumption makes it a weaker version of what logistic regression already gives, with probabilities that are usually badly calibrated. |
-| **Neural networks** | **Not planned** | The tabular evidence for them over boosted trees is weak at this scale, they are hard to reproduce and explain, and they raise the platform question that is deferred. |
+| **Neural networks** | **Deferred** | The tabular evidence for them over boosted trees is weak at this scale, they are hard to reproduce and explain, and they need the background jobs and durable storage of #102. See "Deep learning later". |
+
+## Deep learning later
+
+Deferring neural networks is not abandoning deep learning (owner, 16 October 2026). It means no neural-network family
+joins this registry until its training, reproducibility, resource limits, export behaviour and evaluation are ready.
+A dedicated deep-learning engine can be introduced later, alongside the registry, without weakening these criteria: it
+is held to the same reproducibility, validation and evaluation standards (fold-based comparison, the verdict and its
+noise bar, the sealed holdout, a reproducible export or an explicit statement that there is none). The registry stays
+extensible for that: a family is a `ModelSpec` and a search space, and nothing in the comparison, the verdict or the
+export assumes the six families that exist today.
 
 ## What would change this
 
