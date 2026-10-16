@@ -20,9 +20,10 @@ import time
 import logging
 import re
 import uuid
+from typing import Optional
 
 import pandas as pd
-from fastapi import APIRouter, Depends, UploadFile
+from fastapi import APIRouter, Depends, Form, UploadFile
 
 from app.config import Settings, get_settings
 from app.core.errors import (
@@ -37,8 +38,8 @@ from app.core.request_context import unexpected_detail
 from app.dependencies import get_graph
 from app.graph.nodes.audit_agent import mark_report_stale_if_written
 from app.services import (
-    action_log, drift, evaluation_ledger, model_store, prediction_tracking, replay, scoring, spreadsheet_safe,
-    validation,
+    action_log, drift, evaluation_ledger, label_delay, model_store, prediction_tracking, replay, scoring,
+    spreadsheet_safe, validation,
 )
 from app.services.encoding import read_csv_bytes
 from app.services.session_store import (
@@ -91,7 +92,10 @@ async def _action_log(graph, session_id: str) -> list[dict]:
     return await action_log.read(graph, session_id)
 
 
-def _run(directory, session_id: str, new: pd.DataFrame, action_log: list[dict], target: str | None) -> dict:
+def _run(
+    directory, session_id: str, new: pd.DataFrame, action_log: list[dict], target: str | None,
+    outcome_window_days: int | None = None,
+) -> dict:
     original = pd.read_csv(directory / "original.csv")
     steps, reproduced = replay.freeze(original, action_log)
     result = model_store.load_result(directory)
@@ -200,9 +204,20 @@ def _run(directory, session_id: str, new: pd.DataFrame, action_log: list[dict], 
 
     target_column = result.get("target_column")
     if target_column and target_column in applied.frame.columns and len(X_new):
+        # When the rows are dated: which period the answers cover, and the rows too recent to have matured.
+        immature: set = set()
+        dated = label_delay.date_column(applied.frame, result)
+        if dated:
+            coverage, immature = label_delay.coverage(applied.frame, target_column, dated, outcome_window_days)
+            response["answer_coverage"] = coverage
         answers = _check_new_answers(
-            pipeline, X_new, applied.frame[target_column], result, new, original, target_column
+            pipeline, X_new.loc[[i for i in X_new.index if i not in immature]],
+            applied.frame[target_column], result, new, original, target_column,
         )
+        if answers is not None and dated:
+            answers["coverage"] = response["answer_coverage"]
+            for warning in response["answer_coverage"]["warnings"]:
+                notes.append(warning)
         response["answers"] = answers
         if answers is not None:
             answers["counted_as_independent"] = _record_new_data_evaluation(
@@ -349,6 +364,9 @@ def _jsonable(value):
 async def apply_to_new_file(
     session_id: str,
     file: UploadFile,
+    # Days before the file's latest date within which answers cannot have arrived yet: those rows are left out of
+    # the performance check and counted.
+    outcome_window_days: Optional[int] = Form(default=None, ge=1, le=3650),
     settings: Settings = Depends(get_settings),
     graph=Depends(get_graph),
 ) -> dict:
@@ -369,7 +387,7 @@ async def apply_to_new_file(
 
     try:
         # Off the event loop: replay and prediction are CPU-bound pandas and sklearn.
-        response = await asyncio.to_thread(_run, directory, session_id, new, log, target)
+        response = await asyncio.to_thread(_run, directory, session_id, new, log, target, outcome_window_days)
     except (AppError, UnparseableCSVError):
         raise
     except Exception as exc:  # noqa: BLE001 -- the reason goes back, not a bare 500

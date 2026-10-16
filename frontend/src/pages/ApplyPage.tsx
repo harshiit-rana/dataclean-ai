@@ -91,6 +91,7 @@ export function ApplyPage() {
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ApplyResult | null>(null);
+  const [outcomeWindow, setOutcomeWindow] = useState("");
 
   const run = async () => {
     if (!sessionId || !file) return;
@@ -98,7 +99,7 @@ export function ApplyPage() {
     setError(null);
     setResult(null);
     try {
-      setResult(await applyToNewFile(sessionId, file));
+      setResult(await applyToNewFile(sessionId, file, outcomeWindow ? Number(outcomeWindow) : undefined));
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : String((err as Error)?.message ?? err));
     } finally {
@@ -123,6 +124,20 @@ export function ApplyPage() {
       <Card>
         <CardContent className="flex flex-col gap-3 p-6">
           <FileDropzone onFileSelected={setFile} selectedFile={file} />
+          <label className="flex flex-wrap items-center gap-2 text-sm">
+            <span>Answers take up to</span>
+            <input
+              aria-label="Days for answers to arrive"
+              type="number"
+              min="1"
+              className="w-20 rounded border border-border bg-background px-2 py-1"
+              value={outcomeWindow}
+              onChange={(e) => setOutcomeWindow(e.target.value)}
+            />
+            <span className="text-muted-foreground">
+              days to arrive (optional): rows more recent than that are left out of the performance check
+            </span>
+          </label>
           <div className="flex flex-wrap items-center gap-3">
             <Button onClick={run} disabled={!file || running}>
               {running ? "Working..." : "Clean and predict"}

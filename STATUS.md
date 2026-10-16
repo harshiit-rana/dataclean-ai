@@ -942,6 +942,13 @@ least 10% of rows; for values, the median moved by more than half the reference'
 **performance** is stated only when the file has answers -- otherwise *unknown, no answers yet*. A one-line summary
 says what the combination means, and the Apply page shows the three side by side.
 
+Late answers are reported for the period they cover (#86). Outcomes often arrive weeks after the prediction, so a
+file's recent rows may have no answer yet, or answers only for the cases that resolved quickly. When the rows are
+dated (the model's own time column, or the first column that reads as dates), the performance check reports the date
+range of the rows with answers against those without, and warns when the answered rows are under half the file or
+bunched in its older part. An optional outcome window on the Apply page ("answers take up to N days") leaves out the
+rows too recent for their answer to have matured, and says how many.
+
 The export bundle has a `predict.py` that does what the app's *use this on a new file* does (#88): the approved
 cleaning with every learned value written in, the check against `schema.json` with the same blocking rule and message,
 the derived inputs, `model.joblib` checked against `model.json`, the stored cut-off, and every input row written back

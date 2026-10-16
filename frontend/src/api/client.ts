@@ -113,9 +113,15 @@ export async function uploadCsv(file: File): Promise<UploadResponse> {
 /** Cleans a new CSV the way this session's file was cleaned, and scores it if a model was
  * trained. The session's token goes with it -- the new file is read against this session's
  * data and model. */
-export async function applyToNewFile(sessionId: string, file: File): Promise<ApplyResult> {
+export async function applyToNewFile(
+  sessionId: string,
+  file: File,
+  outcomeWindowDays?: number
+): Promise<ApplyResult> {
   const formData = new FormData();
   formData.append("file", file);
+  // Answers take this long to arrive: rows that recent are left out of the performance check.
+  if (outcomeWindowDays) formData.append("outcome_window_days", String(outcomeWindowDays));
   return handleResponse<ApplyResult>(
     await sessionFetch(sessionId, `/api/apply/${sessionId}`, { method: "POST", body: formData })
   );
