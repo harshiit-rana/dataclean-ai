@@ -6,6 +6,7 @@ from __future__ import annotations
 import logging
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.config import get_settings
@@ -146,6 +147,22 @@ def register_exception_handlers(app: FastAPI) -> None:
             status_code=exc.status_code,
             content=ErrorResponse(
                 error=exc.error, detail=exc.detail, code=exc.code, request_id=current_request_id(request)
+            ).model_dump(exclude_none=True),
+        )
+
+    @app.exception_handler(RequestValidationError)
+    async def handle_invalid_request(request: Request, exc: RequestValidationError) -> JSONResponse:
+        """FastAPI's own validation errors, in the app's shape. Its default body put a list of objects in `detail`,
+        which the page shows as text, so a malformed request surfaced as "[object Object]"."""
+        problems = []
+        for error in exc.errors()[:5]:
+            where = ".".join(str(part) for part in error.get("loc", ()) if part not in ("body", "query", "path"))
+            problems.append(f"{where}: {error.get('msg')}" if where else str(error.get("msg")))
+        return JSONResponse(
+            status_code=422,
+            content=ErrorResponse(
+                error="Request not valid", detail="; ".join(problems) or "The request was not valid.",
+                code="invalid_request", request_id=current_request_id(request),
             ).model_dump(exclude_none=True),
         )
 

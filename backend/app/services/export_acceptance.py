@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import shutil
 import subprocess
 import sys
@@ -25,6 +26,8 @@ import numpy as np
 import pandas as pd
 
 from app.services import cleaning_export, model_export, model_store, predict_export
+
+logger = logging.getLogger(__name__)
 
 TOLERANCE = 1e-9
 TIMEOUT_SECONDS = 600
@@ -218,8 +221,11 @@ def verify(directory: Path, result: dict, actions: list[dict] | None, *, timeout
         outcome.update(status="error", message=f"The export took longer than {timeout} seconds to rebuild, so it "
                                                f"was stopped. The download is unaffected.")
         return outcome
-    except Exception as exc:  # noqa: BLE001 -- a check that cannot run is a result, never a failed export
-        outcome.update(status="error", message=f"The check could not run: {exc}")
+    except Exception:  # noqa: BLE001 -- a check that cannot run is a result, never a failed export
+        from app.core.request_context import unexpected_detail
+
+        logger.exception("The export check could not run")
+        outcome.update(status="error", message=unexpected_detail("Checking the export"))
         return outcome
     finally:
         shutil.rmtree(folder, ignore_errors=True)

@@ -93,7 +93,8 @@ class TestFailed:
         assert response.status_code == 422
         entry = history(sid)["runs"][0]
         assert entry["status"] == "failed" and entry["code"] == "training_error"
-        assert "disk on fire" in entry["reason"]
+        # The user is told it stopped unexpectedly and given the id to quote, never the exception's own text.
+        assert "Training stopped unexpectedly" in entry["reason"] and "disk on fire" not in entry["reason"]
 
     def test_a_failed_improve_is_recorded(self, monkeypatch):
         from app.services import improvement

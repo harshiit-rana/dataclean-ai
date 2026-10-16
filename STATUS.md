@@ -1194,6 +1194,13 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   otherwise -- carried on every log line logged while it is handled (worker threads included), returned in the
   `X-Request-Id` header and put in every error body as `request_id`, including an unexpected 500's, whose log line
   carries the same id. `LOG_FORMAT=json` writes one JSON object per line for a log collector.
+- **Errors that say what to do, never what broke inside (#111).** Every route answers a failure with the
+  documented `{error, detail, code?, request_id}` shape. A failure nobody anticipated -- in training, the search
+  (blocking or streamed), applying a model, opening the sealed holdout, applying one fix, checking the export --
+  tells the user it stopped unexpectedly and gives the request id to quote, never the exception's own text, which
+  is logged under the same id. FastAPI's own validation errors now take the same shape too, with readable text: the
+  page used to receive a list of objects where it expected a sentence. Failures the app anticipates (an operation
+  that cannot run, calibration that cannot be fitted) still explain themselves in words the user can act on.
 - **Static checks in CI (#116).** A `backend-static` job runs `ruff check app` (syntax errors and pyflakes) and
   `mypy app` at mypy's default strictness. Starting it found four unused imports and placeholders and 167 type errors,
   mostly annotation noise on dict-heavy code; the recent modules were fixed and 22 older modules are a documented

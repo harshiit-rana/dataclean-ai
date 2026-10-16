@@ -40,6 +40,7 @@ from fastapi.responses import FileResponse, PlainTextResponse
 
 from app.config import Settings, get_settings
 from app.core.errors import AppError, ModelArtifactRefusedError, SessionNotFoundError, UnparseableCSVError
+from app.core.request_context import unexpected_detail
 from app.models.api_schemas import ImproveRequest, ModelPlanResponse, TrainRequest
 from app.models.graph_state import GoalContext
 from app.services import (
@@ -983,7 +984,7 @@ async def train_model(
         raise TrainingFailedError(str(exc), code=exc.code) from exc
     except Exception as exc:  # noqa: BLE001 -- surface the reason rather than a bare 500
         logger.exception("Training failed for session %s", session_id)
-        detail = f"Training stopped unexpectedly: {exc}"
+        detail = unexpected_detail("Training")
         _record_attempt(
             directory, df, goal=goal, route="train", request=request, started=started,
             cost_limit=settings.training_cost_limit, detail=detail, code="training_error", task=task,
@@ -1220,7 +1221,7 @@ async def improve_model(
         raise TrainingFailedError(str(exc), code=exc.code) from exc
     except Exception as exc:  # noqa: BLE001 -- surface the reason rather than a bare 500
         logger.exception("Improvement failed for session %s", session_id)
-        detail = f"Improving stopped unexpectedly: {exc}"
+        detail = unexpected_detail("Improving the model")
         _record_attempt(
             directory, df, goal=goal_context, route="improve", request=request, started=started,
             cost_limit=settings.training_cost_limit, detail=detail, code="training_error", task=task,
@@ -1316,13 +1317,14 @@ async def improve_model_stream(
             record_failure(str(exc), exc.code)
             # `code` only when there is one, like the HTTP errors, so an uncoded failure is the event it always was.
             await queue.put({"type": "error", "detail": str(exc), **({"code": exc.code} if exc.code else {})})
-        except Exception as exc:  # noqa: BLE001 -- the reason goes to the page, not a 500
+        except Exception:  # noqa: BLE001 -- the reason goes to the page, not a 500
             logger.exception("Streamed improvement failed for session %s", session_id)
-            record_failure(f"Improving stopped unexpectedly: {exc}", "training_error")
+            detail = unexpected_detail("Improving the model")
+            record_failure(detail, "training_error")
             await queue.put(
                 {
                     "type": "error",
-                    "detail": f"Improving stopped unexpectedly: {exc}",
+                    "detail": detail,
                     "code": "training_error",
                 }
             )
@@ -1513,7 +1515,7 @@ async def finalise_model(
         raise
     except Exception as exc:  # noqa: BLE001 -- surface the reason rather than a bare 500
         logger.exception("Opening the sealed holdout failed for session %s", session_id)
-        raise TrainingFailedError(f"The sealed holdout could not be opened: {exc}") from exc
+        raise TrainingFailedError(unexpected_detail("Opening the sealed holdout")) from exc
 
     # Opening the sealed rows adds a score to the audit report's account of the model.
     mark_report_stale_if_written(directory)

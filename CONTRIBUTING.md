@@ -67,6 +67,10 @@ are both running locally, you're ready to make changes.
   models — nested models get serialized into checkpoint envelopes that don't reliably
   reconstruct, which breaks resuming a session. Validate into the real models at node
   boundaries instead. The docstring on `GraphState` explains this.
+- **An unexpected exception's text never reaches the user.** In a catch-all `except Exception`, log the exception
+  and answer with `unexpected_detail("What was happening")` (core/request_context.py): a stable sentence with the
+  request id, which the log line carries too. Put an exception's message in front of the user only when it is one
+  of the app's own errors, written for them.
 - **Security: safe by default.** A setting that weakens protection (session tokens, error details) is off unless
   it is switched on explicitly; `APP_ENV` unset means production. Tests run with `APP_ENV=development` from
   `tests/conftest.py`; a test about the protection sets its own mode.

@@ -24,6 +24,7 @@ from pathlib import Path
 import pandas as pd
 from langgraph.config import get_stream_writer
 
+from app.core.request_context import unexpected_detail
 from app.models.graph_state import GraphState
 from app.models.suggestion_card import ActionLogEntry, SuggestionCard
 from app.services import conflicts, operations, session_store
@@ -135,7 +136,7 @@ async def cleaning_agent(state: GraphState) -> dict:
             )
             writer({"event": "error", "error": "Fix could not be applied", "detail": str(exc)})
             continue
-        except Exception as exc:  # noqa: BLE001 -- one bad fix must not kill the whole run
+        except Exception:  # noqa: BLE001 -- one bad fix must not kill the whole run
             logger.exception("Unexpected failure applying %s for card %s", card.operation, card.card_id)
             action_log.append(
                 ActionLogEntry(
@@ -145,10 +146,10 @@ async def cleaning_agent(state: GraphState) -> dict:
                     issue_type=issue_type,
                     operation=card.operation,
                     status="rejected",
-                    failure_reason=f"Could not be applied: {exc}",
+                    failure_reason=unexpected_detail("Applying this fix"),
                 )
             )
-            writer({"event": "error", "error": "Fix could not be applied", "detail": str(exc)})
+            writer({"event": "error", "error": "Fix could not be applied", "detail": unexpected_detail("Applying this fix")})
             continue
 
         applied_count += 1

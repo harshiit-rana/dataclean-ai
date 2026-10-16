@@ -32,6 +32,7 @@ from app.core.errors import (
     UnparseableCSVError,
     UnsupportedFileTypeError,
 )
+from app.core.request_context import unexpected_detail
 from app.dependencies import get_graph
 from app.graph.nodes.audit_agent import mark_report_stale_if_written
 from app.services import (
@@ -333,7 +334,7 @@ async def apply_to_new_file(
         raise
     except Exception as exc:  # noqa: BLE001 -- the reason goes back, not a bare 500
         logger.exception("Applying session %s to a new file failed", session_id)
-        raise ScoringFailedError(f"Stopped unexpectedly: {exc}") from exc
+        raise ScoringFailedError(unexpected_detail("Applying the model")) from exc
     response["file_name"] = file.filename
     return response
 

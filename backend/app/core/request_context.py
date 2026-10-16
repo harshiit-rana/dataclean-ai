@@ -30,6 +30,16 @@ def current_request_id(request=None) -> str:
     return _request_id.get()
 
 
+def unexpected_detail(what: str) -> str:
+    """What a user is told when something failed for a reason nobody anticipated: a stable sentence and the id to quote,
+    never the exception's own text, which can be meaningless to them and can leak internals. The cause is in the
+    server log under the same id."""
+    return (
+        f"{what} stopped unexpectedly. The cause is in the server log under request id {current_request_id()}; "
+        f"quote it when reporting the problem."
+    )
+
+
 class RequestIdFilter(logging.Filter):
     """Adds `request_id` to every record, so a format can print it."""
 

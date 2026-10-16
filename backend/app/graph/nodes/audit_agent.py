@@ -191,13 +191,13 @@ async def generate_audit_artifacts(state: GraphState, emit=_no_op) -> dict:
     pdf_path: Path | None = None
     try:
         pdf_path = render_pdf(markdown_text, session_dir / "audit_report.pdf")
-    except Exception as exc:  # noqa: BLE001 -- WeasyPrint needs OS libs that may be absent
+    except Exception:  # noqa: BLE001 -- WeasyPrint needs OS libs that may be absent
         logger.exception("PDF rendering failed; markdown report was still written")
         emit(
             {
                 "event": "error",
                 "error": "PDF could not be generated",
-                "detail": f"The report was written as markdown instead. ({exc})",
+                "detail": "The PDF could not be made on this server, so the report was written as markdown instead.",
             }
         )
 
