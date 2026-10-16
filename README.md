@@ -105,12 +105,22 @@ Set `LLM_PROVIDER` in `.env` to `anthropic` (default) or `groq`:
   `FOUND:`/`PROPOSED_ACTION:`/`REASONING:`/`TRADEOFF:` marker format with **no retry today**,
   so a model that drifts from the format silently produces blank suggestion cards. Cheaper
   alternative: `claude-haiku-4-5` via `CLAUDE_MODEL`.
-- **`groq`** (default `llama-3.3-70b-versatile`): far cheaper, generous free tier, fast
-  inference. Llama 3.3 70B is a solid instruction-follower and should handle both structured
-  calls fine, but it's less battle-tested here than Claude -- if you see blank suggestion
-  cards, that's the marker-format gap above, not a bug elsewhere.
+- **`groq`** (default `openai/gpt-oss-120b`; `llama-3.3-70b-versatile` was retired by Groq in 2026): far cheaper, generous free tier, fast
+  inference. In the October 2026 threat-review runs (#114) gpt-oss-120b followed the card format,
+  but it's less battle-tested here than Claude -- if you see blank suggestion cards, that's the
+  marker-format gap above, not a bug elsewhere. The free tier's rate limit is easy to reach on a
+  file with many issues; the cards written before it are kept. If your `.env` still names
+  `llama-3.3-70b-versatile`, change it: Groq no longer serves it.
 
 Only the API key matching your chosen provider is required (see `.env.example`).
+
+### What the AI provider sees
+
+The configured provider receives, in its prompts: the file's name, its column names, your stated goal, the issues the
+profiler found with their statistics and the few values they quote (the largest outlier, say), the log of the fixes
+applied, anything you type into the cleaning chat, and, for the model card, the model's metrics and the names of its
+inputs. It does not receive the file or its rows. Training, evaluation and applying a model send nothing to it. If
+the data is sensitive, that is the line to judge by; see `docs/security/threat-model.md`.
 
 ## Project status
 

@@ -1202,6 +1202,15 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   that forgot to set it served everything to anyone holding an id. Unset now means production;
   development is switched on explicitly by `.env.example` and `docker-compose.yml` for the local
   setup, and the app logs a warning at every start while tokens are off.
+- **Threat review (#114).** `docs/security/threat-model.md`: assets, attackers, six trust boundaries, ten risks, each
+  with an experiment run on 16 October 2026 and its outcome. Fixed, each with a test that fails without it: a session
+  id of `.` or `..` reached the file system (with a `meta.json` in the uploads folder, deleting session `.` removed
+  every session); unknown session ids created empty folders without a token; the operation parser cut values at an
+  escaped quote and kept unknown parameters (now parsed with `ast`, literal keyword values only); the cleaning
+  script's case template now checks its value itself. A live prompt-injection test with Groq (`openai/gpt-oss-120b`)
+  held: no harmful fix proposed, the target untouched, the report prose unsteered. Anthropic was skipped, not passed
+  (no key on the machine used). Groq's old default model is retired; the default is now `openai/gpt-oss-120b`.
+  Follow-ups: #122 (mark file text in prompts as data), #123 (rate limits and quotas for hosted use).
 - **Long work as jobs (#103).** Training, the improvement search and applying a model run as jobs: a folder per job
   under the session (`job.json`, `events.jsonl`, a claim file created exclusively, a heartbeat). `JOB_RUNNER=inline`
   (default, and the tests) runs them in a thread of the API; `worker` queues them for `python -m app.worker`, a

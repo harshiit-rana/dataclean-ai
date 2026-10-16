@@ -97,6 +97,12 @@ are both running locally, you're ready to make changes.
   search replays. A new kind of expensive call gets the same wrapper (`through_journal`). The loop must stay
   deterministic for a given input (fixed seeds, no wall-clock-dependent decisions beyond the time limit), or a resumed
   search stops matching its journal and computes afresh -- correct, but slow.
+- **Security: read the threat model before touching a trust boundary (#114).**
+  [`docs/security/threat-model.md`](docs/security/threat-model.md). A session id from a request is checked with
+  `is_session_id` before it touches the disk (the router guard does it for every session route), and a read never
+  creates a folder. A value a model wrote reaches code only through `parse_operation` (literal keyword values, known
+  parameter names) and `repr()` in the exported scripts. A new prompt that carries file content gets the injection
+  experiment (`backend/scripts/injection_experiment.py`) run against it.
 - **Security: a kept project always needs its token (#120).** `verify_session_access` enforces it whatever
   `APP_ENV` says. Anything a session stores goes inside its folder under `UPLOAD_DIR`, so deleting the project
   (`delete_session_files`) and the sweep remove it; state kept anywhere else must be deleted in `DELETE

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shutil
 import threading
 import time
@@ -36,6 +37,16 @@ KEPT_KEY = "kept"
 def new_session_id() -> str:
     """Session IDs must be server-generated UUIDs, never user-supplied (NFR-13)."""
     return str(uuid.uuid4())
+
+
+# The shape new_session_id makes. A session id from a request is checked against it before anything touches the disk
+# (#114): "." and ".." used to reach the uploads folder itself and its parent, and DELETE /api/session/. could remove
+# every session at once when a meta.json sat there.
+_SESSION_ID = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
+
+
+def is_session_id(value: str) -> bool:
+    return bool(_SESSION_ID.match(value or ""))
 
 
 def session_dir(upload_dir: str, session_id: str) -> Path:
@@ -74,7 +85,9 @@ def _write_meta_file(path: Path, meta: dict) -> None:
 
 
 def read_session_meta(upload_dir: str, session_id: str) -> Optional[dict]:
-    path = _meta_path(upload_dir, session_id)
+    # Read without creating the folder: a request naming a session that does not exist used to leave an empty folder
+    # behind, so unauthenticated requests could fill the uploads directory (#114).
+    path = Path(upload_dir) / session_id / "meta.json"
     if not path.exists():
         return None
     return json.loads(path.read_text())
@@ -303,6 +316,8 @@ def purge_expired_sessions(upload_dir: str, retention_seconds: int, *, now: floa
 def delete_session_files(upload_dir: str, session_id: str) -> dict:
     """Removes the session's folder and everything in it: the upload, cleaned versions, run folders and fitted
     models, job records, reports and the sidecar (#120). Returns what was there, for the caller to report."""
+    if not is_session_id(session_id):
+        raise ValueError(f"Not a session id: {session_id!r}")
     directory = Path(upload_dir) / session_id
     if not directory.is_dir():
         return {"files": 0, "bytes": 0}

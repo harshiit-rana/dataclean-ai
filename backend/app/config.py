@@ -18,7 +18,9 @@ class Settings(BaseSettings):
     claude_model: str = "claude-sonnet-5"
 
     groq_api_key: str = ""
-    groq_model: str = "llama-3.3-70b-versatile"
+    # Groq retired llama-3.3-70b-versatile: on 16 October 2026 the API answered model_not_found for it (#114). A
+    # model name is an external dependency like any other; check `groq.Groq().models.list()` when this fails.
+    groq_model: str = "openai/gpt-oss-120b"
 
     redis_host: str = "localhost"
     redis_port: int = 6379

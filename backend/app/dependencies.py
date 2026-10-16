@@ -13,7 +13,7 @@ from app.config import Settings, get_settings
 from app.core.errors import SessionAccessDeniedError, SessionNotFoundError
 from app.services.llm_client import get_llm_client as _get_llm_client
 from app.services.session_access import META_KEY, token_matches
-from app.services.session_store import KEPT_KEY, read_session_meta, session_dir, touch_session
+from app.services.session_store import KEPT_KEY, is_session_id, read_session_meta, session_dir, touch_session
 
 
 @lru_cache
@@ -70,6 +70,9 @@ def verify_session_access(
     checkpoint may live on -- gets the same expired-session answer from every route, instead of some routes working
     from the checkpoint and the downloads failing.
     """
+    # Before anything touches the disk: only an id shaped like the ones the server makes can name a session (#114).
+    if not is_session_id(session_id):
+        raise SessionNotFoundError("that")
     meta = read_session_meta(settings.upload_dir, session_id)
     if meta is None:
         raise SessionNotFoundError(session_id)

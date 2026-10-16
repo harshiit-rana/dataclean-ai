@@ -76,6 +76,10 @@ def _lines(name: str, params: dict, learned: dict | None, frame: pd.DataFrame) -
         return [f"{_col(params)} = pd.to_datetime({_col(params)}, errors=\"coerce\", format=\"mixed\")"]
     if name == "standardize_case":
         case = params.get("case", "lower")
+        # Written into code, so checked here as well as when the operation ran (#114): the script must never depend on
+        # another module having refused a value first.
+        if case not in {"lower", "upper", "title"}:
+            raise OperationFailedError(f"Unsupported case {case!r}")
         return [f"{_col(params)} = {_col(params)}.astype(\"string\").str.{case}()"]
     if name == "trim_whitespace":
         return [f"{_col(params)} = {_col(params)}.astype(\"string\").str.strip()"]

@@ -23,8 +23,9 @@ Every operation is pure: it returns a new DataFrame and never mutates the input.
 
 from __future__ import annotations
 
+import ast
+
 import logging
-import re
 from dataclasses import dataclass
 from typing import Callable
 
@@ -373,7 +374,23 @@ def operation_catalog(include_conversational: bool = False) -> str:
     )
 
 
-_CALL_PATTERN = re.compile(r"^\s*([a-z_]+)\s*(?:\((.*)\))?\s*$", re.DOTALL)
+# Every parameter name an operation reads. Anything else in a proposed line is dropped (#114): a model's OPERATION line
+# is written from uploaded data, and unknown keys used to ride along into the action log and the exported script.
+KNOWN_PARAMETERS = frozenset(
+    {"column", "columns", "value", "case", "format", "new_name", "decimals", "find", "replace", "comparison", "mode"}
+)
+
+
+def _literal(node: ast.expr):
+    """A parameter's value: a literal, or a bare word taken as text (models sometimes leave strings unquoted).
+    Anything else -- a call, an attribute, an expression -- is not a value and the line is refused."""
+    if isinstance(node, ast.Name):
+        return node.id
+    value = ast.literal_eval(node)
+    if isinstance(value, (list, tuple)):
+        return [str(v) for v in value]
+    # Text, as the parser has always returned it: the operations coerce what they need.
+    return value if isinstance(value, str) else str(value)
 
 
 def parse_operation(text: str) -> tuple[str, dict] | None:
@@ -381,22 +398,42 @@ def parse_operation(text: str) -> tuple[str, dict] | None:
     `fill_median(column="Salary")` -> ("fill_median", {"column": "Salary"}).
 
     Returns None if the line is absent, malformed, or names an operation not in the registry
-    -- the caller treats that as "this card has no executable fix" rather than crashing."""
-    if not text:
+    -- the caller treats that as "this card has no executable fix" rather than crashing.
+
+    Parsed as a Python expression with `ast`, which reads it without running anything, rather than with a regular
+    expression (#114): the regex cut a value at an escaped quote, so a column whose name holds a `"` got a truncated
+    name, and a file can choose its column names. Only keyword arguments with literal values are accepted, and only
+    parameter names an operation reads (`KNOWN_PARAMETERS`)."""
+    if not text or not text.strip():
         return None
-    match = _CALL_PATTERN.match(text.strip())
-    if not match:
+    line = text.strip().splitlines()[0].strip()
+    try:
+        node = ast.parse(line, mode="eval").body
+    except SyntaxError:
         return None
 
-    name, raw_args = match.group(1), match.group(2) or ""
+    if isinstance(node, ast.Name):
+        name, keywords = node.id, []
+    elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and not node.args:
+        name, keywords = node.func.id, node.keywords
+    else:
+        return None
     if name not in OPERATIONS:
         logger.warning("LLM proposed unknown operation %r; ignoring", name)
         return None
 
     params: dict = {}
-    for part in re.findall(r'(\w+)\s*=\s*("[^"]*"|\'[^\']*\'|[^,]+)', raw_args):
-        key, value = part[0], part[1].strip().strip("\"'")
-        params[key] = value
+    for keyword in keywords:
+        if keyword.arg is None:  # **something
+            return None
+        try:
+            value = _literal(keyword.value)
+        except (ValueError, TypeError, SyntaxError):
+            return None
+        if keyword.arg not in KNOWN_PARAMETERS:
+            logger.warning("Dropped unknown parameter %r from a proposed %s", keyword.arg, name)
+            continue
+        params[keyword.arg] = value
     return name, params
 
 
