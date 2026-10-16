@@ -2,6 +2,7 @@
 // (POST /api/profile/{id}) is handled separately in api/sse.ts.
 
 import type {
+  ApplicationSummary,
   ApplyResult,
   Comparison,
   BusinessRule,
@@ -117,6 +118,12 @@ export async function applyToNewFile(sessionId: string, file: File): Promise<App
   return handleResponse<ApplyResult>(
     await sessionFetch(sessionId, `/api/apply/${sessionId}`, { method: "POST", body: formData })
   );
+}
+
+/** The files this session's model was used on before, newest first. */
+export async function fetchApplications(sessionId: string): Promise<ApplicationSummary[]> {
+  const response = await sessionFetch(sessionId, `/api/apply/${sessionId}`);
+  return (await handleResponse<{ applications: ApplicationSummary[] }>(response)).applications;
 }
 
 export async function fetchPreview(sessionId: string): Promise<PreviewResponse> {

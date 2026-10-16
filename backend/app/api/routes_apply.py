@@ -336,7 +336,57 @@ async def apply_to_new_file(
         logger.exception("Applying session %s to a new file failed", session_id)
         raise ScoringFailedError(unexpected_detail("Applying the model")) from exc
     response["file_name"] = file.filename
+    _write_summary(directory, response)
     return response
+
+
+SUMMARY_FILE = "summary.json"
+
+
+def _write_summary(directory, response: dict) -> None:
+    """A few lines about one application, beside its files, so the session's applications can be listed and their
+    files downloaded again after the page is closed. Never fails the application it describes."""
+    import json
+    from datetime import datetime, timezone
+
+    try:
+        drift = response.get("drift") or {}
+        validation = response.get("validation") or {}
+        summary = {
+            "apply_id": response["apply_id"],
+            "file_name": response.get("file_name"),
+            "at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            "rows_in": response.get("rows_in"),
+            "rows_kept": response.get("rows_kept"),
+            "drift_verdict": drift.get("verdict"),
+            "rows_with_findings": validation.get("rows_with_findings"),
+            "predictions": bool(response.get("predictions")),
+            "answers_headline": (response.get("answers") or {}).get("headline"),
+            "model_run_id": model_store.current_run_id(directory),
+            "downloads": response.get("downloads") or {},
+        }
+        folder = directory / APPLIED_DIR / response["apply_id"]
+        (folder / SUMMARY_FILE).write_text(json.dumps(summary, default=str), encoding="utf-8")
+    except Exception:  # noqa: BLE001
+        logger.warning("The summary of an application could not be written", exc_info=True)
+
+
+@router.get("/api/apply/{session_id}")
+async def list_applications(session_id: str, settings: Settings = Depends(get_settings)) -> dict:
+    """Every application of this session's model to a new file, newest first, with what it found and its
+    downloads (the same `/api/apply/{id}/{apply_id}/{kind}` links)."""
+    import json
+
+    if read_session_meta(settings.upload_dir, session_id) is None:
+        raise SessionNotFoundError(session_id)
+    root = session_dir(settings.upload_dir, session_id) / APPLIED_DIR
+    found = []
+    for path in root.glob(f"*/{SUMMARY_FILE}") if root.is_dir() else []:
+        try:
+            found.append(json.loads(path.read_text(encoding="utf-8")))
+        except (OSError, ValueError):
+            continue
+    return {"applications": sorted(found, key=lambda a: a.get("at") or "", reverse=True)}
 
 
 @router.get("/api/apply/{session_id}/{apply_id}/{kind}")

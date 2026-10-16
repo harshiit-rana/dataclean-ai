@@ -10,6 +10,7 @@ import { OPERATION_LABELS } from "@/lib/operations";
 import { cn } from "@/lib/utils";
 import { NotJudged } from "@/components/NotJudged";
 import { ValidationCard } from "@/components/apply/ValidationCard";
+import { PreviousApplications } from "@/components/apply/PreviousApplications";
 import type { AppliedStep, ApplyResult, DriftColumn, DriftReport } from "@/api/types";
 
 const DRIFT_STYLES: Record<DriftReport["verdict"], { title: string; className: string }> = {
@@ -398,6 +399,8 @@ export function ApplyPage() {
           )}
         </>
       )}
+
+      {sessionId && <PreviousApplications sessionId={sessionId} refreshKey={result?.apply_id} />}
     </div>
   );
 }

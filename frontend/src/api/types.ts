@@ -1366,3 +1366,18 @@ export interface PromotionDecision {
   override?: boolean;
   reason?: string | null;
 }
+
+/** One earlier application of the model to a new file (GET /api/apply/{id}). */
+export interface ApplicationSummary {
+  apply_id: string;
+  file_name: string | null;
+  at: string;
+  rows_in: number | null;
+  rows_kept: number | null;
+  drift_verdict: string | null;
+  rows_with_findings: number | null;
+  predictions: boolean;
+  answers_headline: string | null;
+  model_run_id: string | null;
+  downloads: { cleaned?: string; predictions?: string };
+}

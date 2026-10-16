@@ -922,6 +922,11 @@ row numbers and example values. Every row of the predictions file gets a `datacl
 its problem is, and the Apply page shows the findings. Vectorised per column: 100,000 rows of 20 columns check in
 about 0.2 seconds.
 
+Earlier applications stay reachable (#89). Each application writes a small `summary.json` beside its files (the file
+name, when, rows in and kept, the input-drift verdict, how many rows the schema check flagged, whether there are
+predictions, the model it used), `GET /api/apply/{id}` lists them newest first, and the Apply page shows them with
+their downloads.
+
 The export bundle has a `predict.py` that does what the app's *use this on a new file* does (#88): the approved
 cleaning with every learned value written in, the check against `schema.json` with the same blocking rule and message,
 the derived inputs, `model.joblib` checked against `model.json`, the stored cut-off, and every input row written back
