@@ -48,8 +48,8 @@ class TestWhichModelsAreChecked:
     def test_forests_and_boosting_are_seeded_and_the_linear_models_are_not(self):
         seeded = {name for name, spec in modeling.MODELS.items() if spec.seeded}
         assert seeded == {
-            "random_forest_classifier", "gradient_boosting_classifier",
-            "random_forest_regressor", "gradient_boosting_regressor",
+            "random_forest_classifier", "extra_trees_classifier", "gradient_boosting_classifier",
+            "random_forest_regressor", "extra_trees_regressor", "gradient_boosting_regressor",
         }
 
     def test_a_deterministic_winner_reports_not_applicable_with_the_reason(self):
