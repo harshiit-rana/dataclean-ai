@@ -11,6 +11,8 @@ import { listKeptProjects, rememberKeptProject, forgetSession } from "@/lib/sess
  *
  * There are no accounts, so the server cannot list "your" projects: the list is what this
  * browser remembers. A project opened elsewhere comes back with its id and key. */
+const PROJECT_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function KeptProjects() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState(listKeptProjects);
@@ -24,6 +26,12 @@ export function KeptProjects() {
     const sessionId = id.trim();
     const token = key.trim();
     setError(null);
+    // Ids are server-made UUIDs. Anything else is refused before it goes near storage or a route: the id ends up in a
+    // navigation path, and React Router 6 has a known open redirect for paths a user controls.
+    if (!PROJECT_ID.test(sessionId)) {
+      setError("A project id looks like 1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed. Check it and try again.");
+      return;
+    }
     // Remembered first so the check below carries the key; forgotten again if it is refused.
     rememberKeptProject({ id: sessionId, name: "Opening…", keptAt: null }, token);
     try {

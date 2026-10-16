@@ -14,6 +14,8 @@ vi.mock("@/api/client", async (original) => ({
 
 const { KeptProjects } = await import("./KeptProjects");
 
+const ID = "1b9d6bcd-bbfd-4b2d-9b5d-ab8dfbbd4bed";
+
 function renderList() {
   return render(
     <MemoryRouter initialEntries={["/"]}>
@@ -51,13 +53,13 @@ describe("KeptProjects", () => {
     fetchProject.mockResolvedValue({ kept: true, name: "Churn study", kept_at: "2026-10-16T12:00:00Z", file_name: "c.csv" });
     renderList();
     fireEvent.click(screen.getByRole("button", { name: "Open a project with its key" }));
-    fireEvent.change(screen.getByLabelText("Project id"), { target: { value: " s9 " } });
+    fireEvent.change(screen.getByLabelText("Project id"), { target: { value: ` ${ID} ` } });
     fireEvent.change(screen.getByLabelText("Project key"), { target: { value: "tok-9" } });
     fireEvent.click(screen.getByRole("button", { name: "Open project" }));
 
     expect(await screen.findByText("model page")).toBeInTheDocument();
-    expect(getSessionToken("s9")).toBe("tok-9");
-    expect(listKeptProjects()[0]).toMatchObject({ id: "s9", name: "Churn study" });
+    expect(getSessionToken(ID)).toBe("tok-9");
+    expect(listKeptProjects()[0]).toMatchObject({ id: ID, name: "Churn study" });
   });
 
   it("forgets a key the server refuses and says no project matches", async () => {
@@ -65,12 +67,23 @@ describe("KeptProjects", () => {
     fetchProject.mockRejectedValue(new ApiError("Forbidden", "denied", 403));
     renderList();
     fireEvent.click(screen.getByRole("button", { name: "Open a project with its key" }));
-    fireEvent.change(screen.getByLabelText("Project id"), { target: { value: "s9" } });
+    fireEvent.change(screen.getByLabelText("Project id"), { target: { value: ID } });
     fireEvent.change(screen.getByLabelText("Project key"), { target: { value: "wrong" } });
     fireEvent.click(screen.getByRole("button", { name: "Open project" }));
 
     expect(await screen.findByRole("alert")).toHaveTextContent("No project matches that id and key.");
-    expect(getSessionToken("s9")).toBeNull();
+    expect(getSessionToken(ID)).toBeNull();
+    expect(listKeptProjects()).toEqual([]);
+  });
+
+  it("refuses anything that is not a project id before storing or navigating", async () => {
+    renderList();
+    fireEvent.click(screen.getByRole("button", { name: "Open a project with its key" }));
+    fireEvent.change(screen.getByLabelText("Project id"), { target: { value: String.raw`/\\evil.example` } });
+    fireEvent.change(screen.getByLabelText("Project key"), { target: { value: "tok" } });
+    fireEvent.click(screen.getByRole("button", { name: "Open project" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("A project id looks like");
+    expect(fetchProject).not.toHaveBeenCalled();
     expect(listKeptProjects()).toEqual([]);
   });
 
