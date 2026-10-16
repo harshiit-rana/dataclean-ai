@@ -1201,6 +1201,11 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   is logged under the same id. FastAPI's own validation errors now take the same shape too, with readable text: the
   page used to receive a list of objects where it expected a sentence. Failures the app anticipates (an operation
   that cannot run, calibration that cannot be fitted) still explain themselves in words the user can act on.
+- **`docker compose up` checked in CI (#117).** A `compose` job builds both images, starts the stack and waits until
+  every service's healthcheck passes, uploads a sample file, and tears down, printing the logs if anything fails.
+  The backend's healthcheck uses a new readiness endpoint, `GET /health/ready`, which answers 503 naming what is
+  missing unless Redis answers and the graph was built; `/health` stays a constant liveness check. The frontend
+  waits for a ready backend and has a healthcheck of its own.
 - **Static checks in CI (#116).** A `backend-static` job runs `ruff check app` (syntax errors and pyflakes) and
   `mypy app` at mypy's default strictness. Starting it found four unused imports and placeholders and 167 type errors,
   mostly annotation noise on dict-heavy code; the recent modules were fixed and 22 older modules are a documented
