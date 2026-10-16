@@ -39,6 +39,16 @@ describe("ChartCard", () => {
     expect(screen.getByText("0.71")).toBeInTheDocument();
   });
 
+  it("names its toggle after its chart, so a page of them can be told apart (#101)", () => {
+    render(
+      <ChartCard title="Per class" tableColumns={COLUMNS} tableRows={ROWS}>
+        <div>the chart</div>
+      </ChartCard>
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Show table for Per class" }));
+    expect(screen.getByRole("button", { name: "Show chart for Per class" })).toBeInTheDocument();
+  });
+
   it("goes back to the chart", () => {
     render(
       <ChartCard title="Per class" tableColumns={COLUMNS} tableRows={ROWS}>

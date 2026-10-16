@@ -36,7 +36,9 @@ export const SuggestionCardView = memo(function SuggestionCardView({
   onReasonChange,
 }: SuggestionCardViewProps) {
   return (
-    <Card className={cn(decision === "rejected" && "opacity-60")}>
+    // A declined card is marked by its badge and a dashed border, not faded: fading the whole card took its text
+    // below readable contrast (#101).
+    <Card className={cn(decision === "rejected" && "border-dashed bg-muted/30")}>
       <CardHeader className="flex-row items-center justify-between">
         <CardTitle className="text-base">{card.column_name}</CardTitle>
         {decision && <Badge variant={decision === "approved" ? "low" : "default"}>{decision}</Badge>}
@@ -72,10 +74,14 @@ export const SuggestionCardView = memo(function SuggestionCardView({
           </div>
         )}
 
-        <div className="mt-2 flex gap-2">
+        {/* Each card's buttons say which column they decide, and whether they are the choice made: thirteen
+            buttons all named "Approve" told a screen reader nothing as it moved between them (#101). */}
+        <div className="mt-2 flex gap-2" role="group" aria-label={`Decision for ${card.column_name}`}>
           <Button
             size="sm"
             variant={decision === "approved" ? "default" : "outline"}
+            aria-pressed={decision === "approved"}
+            aria-label={`Approve the fix for ${card.column_name}`}
             onClick={() => onDecide(card.card_id, "approved")}
           >
             Approve
@@ -83,6 +89,8 @@ export const SuggestionCardView = memo(function SuggestionCardView({
           <Button
             size="sm"
             variant={decision === "rejected" ? "destructive" : "outline"}
+            aria-pressed={decision === "rejected"}
+            aria-label={`Reject the fix for ${card.column_name}`}
             onClick={() => onDecide(card.card_id, "rejected")}
           >
             Reject

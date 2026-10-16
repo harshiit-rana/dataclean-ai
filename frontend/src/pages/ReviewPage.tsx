@@ -120,7 +120,7 @@ export function ReviewPage() {
           </Link>
         </div>
       ) : (
-        stream.status === "error" && <p className="text-sm text-destructive">{stream.error}</p>
+        stream.status === "error" && <p role="alert" className="text-sm text-destructive">{stream.error}</p>
       )}
 
       {stream.partialWarning && (
@@ -133,7 +133,7 @@ export function ReviewPage() {
       )}
 
       {previewError && (
-        <div className="rounded-md border border-destructive/50 p-3 text-sm text-destructive">
+        <div role="alert" className="rounded-md border border-destructive/50 p-3 text-sm text-destructive">
           <p className="font-medium">Couldn't load the data table</p>
           <p className="text-xs">{previewError}</p>
         </div>

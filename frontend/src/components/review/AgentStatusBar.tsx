@@ -22,7 +22,8 @@ export function AgentStatusBar({ status, currentAgent, statusMessage }: AgentSta
         : (currentAgent && AGENT_LABELS[currentAgent]) || statusMessage || "Working...";
 
   return (
-    <div className="flex items-center gap-2 rounded-md border border-border bg-muted px-4 py-2 text-sm">
+    // Announced as it changes, so a screen reader hears each stage and "Ready for your review" (#101).
+    <div role="status" aria-live="polite" className="flex items-center gap-2 rounded-md border border-border bg-muted px-4 py-2 text-sm">
       {status === "streaming" && (
         <span className="h-2 w-2 animate-pulse rounded-full bg-primary" aria-hidden />
       )}

@@ -712,3 +712,12 @@ describe("ModelPlanForm — set up from a readiness check (#100)", () => {
     expect(onTrain.mock.calls[0][0].split_strategy).toBe("random");
   });
 });
+
+describe("ModelPlanForm — named groups of choices (#101)", () => {
+  it("names each set of choices by its question, so a screen reader says what they are for", () => {
+    renderForm();
+    expect(screen.getByRole("group", { name: "Which columns should the model use?" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Which models should we try?" })).toBeInTheDocument();
+    expect(screen.getByRole("radiogroup", { name: "How should the data be split?" })).toBeInTheDocument();
+  });
+});

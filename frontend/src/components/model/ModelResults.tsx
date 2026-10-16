@@ -659,7 +659,8 @@ export function ModelResults({
           accuracy on a lopsided target, and that is the single easiest thing to misread. */}
       <Card className={cn("border", verdict.className)}>
         <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0">
-          <CardTitle className="text-base">{verdict.title}</CardTitle>
+          {/* Focused when a new result arrives (ModelPage), so the verdict is the first thing read (#101). */}
+          <CardTitle id="model-verdict" tabIndex={-1} className="text-base focus:outline-none">{verdict.title}</CardTitle>
           <ScoreLabel kind="held_out" evaluation={result.evaluation} />
         </CardHeader>
         <CardContent className="text-sm">

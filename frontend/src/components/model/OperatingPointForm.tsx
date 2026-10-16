@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,7 @@ const OBJECTIVES: { value: OperatingObjective; label: string; description: strin
  * on that chart, is choosing on the test set. So the user says what matters and the server
  * chooses the line on the training folds. That is why there is no slider here. */
 export function OperatingPointForm({ classLabels, value, onChange }: OperatingPointFormProps) {
+  const titleId = useId();
   const positive = value.positive_label ?? classLabels[classLabels.length - 1];
   const set = (patch: Partial<OperatingPointRequest>) => onChange({ ...value, ...patch });
 
@@ -56,9 +58,9 @@ export function OperatingPointForm({ classLabels, value, onChange }: OperatingPo
   };
 
   return (
-    <Card>
+    <Card role="group" aria-labelledby={titleId}>
       <CardHeader>
-        <CardTitle className="text-base">What matters more: catching cases, or not crying wolf?</CardTitle>
+        <CardTitle id={titleId} className="text-base">What matters more: catching cases, or not crying wolf?</CardTitle>
         <p className="text-sm text-muted-foreground">
           A model gives each row a probability, and somewhere a line is drawn. Where it sits
           is a business call, not a modelling one. Say what matters and the app will choose

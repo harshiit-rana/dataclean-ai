@@ -1285,7 +1285,12 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   and three light-theme pairings failed (grey helper text on the muted background, red error text, text on red
   fills); those tokens are darker now. A change beyond the noise in the run history now says so in words as well as
   colour, a kept round says "kept", and the live search announces one short line per finished round instead of the
-  whole card on every update. Still to do: a manual keyboard walkthrough of the running app in a browser.
+  whole card on every update. The keyboard-only walkthrough of the running app (16 October 2026,
+  `docs/accessibility/keyboard-audit.md`) found and fixed what jsdom cannot see: data-table headers that opened on a
+  click only, thirteen indistinguishable "Approve" buttons, focus left on `<body>` after every navigation and every
+  finished training, unnamed groups of choices, twelve buttons all named "Show table", unannounced progress and
+  errors, a drop zone that announced nothing, and buttons relying on the browser's faint default focus ring. Not done:
+  a test with a real screen reader (#121).
 - **Static checks in CI (#116).** A `backend-static` job runs `ruff check app` (syntax errors and pyflakes) and
   `mypy app` at mypy's default strictness. Starting it found four unused imports and placeholders and 167 type errors,
   mostly annotation noise on dict-heavy code; the recent modules were fixed and 22 older modules are a documented

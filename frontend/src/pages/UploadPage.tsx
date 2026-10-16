@@ -68,7 +68,7 @@ export function UploadPage() {
         <CardContent>
           <FileDropzone onFileSelected={handleFileSelected} selectedFile={file} />
           {uploading && (
-            <p className="mt-2 text-xs text-muted-foreground">Reading your file...</p>
+            <p role="status" className="mt-2 text-xs text-muted-foreground">Reading your file...</p>
           )}
           {upload && (
             <p className="mt-2 text-xs text-muted-foreground">
@@ -91,7 +91,7 @@ export function UploadPage() {
         </CardContent>
       </Card>
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
 
       <KeptProjects />
     </div>

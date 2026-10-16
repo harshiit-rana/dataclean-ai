@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { ClippingOffer } from "@/api/types";
@@ -19,15 +20,16 @@ interface ClipOutliersProps {
  * list padded with columns that have nothing to clip is how people learn to tick without
  * reading. */
 export function ClipOutliers({ offers, chosen, onChange }: ClipOutliersProps) {
+  const titleId = useId();
   if (offers.length === 0) return null;
 
   const toggle = (column: string) =>
     onChange(chosen.includes(column) ? chosen.filter((c) => c !== column) : [...chosen, column]);
 
   return (
-    <Card>
+    <Card role="group" aria-labelledby={titleId}>
       <CardHeader>
-        <CardTitle className="text-base">Tame extreme values</CardTitle>
+        <CardTitle id={titleId} className="text-base">Tame extreme values</CardTitle>
         <p className="text-sm text-muted-foreground">
           A few values in these columns sit far from all the others, and a model can be thrown
           by them. Ticking one pulls such values back to the edge of the usual range — the

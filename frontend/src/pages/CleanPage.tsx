@@ -132,7 +132,7 @@ export function CleanPage() {
         </p>
       </div>
 
-      {run.status === "error" && <p className="text-sm text-destructive">{run.error}</p>}
+      {run.status === "error" && <p role="alert" className="text-sm text-destructive">{run.error}</p>}
 
       {/* Live progress while the run streams, then the persisted log with undo controls. */}
       {actionLog === null ? (

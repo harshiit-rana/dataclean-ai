@@ -62,8 +62,10 @@ export function ChartCard({
           <button
             type="button"
             onClick={() => setShowTable((open) => !open)}
-            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            className="shrink-0 rounded-md border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             aria-expanded={showTable}
+            // Twelve charts on the results page each had a button named only "Show table" (#101).
+            aria-label={`${showTable ? "Show chart" : "Show table"} for ${title}`}
           >
             {showTable ? "Show chart" : "Show table"}
           </button>

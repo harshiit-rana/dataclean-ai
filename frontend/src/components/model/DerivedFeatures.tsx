@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import type { FeatureRecipe } from "@/api/types";
@@ -28,15 +29,16 @@ const KIND_LABELS: Record<FeatureRecipe["kind"], string> = {
  * made the default model worse. An extra input is a change, and a change is the user's to
  * opt into -- the improvement loop tries them either way and reports whether they helped. */
 export function DerivedFeatures({ recipes, chosen, onChange }: DerivedFeaturesProps) {
+  const titleId = useId();
   if (recipes.length === 0) return null;
 
   const toggle = (id: string) =>
     onChange(chosen.includes(id) ? chosen.filter((c) => c !== id) : [...chosen, id]);
 
   return (
-    <Card>
+    <Card role="group" aria-labelledby={titleId}>
       <CardHeader>
-        <CardTitle className="text-base">Inputs we can build from your columns</CardTitle>
+        <CardTitle id={titleId} className="text-base">Inputs we can build from your columns</CardTitle>
         <p className="text-sm text-muted-foreground">
           Some columns can&apos;t be used as they stand — a date is a different value on
           nearly every row, and a paragraph of text isn&apos;t a category. These turn them

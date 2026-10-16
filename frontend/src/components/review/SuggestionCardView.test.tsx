@@ -65,10 +65,18 @@ describe("SuggestionCardView", () => {
 
   it("reports approve and reject decisions", () => {
     const props = renderCard();
-    fireEvent.click(screen.getByRole("button", { name: "Approve" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Approve/ }));
     expect(props.onDecide).toHaveBeenCalledWith("card_1", "approved");
-    fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Reject/ }));
     expect(props.onDecide).toHaveBeenCalledWith("card_1", "rejected");
+  });
+
+  it("names the column each button decides, and says which one was chosen (#101)", () => {
+    renderCard({ decision: "rejected" });
+    const column = CARD.column_name;
+    expect(screen.getByRole("group", { name: `Decision for ${column}` })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: `Approve the fix for ${column}` })).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("button", { name: `Reject the fix for ${column}` })).toHaveAttribute("aria-pressed", "true");
   });
 
   it("shows a target-safety warning as an adjustment, not advice", () => {

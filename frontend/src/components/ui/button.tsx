@@ -17,8 +17,10 @@ const sizeClasses: Record<Size, string> = {
   lg: "h-11 px-8",
 };
 
+// An explicit focus ring, the same as the inputs', rather than the browser's default: on the dark theme the default
+// was the only sign of focus on every button, and its contrast depends on the browser (#101).
 const baseClasses =
-  "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors disabled:pointer-events-none disabled:opacity-50";
+  "inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-50";
 
 /** Shared button styling for elements that must render as <a> or <Link> rather than
  * <button> (downloads, navigation) -- keeps them visually identical without pulling in

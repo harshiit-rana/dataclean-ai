@@ -69,7 +69,7 @@ export function ExportPage() {
           variant="outline"
           onError={setError}
         >
-          clean.py
+          Cleaning script (clean.py)
         </DownloadButton>
         {hasPdf && (
           <DownloadButton
@@ -99,7 +99,7 @@ export function ExportPage() {
       {sessionId && <ReadinessPanel sessionId={sessionId} />}
 
       {error && (
-        <div className="rounded-md border border-destructive/50 p-3 text-sm text-destructive">
+        <div role="alert" className="rounded-md border border-destructive/50 p-3 text-sm text-destructive">
           <p className="font-medium">Couldn't load the report</p>
           <p className="text-xs">{error}</p>
         </div>

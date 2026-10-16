@@ -150,7 +150,7 @@ export function ApplyPage() {
       </Card>
 
       {error && (
-        <div className="rounded-md border border-destructive/50 p-3 text-sm">
+        <div role="alert" className="rounded-md border border-destructive/50 p-3 text-sm">
           <p className="font-medium text-destructive">That file couldn&apos;t be used</p>
           <p className="mt-1 text-muted-foreground">{error}</p>
         </div>

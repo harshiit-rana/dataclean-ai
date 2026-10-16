@@ -126,6 +126,16 @@ export function ModelPage() {
   // The search runs as a job (#103). Its id is kept for this tab, so a dropped connection or a reload picks the
   // progress up again instead of saying "come back later".
   const jobKey = sessionId ? `dataclean.job.${sessionId}` : null;
+  // A new result replaces the form or the progress that held focus, which would leave it on <body>: move it to the
+  // verdict instead, which also scrolls it into view and has a screen reader read it first (#101).
+  const showVerdict = () => {
+    window.requestAnimationFrame(() => {
+      const verdict = document.getElementById("model-verdict");
+      if (verdict) verdict.focus();
+      else window.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  };
+
   const rememberJob = (jobId: string | null) => {
     if (!jobKey) return;
     try {
@@ -196,7 +206,7 @@ export function ModelPage() {
       setResult(restored);
       setCard(null);
       setHistory(await fetchModelHistory(sessionId).catch(() => history));
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      showVerdict();
     } catch (err) {
       setRestoreError(err instanceof ApiError ? err.detail : String((err as Error)?.message ?? err));
     } finally {
@@ -253,7 +263,7 @@ export function ModelPage() {
       setResult(trained);
       setHistory(await fetchModelHistory(sessionId).catch(() => history));
       setShowPlan(false);
-      window.scrollTo({ top: 0, behavior: "smooth" });
+      showVerdict();
     } catch (err) {
       setError(
         err instanceof ApiError ? err.detail : String((err as Error)?.message ?? err),
@@ -357,7 +367,7 @@ export function ModelPage() {
             void fetchModelHistory(sessionId)
               .then(setHistory)
               .catch(() => undefined);
-          window.scrollTo({ top: 0, behavior: "smooth" });
+          showVerdict();
         } else if (event.type === "error" && event.resumed_as && sessionId) {
           // Interrupted and resumed as a new job (#104): it replays the finished rounds from its journal in seconds,
           // so the trail starts again from the top and then carries on.
@@ -447,7 +457,7 @@ export function ModelPage() {
     return (
       <div className="mx-auto flex max-w-3xl flex-col gap-4 p-8">
         <h1 className="text-2xl font-semibold">Build a model</h1>
-        <div className="rounded-md border border-destructive/50 p-4 text-sm">
+        <div role="alert" className="rounded-md border border-destructive/50 p-4 text-sm">
           <p className="font-medium text-destructive">Can&apos;t build a model for this session</p>
           <p className="mt-1 text-muted-foreground">{planError}</p>
         </div>
@@ -506,7 +516,7 @@ export function ModelPage() {
           sessionId={sessionId!}
           onOpenSetup={() => {
             setShowPlan(true);
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            showVerdict();
           }}
         />
       )}
@@ -551,7 +561,7 @@ export function ModelPage() {
 
       {training && (
         <Card>
-          <CardContent className="p-6 text-sm text-muted-foreground">
+          <CardContent role="status" className="p-6 text-sm text-muted-foreground">
             Training and scoring each model, then cross-validating the best one. This usually
             takes a few seconds — longer on bigger files.
           </CardContent>

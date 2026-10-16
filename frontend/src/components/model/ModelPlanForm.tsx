@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
@@ -53,6 +53,9 @@ interface ModelPlanFormProps {
  * "train" button would make them defaults nobody chose, so they are laid out here with the
  * app's reasoning attached and everything adjustable. */
 export function ModelPlanForm({ plan, onTrain, training, preselect }: ModelPlanFormProps) {
+  const columnsTitleId = useId();
+  const splitTitleId = useId();
+  const modelsTitleId = useId();
   const known = new Set([
     ...plan.features.numeric,
     ...plan.features.categorical,
@@ -171,9 +174,9 @@ export function ModelPlanForm({ plan, onTrain, training, preselect }: ModelPlanF
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
+      <Card role="group" aria-labelledby={columnsTitleId}>
         <CardHeader>
-          <CardTitle className="text-base">Which columns should the model use?</CardTitle>
+          <CardTitle id={columnsTitleId} className="text-base">Which columns should the model use?</CardTitle>
           <p className="text-sm text-muted-foreground">
             Everything is included unless you say otherwise. Columns we think should be left
             out are already unticked, with the reason — untick our suggestion if you disagree.
@@ -238,9 +241,9 @@ export function ModelPlanForm({ plan, onTrain, training, preselect }: ModelPlanF
         </CardContent>
       </Card>
 
-      <Card>
+      <Card role="group" aria-labelledby={splitTitleId}>
         <CardHeader>
-          <CardTitle className="text-base">How should the data be split?</CardTitle>
+          <CardTitle id={splitTitleId} className="text-base">How should the data be split?</CardTitle>
           <p className="text-sm text-muted-foreground">
             Some rows are held back so the model can be scored on data it has never seen.
           </p>
@@ -272,6 +275,7 @@ export function ModelPlanForm({ plan, onTrain, training, preselect }: ModelPlanF
               )}
             </div>
           )}
+          <div role="radiogroup" aria-labelledby={splitTitleId} className="flex flex-col gap-3">
           {plan.split_options.map((option) => {
             const disabled =
               (option.value === "time" && plan.date_columns.length === 0) ||
@@ -310,9 +314,10 @@ export function ModelPlanForm({ plan, onTrain, training, preselect }: ModelPlanF
               </label>
             );
           })}
+          </div>
 
           {splitStrategy === "time" && plan.date_columns.length > 0 && (
-            <Select value={timeColumn} onChange={(e) => setTimeColumn(e.target.value)}>
+            <Select aria-label="Date column to order by" value={timeColumn} onChange={(e) => setTimeColumn(e.target.value)}>
               {plan.date_columns.map((column) => (
                 <option key={column} value={column}>
                   Order by {column}
@@ -506,9 +511,9 @@ export function ModelPlanForm({ plan, onTrain, training, preselect }: ModelPlanF
         </CardContent>
       </Card>
 
-      <Card>
+      <Card role="group" aria-labelledby={modelsTitleId}>
         <CardHeader>
-          <CardTitle className="text-base">Which models should we try?</CardTitle>
+          <CardTitle id={modelsTitleId} className="text-base">Which models should we try?</CardTitle>
           <p className="text-sm text-muted-foreground">
             All of them by default. They train on the same split, so the scores are
             comparable.

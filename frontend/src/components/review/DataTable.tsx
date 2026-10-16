@@ -45,13 +45,19 @@ export const DataTable = memo(function DataTable({
           Showing {preview.preview_row_count} of {preview.total_rows} rows &middot;{" "}
           {preview.total_columns} columns
         </span>
-        <span>Click a column header for details</span>
+        <span>Choose a column header for details</span>
       </div>
 
       {/* Height-capped rather than rendering all 100 rows inline: the suggestion cards are the
           point of this page, and a full-length table pushed them a long way below the fold --
           far enough that a wheel gesture over the table never reached them. */}
-      <div className="max-h-[26rem] overflow-auto">
+      {/* Focusable so the rows can be scrolled from the keyboard as well as the wheel (#101). */}
+      <div
+        className="max-h-[26rem] overflow-auto focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        tabIndex={0}
+        role="region"
+        aria-label="Data preview"
+      >
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr>
@@ -62,25 +68,33 @@ export const DataTable = memo(function DataTable({
                 return (
                   <th
                     key={col.name}
-                    onClick={() => onSelectColumn(col.name)}
+                    scope="col"
                     className={cn(
                       // Sticky so the column names stay readable while the rows scroll under
                       // them. The background has to be opaque or the rows show through.
-                      "sticky top-0 z-10 cursor-pointer whitespace-nowrap border-b border-border bg-background px-3 py-2 text-left font-medium transition-colors hover:bg-muted",
+                      "sticky top-0 z-10 whitespace-nowrap border-b border-border bg-background p-0 text-left font-medium",
                       isSelected && "bg-muted"
                     )}
                   >
-                    <span className="flex items-center gap-1.5">
+                    {/* A button, not a clickable cell, so the details open from the keyboard too (#101). */}
+                    <button
+                      type="button"
+                      onClick={() => onSelectColumn(col.name)}
+                      aria-pressed={isSelected}
+                      className="flex w-full items-center gap-1.5 px-3 py-2 text-left font-medium transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                    >
                       {severity && (
                         <span
                           className={cn("h-2 w-2 shrink-0 rounded-full", severityDot[severity])}
+                          role="img"
                           aria-label={`${severity} severity issue`}
                         />
                       )}
                       {col.name}
                       {col.is_critical && (
                         <span className="text-xs font-normal text-primary" title="Marked critical">
-                          &#9733;
+                          <span aria-hidden="true">&#9733;</span>
+                          <span className="sr-only">(critical)</span>
                         </span>
                       )}
                       {col.is_target && (
@@ -91,7 +105,7 @@ export const DataTable = memo(function DataTable({
                           target
                         </span>
                       )}
-                    </span>
+                    </button>
                   </th>
                 );
               })}
