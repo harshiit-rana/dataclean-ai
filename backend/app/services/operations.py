@@ -170,10 +170,38 @@ def _cast_to_numeric(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     return out
 
 
+def times_of_day_only(parsed: pd.Series) -> bool:
+    """Whether the values that read as dates are really times of day with no date in them (#130).
+
+    pandas reads "7:16 a.m." as 7:16 *today*, so a column of times parses as dates -- every one of them on the day the
+    file was read. Rewriting such a column as dates replaces each time with today's date; the flights file in the
+    real-error benchmark (#127) lost 4,583 correct times that way. A column where nine in ten parsed values fall on
+    today's date holds times, not dates."""
+    try:
+        read = parsed.dropna()
+        if read.empty:
+            return False
+        if read.dt.tz is not None:
+            read = read.dt.tz_localize(None)
+        return bool((read.dt.normalize() == pd.Timestamp.today().normalize()).mean() >= 0.9)
+    except (AttributeError, TypeError):  # not a column of timestamps (mixed time zones parse to objects)
+        return False
+
+
+def _refuse_times_of_day(column: str, parsed: pd.Series) -> None:
+    if times_of_day_only(parsed):
+        raise OperationFailedError(
+            f"The values in {column!r} are times of day with no date. Reading them as dates would attach today's date "
+            f"to every one and, written back as dates, lose the times."
+        )
+
+
 def _cast_to_datetime(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     column = _require_column(df, params)
+    parsed = pd.to_datetime(df[column], errors="coerce", format="mixed")
+    _refuse_times_of_day(column, parsed)
     out = df.copy()
-    out[column] = pd.to_datetime(out[column], errors="coerce", format="mixed")
+    out[column] = parsed
     return out
 
 
@@ -238,6 +266,7 @@ def _standardize_dates(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     parsed = pd.to_datetime(df[column], errors="coerce", format="mixed")
     if parsed.notna().sum() == 0:
         raise OperationFailedError(f"No values in {column!r} could be read as dates.")
+    _refuse_times_of_day(column, parsed)
     out = df.copy()
     out[column] = parsed.dt.strftime(fmt).where(parsed.notna(), None)
     return out

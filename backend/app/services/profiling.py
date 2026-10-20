@@ -21,6 +21,7 @@ import uuid
 import pandas as pd
 
 from app.models.graph_state import ColumnIssue
+from app.services.operations import times_of_day_only
 
 logger = logging.getLogger(__name__)
 
@@ -119,7 +120,8 @@ def _detect_type_mismatches(df: pd.DataFrame) -> list[ColumnIssue]:
 
         dates = pd.to_datetime(non_null, errors="coerce", format="mixed")
         date_rate = dates.notna().sum() / len(non_null)
-        if date_rate >= _DATE_MISMATCH_THRESHOLD:
+        # Times of day read as dates on today's date; calling them dates proposes a fix that erases them (#130).
+        if date_rate >= _DATE_MISMATCH_THRESHOLD and not times_of_day_only(dates):
             issues.append(
                 ColumnIssue(
                     issue_id=generate_issue_id(),
@@ -154,8 +156,8 @@ def _detect_inconsistent_date_formats(df: pd.DataFrame) -> list[ColumnIssue]:
             continue
         parsed = pd.to_datetime(non_null, errors="coerce", format="mixed")
         date_rate = parsed.notna().sum() / len(non_null)
-        if date_rate < _DATE_MISMATCH_THRESHOLD:
-            continue  # not a date column
+        if date_rate < _DATE_MISMATCH_THRESHOLD or times_of_day_only(parsed):
+            continue  # not a date column: no dates at all, or times of day with no date (#130)
         shapes = non_null[parsed.notna()].map(_date_shape)
         distinct_shapes = shapes.value_counts()
         if len(distinct_shapes) <= 1:

@@ -271,3 +271,29 @@ def test_the_explanation_prompt_recommends_merging_over_recasing():
     text = " ".join(str(v) for v in vars(explanation_prompts).values() if isinstance(v, str))
     assert "unify_case_variants" in text and "damages names" in text
 
+
+# --- times of day are not dates (#130) ----------------------------------------------------
+
+TIMES = pd.DataFrame({"departed": ["7:16 a.m.", "10:30 p.m.", "7:16am", "12:05 p.m.", None]})
+
+
+@pytest.mark.parametrize("name", ["standardize_dates", "cast_to_datetime"])
+def test_a_column_of_times_is_refused_rather_than_turned_into_todays_date(name):
+    with pytest.raises(ops.OperationFailedError, match="times of day"):
+        ops.apply_operation(TIMES, name, {"column": "departed"})
+
+
+def test_dates_with_times_are_still_dates():
+    frame = pd.DataFrame({"at": ["2021-03-01 07:16", "01/04/2021 22:30", "2021-05-01 12:05"]})
+    out, _, _ = ops.apply_operation(frame, "standardize_dates", {"column": "at"})
+    assert out["at"].tolist() == ["2021-03-01", "2021-01-04", "2021-05-01"]
+    assert not ops.times_of_day_only(pd.to_datetime(frame["at"], format="mixed"))
+
+
+def test_the_profiler_does_not_call_times_dates():
+    from app.services import profiling
+
+    found = {(i.column_name, i.issue_type) for i in profiling.detect_issues(TIMES)}
+    assert ("departed", "type_mismatch") not in found and ("departed", "inconsistent_format") not in found
+    dates = pd.DataFrame({"joined": ["2021-01-05", "05/02/2021", "2021-03-01"]})
+    assert ("joined", "inconsistent_format") in {(i.column_name, i.issue_type) for i in profiling.detect_issues(dates)}

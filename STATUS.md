@@ -95,6 +95,12 @@ written; the cards recommend it, and `standardize_case` stays for a column of fr
 learned from the session's file and replayed on new files (so a new file's `Plus` becomes the `plus` the model was
 trained on), written into `clean.py` as a `replace` table, and shown on the Apply page.
 
+**Times of day are not dates (#130).** pandas reads `7:16 a.m.` as 7:16 today, so a column of times parsed as dates:
+the profiler called it dates in mixed formats, and `standardize_dates` rewrote every value as today's date, erasing
+the times. The flights file in the real-error benchmark lost 4,583 correct times that way. A column where nine in ten
+parsed values fall on today's date is now treated as times: the date checks leave it alone, and `standardize_dates`
+and `cast_to_datetime` refuse it with a reason instead of inventing dates.
+
 **Approval, then execution.** The graph pauses at `human_approval` and checkpoints to Redis.
 Your decisions resume it. Nineteen whitelisted operations do the work. Your original file is
 never modified — there's a test asserting it's byte-identical after a run.
