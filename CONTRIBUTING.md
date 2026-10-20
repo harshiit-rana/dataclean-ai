@@ -587,6 +587,9 @@ are both running locally, you're ready to make changes.
   affordable (`cost_weight`, `complexity_rank`), a small search space, explainable or marked not, and shown to earn its
   place on the benchmark. Argue a request from that note, not from scratch. No new dependency without a clear reason;
   deep learning is deferred, not ruled out, and when it comes it meets the same standards.
+- **Registry models are built with `ModelSpec.build`, never by importing the class.** It substitutes the classes in
+  `forests.REPLACEMENTS`, which work around a scikit-learn 1.9 bug with balanced class weights on labels like "0"/"1"
+  (#126). Test a new classifier on a target coded 0/1 as well as yes/no: the app cross-validates on text labels.
 - **Anything that scores an input's usefulness uses validation folds of the training rows.** `improvement.fold_importance`
   shuffles an input only on rows the fold's model was not fitted on; computing importance on the fitted rows, or on the
   test set, would reward memorisation or select on the test set. A round that removes inputs must withhold them from

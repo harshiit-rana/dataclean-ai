@@ -794,6 +794,18 @@ gradient boosting: never kept on noise, and on a plain signal never kept either.
 costs, re-weighting mostly makes the same shift a second time, so the usual finding is "the cut-off is enough", and the
 round says so rather than adding a wrapper that does not pay.
 
+**Both forests take part on number-coded targets (#126).** On a target coded 0/1 or 1/2/3 the random forest and
+extra trees failed every cross-validated comparison, so the plain train chose between logistic regression and gradient
+boosting only and the improvement loop could never tune them; the log said only "Configuration failed to score". The
+app hands its classifiers text labels when it cross-validates, and scikit-learn 1.9 (1.9.0 and 1.9.1) cannot apply
+`class_weight="balanced"` in a forest to text that reads as a whole number: `compute_class_weight` looks up `int("0")`
+in a dict keyed by `"0"`. Yes/no and 1.0/2.0 labels were never hit, which is why the samples and tests missed it; the
+accuracy benchmark (#124) found it on OpenML's `Australian` and `cmc`. `forests.py` subclasses both forests to compute
+the same balanced weights on the path that works and fit with them as row weights -- the same probabilities as
+scikit-learn's own class, checked with and without row weights -- and `ModelSpec.build` makes those. The exported script
+still names scikit-learn's classes (it trains on the file's own labels), and `predict.py` ships the module. A test fails
+the day scikit-learn fixes the bug, so the workaround can go.
+
 **A record of what you tried.** Results used to overwrite a single file, so retraining
 discarded the previous run — which made the question people actually ask unanswerable: *did the
 thing I just changed help?* Every run is now kept with its settings, its headline number and

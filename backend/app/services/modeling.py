@@ -29,6 +29,7 @@ from app.services import (
     calibration as calibration_service,
     diagnostics,
     features as feature_recipes,
+    forests,
     not_judged,
     operating_point,
     time_folds,
@@ -141,7 +142,11 @@ class ModelSpec:
     def build(self, overrides: dict | None = None) -> Any:
         import importlib
 
-        cls = getattr(importlib.import_module(self.module), self.class_name)
+        # The two forests come from forests.py, which works around a scikit-learn 1.9 bug with balanced class
+        # weights on labels like "0"/"1" (#126). The exported script still names scikit-learn's own classes.
+        cls = forests.REPLACEMENTS.get(f"{self.module}.{self.class_name}") or getattr(
+            importlib.import_module(self.module), self.class_name
+        )
         settings = self.settings(overrides)
         if self.ensemble:
             members = settings.pop("members", [])

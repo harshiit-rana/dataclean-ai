@@ -19,7 +19,7 @@ from dataclasses import asdict
 
 import pandas as pd
 
-from app.services import clipping, cost_weighting, features, operations, replay, scoring, validation
+from app.services import clipping, cost_weighting, features, forests, operations, replay, scoring, validation
 
 # The modules predict.py runs, copied verbatim. They import only pandas, numpy, scikit-learn and each other.
 RUNTIME_MODULES = {
@@ -30,6 +30,7 @@ RUNTIME_MODULES = {
     "validation": validation,
     "clipping": clipping,
     "cost_weighting": cost_weighting,
+    "forests": forests,
 }
 
 _PACKAGE_DOC = '''"""The parts of DataClean AI that predict.py runs, copied from the app unchanged.
