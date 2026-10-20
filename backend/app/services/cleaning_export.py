@@ -74,6 +74,8 @@ def _lines(name: str, params: dict, learned: dict | None, frame: pd.DataFrame) -
         return [f"{_col(params)} = pd.to_numeric({_col(params)}, errors=\"coerce\")"]
     if name == "cast_to_datetime":
         return [f"{_col(params)} = pd.to_datetime({_col(params)}, errors=\"coerce\", format=\"mixed\")"]
+    if name == "unify_case_variants":
+        return [f"{_col(params)} = {_col(params)}.replace({_r(learned['mapping'])})"]
     if name == "standardize_case":
         case = params.get("case", "lower")
         # Written into code, so checked here as well as when the operation ran (#114): the script must never depend on
@@ -128,7 +130,8 @@ _LABELS = {
     "drop_duplicate_rows": "Remove duplicate rows, keeping the first",
     "cast_to_numeric": "Convert {col} to numbers",
     "cast_to_datetime": "Convert {col} to dates",
-    "standardize_case": "Make capitalisation in {col} consistent",
+    "unify_case_variants": "Merge spellings in {col} that differ only in capitals",
+    "standardize_case": "Rewrite every value in {col} in one case",
     "trim_whitespace": "Remove spaces around the text in {col}",
     "standardize_dates": "Rewrite the dates in {col} in one format",
     "cap_outliers": "Clamp extreme values in {col}",
@@ -146,6 +149,9 @@ def _learned_note(name: str, learned: dict | None) -> str:
         return ""
     if "fill_value" in learned:
         return f" -- {learned['fill_value']!r}, as learned from the original file"
+    if "mapping" in learned:
+        merged = len(learned["mapping"])
+        return f" -- {merged} spelling{'s' if merged != 1 else ''}, as learned from the original file"
     return f" -- limits {learned['lower']!r} to {learned['upper']!r}, as learned from the original file"
 
 

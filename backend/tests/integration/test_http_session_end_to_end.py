@@ -72,7 +72,7 @@ class FakeCardWriter:
         elif kind == "inconsistent_format" and "space" in description.lower():
             operation = f'trim_whitespace(column="{column}")'
         elif kind == "inconsistent_format":
-            operation = f'standardize_case(column="{column}", case="lower")'
+            operation = f'unify_case_variants(column="{column}")'
         elif kind == "high_cardinality":
             operation = f'drop_column(column="{column}")'
         else:

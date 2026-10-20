@@ -191,6 +191,37 @@ def _standardize_case(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     return out
 
 
+def case_variant_mapping(series: pd.Series) -> dict[str, str]:
+    """Each spelling that differs from another only in capitals, mapped to the commonest spelling of its group (the
+    first in sorted order on a tie). Spellings with no such variant are not in the mapping."""
+    text = series.dropna()
+    counts = text[text.map(lambda v: isinstance(v, str))].value_counts()
+    groups: dict[str, list[tuple[str, int]]] = {}
+    for spelling, count in counts.items():
+        groups.setdefault(str(spelling).lower(), []).append((str(spelling), int(count)))
+    mapping: dict[str, str] = {}
+    for members in groups.values():
+        if len(members) > 1:
+            canonical = min(members, key=lambda member: (-member[1], member[0]))[0]
+            mapping.update({spelling: canonical for spelling, _ in members if spelling != canonical})
+    return mapping
+
+
+def _unify_case_variants(df: pd.DataFrame, params: dict, learned: dict | None = None) -> pd.DataFrame:
+    """Merges spellings that differ only in capitals (`BASIC`, `Basic`) into the commonest one, and leaves every
+    other value as it is (#129). `standardize_case` re-cases the whole column instead, which damages values whose
+    capitals are right: title case turns "18th Street" into "18Th Street" and "Episode IV" into "Episode Iv".
+
+    Not a whole-file statistic in the sense of a fill: which spelling wins changes no row's information, only its
+    label, so it cannot carry the test rows into the model."""
+    column = _require_column(df, params)
+    mapping = learned["mapping"] if learned else case_variant_mapping(df[column])
+    out = df.copy()
+    if mapping:
+        out[column] = out[column].map(lambda value: mapping.get(value, value) if isinstance(value, str) else value)
+    return out
+
+
 def _trim_whitespace(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     column = _require_column(df, params)
     out = df.copy()
@@ -344,7 +375,13 @@ OPERATIONS: dict[str, Operation] = {
         Operation("drop_duplicate_rows", "Remove duplicate rows, keeping the first", False, _drop_duplicate_rows),
         Operation("cast_to_numeric", "Convert this column to numbers", True, _cast_to_numeric),
         Operation("cast_to_datetime", "Convert this column to real dates", True, _cast_to_datetime),
-        Operation("standardize_case", "Make capitalization consistent", True, _standardize_case),
+        Operation(
+            "unify_case_variants",
+            "Merge spellings that differ only in capitals into the most common one, leaving other values alone",
+            True,
+            _unify_case_variants,
+        ),
+        Operation("standardize_case", "Rewrite every value in one case (lower, upper or title)", True, _standardize_case),
         Operation("trim_whitespace", "Remove leading/trailing spaces", True, _trim_whitespace),
         Operation("standardize_dates", "Rewrite all dates in one consistent format", True, _standardize_dates),
         Operation("cap_outliers", "Clamp extreme values to the normal range", True, _cap_outliers),
@@ -439,7 +476,7 @@ def parse_operation(text: str) -> tuple[str, dict] | None:
 
 # Operations whose effect depends on a statistic read from the data they are applied to.
 LEARNED_OPERATIONS = frozenset(
-    {"fill_median", "fill_mean", "fill_mode", "cap_outliers", "drop_outlier_rows"}
+    {"fill_median", "fill_mean", "fill_mode", "cap_outliers", "drop_outlier_rows", "unify_case_variants"}
 )
 
 
@@ -470,6 +507,10 @@ def learn(df: pd.DataFrame, name: str, params: dict) -> dict | None:
         return {"fill_value": _plain(value)}
     if name == "fill_mode":
         return {"fill_value": _plain(_mode_of(df, column))}
+    if name == "unify_case_variants":
+        # The session's own spellings: a new file's "Plus" becomes the "plus" the model was trained on, whichever is
+        # commoner in the new file. A spelling the session never had stays as it is (validation names it as unseen).
+        return {"mapping": case_variant_mapping(df[column])}
     lower, upper = _iqr_bounds(_require_numeric(df, column))
     return {"lower": _plain(lower), "upper": _plain(upper)}
 

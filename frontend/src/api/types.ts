@@ -1215,8 +1215,9 @@ export interface AppliedStep {
   rows_before: number;
   rows_after: number;
   dropped_count: number;
-  /** The statistic the session learned and reused: a fill value, or outlier limits. */
-  learned: Record<string, number | string> | null;
+  /** The statistic the session learned and reused: a fill value, outlier limits, or the spellings merged into one
+   * (`mapping`, from unify_case_variants). */
+  learned: Record<string, number | string | Record<string, string>> | null;
 }
 
 export interface DriftColumn {

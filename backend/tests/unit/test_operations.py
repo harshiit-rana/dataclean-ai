@@ -232,3 +232,42 @@ def test_conversational_operations_are_hidden_from_the_issue_fixing_catalog():
     full_catalog = ops.operation_catalog(include_conversational=True)
     for name in ops.OPERATIONS:
         assert name in full_catalog
+
+
+# --- merging spellings that differ only in capitals (#129) --------------------------------
+
+
+def test_unify_case_variants_merges_only_the_variants_into_the_commonest_spelling():
+    frame = pd.DataFrame({"brewery": ["18th Street Brewery", "18th Street Brewery", "18TH STREET BREWERY",
+                                      "Episode IV", "ENG", "eng", "ENG", None]})
+    out, _, _ = ops.apply_operation(frame, "unify_case_variants", {"column": "brewery"})
+    assert out["brewery"].tolist()[:7] == ["18th Street Brewery"] * 3 + ["Episode IV", "ENG", "ENG", "ENG"]
+    assert pd.isna(out["brewery"].iloc[7])
+
+
+def test_standardize_case_is_what_damaged_them():
+    """Why the capitals finding no longer recommends re-casing the column."""
+    frame = pd.DataFrame({"brewery": ["18th Street Brewery", "Episode IV", "18TH STREET BREWERY"]})
+    out, _, _ = ops.apply_operation(frame, "standardize_case", {"column": "brewery", "case": "title"})
+    assert out["brewery"].tolist()[:2] == ["18Th Street Brewery", "Episode Iv"]
+
+
+def test_a_tie_goes_to_the_first_spelling_in_sorted_order():
+    assert ops.case_variant_mapping(pd.Series(["Plus", "plus"])) == {"plus": "Plus"}
+
+
+def test_the_sessions_spellings_are_replayed_on_a_new_file():
+    session = pd.DataFrame({"plan": ["plus", "plus", "Plus", "basic"]})
+    learned = ops.learn(session, "unify_case_variants", {"column": "plan"})
+    assert learned == {"mapping": {"Plus": "plus"}}
+    new = pd.DataFrame({"plan": ["Plus", "Plus", "Plus", "plus", "BASIC"]})  # "Plus" is commoner here
+    out, _, _ = ops.apply_operation(new, "unify_case_variants", {"column": "plan"}, learned=learned)
+    assert out["plan"].tolist() == ["plus", "plus", "plus", "plus", "BASIC"]  # BASIC was never seen: left as is
+
+
+def test_the_explanation_prompt_recommends_merging_over_recasing():
+    from app.services.prompts import explanation_prompts
+
+    text = " ".join(str(v) for v in vars(explanation_prompts).values() if isinstance(v, str))
+    assert "unify_case_variants" in text and "damages names" in text
+

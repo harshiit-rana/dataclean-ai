@@ -153,6 +153,13 @@ describe("ApplyPage", () => {
     expect(await screen.findByText(/with 23.83, as learned from your original file/)).toBeInTheDocument();
   });
 
+  it("says how many spellings a merge carried over from the original file", async () => {
+    const steps = [{ ...RESULT.steps[0], operation: "unify_case_variants", column: "plan",
+                     learned: { mapping: { Plus: "plus", PLUS: "plus" } } }];
+    await runWith({ ...RESULT, steps });
+    expect(await screen.findByText(/merging 2 spellings, as learned from your original file/)).toBeInTheDocument();
+  });
+
   it("explains a skipped fix rather than hiding it", async () => {
     await runWith(RESULT);
     expect(await screen.findByText("Skipped")).toBeInTheDocument();

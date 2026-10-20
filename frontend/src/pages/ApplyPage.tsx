@@ -42,6 +42,10 @@ function describeLearned(step: AppliedStep): string | null {
     const upper = Number(step.learned.upper);
     return `range ${lower.toFixed(2)} to ${upper.toFixed(2)}`;
   }
+  if ("mapping" in step.learned) {
+    const merged = Object.keys(step.learned.mapping as Record<string, string>).length;
+    return `merging ${merged} spelling${merged === 1 ? "" : "s"}`;
+  }
   return null;
 }
 

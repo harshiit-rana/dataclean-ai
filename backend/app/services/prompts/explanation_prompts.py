@@ -48,14 +48,18 @@ line -- no backticks, no explanation.
 
 Argument rules:
 - Every operation except drop_duplicate_rows takes column="<the column name>".
-- standardize_case also takes case="lower" | "upper" | "title".
+- For inconsistent capitals use unify_case_variants: it merges only the spellings that differ in \
+capitals, into the most common one, and leaves every other value as written. standardize_case \
+(which also takes case="lower" | "upper" | "title") rewrites every value in the column and \
+damages names, codes and acronyms, so propose it only when the column holds free words with no \
+meaningful capitals.
 - standardize_dates also takes format="%Y-%m-%d" (or another strftime format).
 - fill_constant also takes value="<the fill value>".
 
 Example OPERATION lines:
 fill_median(column="revenue")
 drop_duplicate_rows()
-standardize_case(column="country", case="upper")
+unify_case_variants(column="country")
 
 The OPERATION must match what PROPOSED_ACTION describes. No other text before FOUND: or \
 after the OPERATION line.

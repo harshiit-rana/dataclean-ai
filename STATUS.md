@@ -85,8 +85,18 @@ beside `basic`, `Basic` and `BASIC`; the casing check caught the capitals, and l
 left `' basic '` and `basic` as two unrelated categories. The card now says what fixing it buys:
 *"Trimming them merges 12 different spellings into 9, and ignoring capitals as well leaves 3."*
 
+**Capitals are fixed by merging spellings, not by re-casing the column (#129).** The capitals finding used to lead
+to `standardize_case`, which rewrites every value in the column in one case. On real files that damages what was
+right: title case turns `18th Street Brewery` into `18Th Street Brewery` and `Episode IV` into `Episode Iv`, and
+lower case turns `ENG` into `eng`. The real-error benchmark (#127) counted 2,271 correct movie names, 259 brewery
+names and about 700 journal titles and abbreviations overwritten that way. A new operation, `unify_case_variants`,
+merges only the spellings that differ in capitals, each into its commonest spelling, and leaves every other value as
+written; the cards recommend it, and `standardize_case` stays for a column of free words. Which spelling won is
+learned from the session's file and replayed on new files (so a new file's `Plus` becomes the `plus` the model was
+trained on), written into `clean.py` as a `replace` table, and shown on the Apply page.
+
 **Approval, then execution.** The graph pauses at `human_approval` and checkpoints to Redis.
-Your decisions resume it. Eighteen whitelisted operations do the work. Your original file is
+Your decisions resume it. Nineteen whitelisted operations do the work. Your original file is
 never modified — there's a test asserting it's byte-identical after a run.
 
 **Undo.** Any applied fix can be reversed. The action log is rewritten in place and the audit
@@ -1189,7 +1199,7 @@ the app; the cleaning behind its training data had no equivalent. The export now
 session's cleaning as a script, one commented block per applied fix, with every learned value
 written in as a literal. Run on the original upload it reproduces the cleaned file; run on a
 later export it cleans it exactly as the app's "use this on a new file" does. A test runs it in
-a subprocess over a log that exercises all eighteen operations and compares the output with
+a subprocess over a log that exercises all nineteen operations and compares the output with
 the app's, byte for byte, on both the original and a changed file.
 
 A column the new file lacks is skipped with the reason rather than failing everything else; the
