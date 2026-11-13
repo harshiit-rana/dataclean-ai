@@ -8,8 +8,9 @@ or a score is evidence about a change, not a pass or a fail for it.
 | `benchmark.py` (#107) | How long profiling, a train and the improvement loop take | Synthetic, 1k–100k rows | `Benchmark` |
 | `accuracy_benchmark.py` (#124) | How accurate the models are next to other systems, and how well calibrated | 24 OpenML AutoML Benchmark tasks | `Accuracy benchmark` |
 | `cleaning_benchmark.py` (#125) | How many known problems the profiler finds, and what fixing them wins back | 6 of those tasks, with injected problems | `Data benchmarks` |
+| `real_errors_benchmark.py` (#127) | The same, cell by cell, on errors people actually made | The Raha/Baran datasets | `Data benchmarks` |
 
-The cleaning benchmark has its own page: [cleaning](cleaning.md).
+The data benchmarks have their own pages: [cleaning](cleaning.md), [real errors](real-errors.md).
 
 ## The accuracy benchmark
 

@@ -1338,6 +1338,13 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   2 false alarms among 113 findings. Where the problems cost score (vehicle, house_prices_nominal), the fixes won back
   about 60% of it. On credit-g, churn and abalone they cost nothing measurable. On car the loss stayed: blanks there
   destroy information no fill can recover. Details in `docs/benchmarks/cleaning.md`.
+- **Real-error benchmark (#127).** `backend/scripts/real_errors_benchmark.py` scores detection and repair cell by
+  cell on five datasets whose errors people made, with hand-made clean versions (Raha and Baran: hospital, flights,
+  beers, rayyan, movies_1). What the profiler flags is mostly right where its kind of problem exists (every number
+  stored as text, three in four capitals findings), but it sees 6% to 47% of the damage: most real errors are typos
+  and well-formed wrong values. It found #129 (the capitals fix re-cased correct values) and #130 (times of day
+  erased as dates); with both fixed, the fixes overwrite 161 correct values instead of 7,937. Flagged outliers were
+  never errors in these files (0 of 112). Details in `docs/benchmarks/real-errors.md`.
 - **Accessibility pass (#101).** axe runs in the frontend suite on the Upload, Review, Clean, Model, Apply and
   Export pages and on the model results, and found real problems, now fixed: the app had no landmarks (the pages
   now sit in `<main>`, the theme toggle in `<header>`); card titles were `<h3>` straight under the page's `<h1>`
