@@ -1,0 +1,5 @@
+# The accuracy benchmark's AutoML competitor (scripts/accuracy_benchmark.py, #124). Never imported by the app or its
+# tests: install it only to run the benchmark. Without it the benchmark runs every other system and says FLAML was
+# skipped. FLAML's own extras bring LightGBM and XGBoost, which the app does not use either.
+-r requirements.txt
+flaml[automl]>=2.7,<3

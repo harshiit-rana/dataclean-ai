@@ -1,0 +1,118 @@
+name: Accuracy benchmark
+
+# How accurate the app's models are next to a constant predictor, a random forest, plain gradient boosting and FLAML,
+# on public OpenML AutoML Benchmark tasks with their official folds (backend/scripts/accuracy_benchmark.py, #124).
+# Never on a push: it takes hours, and a score is evidence about a change, not a pass or a fail for it. Weekly and on
+# demand. The development and held-out tasks run side by side and are merged into one result, kept as an artifact;
+# the merged result is compared with the last successful run's and every task where the app's normalised score fell
+# by more than 0.1 is marked. Same runner image every time, so runs are comparable.
+
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "amlb (24 AutoML Benchmark tasks) or tabarena (28 TabArena tasks, all held out)"
+        default: "amlb"
+      folds:
+        description: "Official folds per task (1-10)"
+        default: "2"
+      budget:
+        description: "Seconds for the improvement loop and for FLAML, per fold"
+        default: "120"
+  schedule:
+    - cron: "0 2 * * 0"
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  tasks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        part: [exclude, only]  # --held-out exclude: development tasks; only: held-out tasks
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-benchmark.txt
+
+      - name: Keep the OpenML downloads between runs
+        uses: actions/cache@v5
+        with:
+          path: backend/.benchmark_cache
+          key: openml-${{ github.event.inputs.suite || 'amlb' }}-${{ hashFiles('backend/scripts/openml_tasks.py') }}
+
+      - name: Score every system
+        run: |
+          python scripts/accuracy_benchmark.py --suite ${{ github.event.inputs.suite || 'amlb' }} --held-out ${{ matrix.part }} \
+            --folds ${{ github.event.inputs.folds || '2' }} --budget ${{ github.event.inputs.budget || '120' }} \
+            --out accuracy-${{ matrix.part }}.json
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: accuracy-${{ matrix.part }}
+          path: backend/accuracy-${{ matrix.part }}.json
+
+  summary:
+    needs: tasks
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: accuracy-*
+          path: backend/parts
+          merge-multiple: true
+
+      - name: Fetch the last results to compare with
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The newest successful run of the same suite: a TabArena run is no baseline for an AMLB one.
+          for id in $(gh run list --workflow accuracy-benchmark.yml --status success --limit 10 --json databaseId -q '.[].databaseId' || true); do
+            gh run download "$id" -n accuracy-${{ github.event.inputs.suite || 'amlb' }} -D baseline 2>/dev/null && break
+          done
+          true  # no earlier run of this suite is not a failure
+
+      - name: Merge and compare
+        run: |
+          baseline=""
+          if [ -f baseline/accuracy.json ]; then baseline="--baseline baseline/accuracy.json"; fi
+          python scripts/accuracy_benchmark.py --merge parts/accuracy-*.json --out accuracy.json \
+            --markdown accuracy.md --cd-svg accuracy-cd.svg $baseline
+
+      - name: Show the tables on the run's page
+        if: always()
+        run: if [ -f accuracy.md ]; then cat accuracy.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: accuracy-${{ github.event.inputs.suite || 'amlb' }}
+          path: |
+            backend/accuracy.json
+            backend/accuracy.md
+            backend/accuracy-cd.svg

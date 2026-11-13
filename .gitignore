@@ -5,6 +5,7 @@
 # Backend
 backend/uploads/
 backend/chroma_db/
+backend/.benchmark_cache/
 **/__pycache__/
 *.pyc
 .pytest_cache/

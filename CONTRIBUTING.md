@@ -55,6 +55,11 @@ are both running locally, you're ready to make changes.
   response shape a later step reads, it fails; update it in the same change, deliberately. The
   fake card writer is kept close to the real prompt contract (an OPERATION line per issue
   type), so keep it in step with `explanation_prompts.py`.
+- If you changed a default that decides accuracy -- a model's settings, a search space, a threshold in the loop, a
+  model family -- run the accuracy benchmark on the **development** tasks before and after
+  (`python scripts/accuracy_benchmark.py --held-out exclude`, see `docs/benchmarks/README.md`) and put both summaries
+  in the PR. Never choose a default by its score on the held-out tasks; they exist to show whether a change carries
+  over to tasks it was not chosen on.
 - If you added anything that **decides** something -- picks a model, a setting, a feature, a
   threshold, a column to drop, a number shown beside the score -- add a case for that decision
   path to `backend/tests/unit/test_evaluation_integrity.py`. It runs the path twice, once with
@@ -575,7 +580,8 @@ are both running locally, you're ready to make changes.
   `test_successive_halving.py` show how to check group-aware and forward folds at every rung).
 - **The automatic strategy choice is a pure function with documented thresholds.** Change `HALVING_MIN_*` in
   `tuning.py` and the boundary cases in `tests/unit/test_choose_strategy.py` together, and say in the commit what
-  data justified it: a threshold moved without a benchmark is a guess, and the tests exist to make that visible.
+  data justified it (the accuracy benchmark's development tasks, #124): a threshold moved without a benchmark is a
+  guess, and the tests exist to make that visible.
 - **A new model family gets a `cost_weight`.** Set it on its `ModelSpec` (see `_COST_WEIGHTS` in `modeling.py`) from
   a rough timing against logistic regression, or the processing limit will treat it as cheap. A new step that scales
   with rows times candidates times folds belongs in `estimate_cost`, and anything that reduces a request to fit

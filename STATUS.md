@@ -1317,6 +1317,20 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   given an earlier run's file flags every timing more than 30% slower. A separate `Benchmark` workflow runs it weekly
   and on demand -- never on a push, since a timing is not a pass or fail for a change -- compares with the last
   successful run on the same runner image, and keeps the results as an artifact.
+- **Accuracy benchmark (#124).** `backend/scripts/accuracy_benchmark.py` scores the app against a constant
+  predictor, a 500-tree random forest, plain histogram gradient boosting and FLAML (same machine, same time budget)
+  on 24 tasks of the OpenML AutoML Benchmark with their official folds and AMLB's metrics (AUC, log loss, RMSE).
+  Fourteen tasks are for development; ten are held out and never used to choose a default, and 28 TabArena tasks
+  (`--suite tabarena`) are all held out. It reports normalised scores (0 the constant predictor, 1 the forest; mean
+  and median), average ranks, the improvement loop's wins and losses, the Brier score, and whether any of it is more
+  than chance (Friedman test, Nemenyi critical difference with a diagram, Holm-corrected Wilcoxon tests). An
+  `Accuracy benchmark` workflow runs it weekly, never on a push, and marks every task where the app fell by more than
+  0.1 since the last run. First results (4 November 2026, 2 folds, 120 s): the app is level with the forest (median
+  1.00) and a little behind FLAML (1.04); average ranks FLAML 2.21, the app 2.94, the forest 3.46, gradient boosting
+  3.62, and only the constant predictor is told apart from the rest. It found #126 (both forests silently dropped
+  out on targets coded 0/1, fixed), #131 (the improvement loop kept nothing on any task: its bar is the spread of
+  fold scores, not of paired differences) and #132 (probabilities for more than two classes are chosen by accuracy
+  and fall well behind FLAML's in log loss). Both are open decisions. Details in `docs/benchmarks/README.md`.
 - **Accessibility pass (#101).** axe runs in the frontend suite on the Upload, Review, Clean, Model, Apply and
   Export pages and on the model results, and found real problems, now fixed: the app had no landmarks (the pages
   now sit in `<main>`, the theme toggle in `<header>`); card titles were `<h3>` straight under the page's `<h1>`

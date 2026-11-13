@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 186" font-family="sans-serif" font-size="13" role="img" aria-label="Average rank over 24 tasks (lower is better)">
+<style>.ink{stroke:currentColor;fill:none}.txt{fill:currentColor}</style>
+<text class="txt" x="360.0" y="16" text-anchor="middle" font-weight="bold">Average rank over 24 tasks (lower is better)</text>
+<line class="ink" x1="170" y1="70" x2="550" y2="70"/>
+<line class="ink" x1="170.0" y1="65" x2="170.0" y2="70"/>
+<text class="txt" x="170.0" y="61" text-anchor="middle">1</text>
+<line class="ink" x1="246.0" y1="65" x2="246.0" y2="70"/>
+<text class="txt" x="246.0" y="61" text-anchor="middle">2</text>
+<line class="ink" x1="322.0" y1="65" x2="322.0" y2="70"/>
+<text class="txt" x="322.0" y="61" text-anchor="middle">3</text>
+<line class="ink" x1="398.0" y1="65" x2="398.0" y2="70"/>
+<text class="txt" x="398.0" y="61" text-anchor="middle">4</text>
+<line class="ink" x1="474.0" y1="65" x2="474.0" y2="70"/>
+<text class="txt" x="474.0" y="61" text-anchor="middle">5</text>
+<line class="ink" x1="550.0" y1="65" x2="550.0" y2="70"/>
+<text class="txt" x="550.0" y="61" text-anchor="middle">6</text>
+<line class="ink" stroke-width="2" x1="170" y1="34" x2="287.0" y2="34"/>
+<text class="txt" x="293.0" y="38">CD = 1.54</text>
+<polyline class="ink" points="261.8,70 261.8,114 12,114"/>
+<text class="txt" x="12" y="110" text-anchor="start">flaml (2.21)</text>
+<polyline class="ink" points="317.3,70 317.3,136 12,136"/>
+<text class="txt" x="12" y="132" text-anchor="start">dataclean_train (2.94)</text>
+<polyline class="ink" points="317.3,70 317.3,158 12,158"/>
+<text class="txt" x="12" y="154" text-anchor="start">dataclean_improve (2.94)</text>
+<polyline class="ink" points="356.8,70 356.8,158 708,158"/>
+<text class="txt" x="708" y="154" text-anchor="end">random_forest (3.46)</text>
+<polyline class="ink" points="369.5,70 369.5,136 708,136"/>
+<text class="txt" x="708" y="132" text-anchor="end">hist_gradient_boosting (3.62)</text>
+<polyline class="ink" points="537.3,70 537.3,114 708,114"/>
+<text class="txt" x="708" y="110" text-anchor="end">constant (5.83)</text>
+<line class="ink" stroke-width="3" x1="258.8" y1="82" x2="372.5" y2="82"/>
+</svg>
