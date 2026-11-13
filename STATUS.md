@@ -1331,6 +1331,13 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   out on targets coded 0/1, fixed), #131 (the improvement loop kept nothing on any task: its bar is the spread of
   fold scores, not of paired differences) and #132 (probabilities for more than two classes are chosen by accuracy
   and fall well behind FLAML's in log loss). Both are open decisions. Details in `docs/benchmarks/README.md`.
+- **Cleaning benchmark (#125).** `backend/scripts/cleaning_benchmark.py` injects problems whose every cell is known
+  into six of those tasks (blanks, outliers, numbers as text, capitals, spaces, mixed dates, duplicates), as REIN and
+  CleanML do. It scores what the profiler finds against what the clean file already shows, then how much model score
+  the fix each finding implies wins back. Results (13 November 2026, 18 runs): every injected problem was found, with
+  2 false alarms among 113 findings. Where the problems cost score (vehicle, house_prices_nominal), the fixes won back
+  about 60% of it. On credit-g, churn and abalone they cost nothing measurable. On car the loss stayed: blanks there
+  destroy information no fill can recover. Details in `docs/benchmarks/cleaning.md`.
 - **Accessibility pass (#101).** axe runs in the frontend suite on the Upload, Review, Clean, Model, Apply and
   Export pages and on the model results, and found real problems, now fixed: the app had no landmarks (the pages
   now sit in `<main>`, the theme toggle in `<header>`); card titles were `<h3>` straight under the page's `<h1>`

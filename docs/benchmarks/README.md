@@ -7,6 +7,9 @@ or a score is evidence about a change, not a pass or a fail for it.
 |---|---|---|---|
 | `benchmark.py` (#107) | How long profiling, a train and the improvement loop take | Synthetic, 1k–100k rows | `Benchmark` |
 | `accuracy_benchmark.py` (#124) | How accurate the models are next to other systems, and how well calibrated | 24 OpenML AutoML Benchmark tasks | `Accuracy benchmark` |
+| `cleaning_benchmark.py` (#125) | How many known problems the profiler finds, and what fixing them wins back | 6 of those tasks, with injected problems | `Data benchmarks` |
+
+The cleaning benchmark has its own page: [cleaning](cleaning.md).
 
 ## The accuracy benchmark
 
@@ -75,7 +78,7 @@ The first run downloads the tasks from openml.org into `backend/.benchmark_cache
 same time, and keep the machine from sleeping: the improvement loop and FLAML work to a wall-clock budget, so a busy
 or sleeping machine gives them less search.
 
-The long benchmarks (this one) save after every task or seed. If a run is stopped, the same
+The long benchmarks (this one and cleaning) save after every task or seed. If a run is stopped, the same
 command carries on from where it stopped. A run that finished is not picked up: the same command starts again, so a
 before-and-after comparison measures the change.
 
@@ -190,3 +193,7 @@ tabular part of what it measures is covered more cheaply, and more fairly, by th
 **Published AMLB results.** Comparing with the scores AutoGluon, H2O and others reached in AMLB's own runs would
 mean comparing different hardware and time budgets. FLAML is run here instead, on the same machine and budget as
 the app, which is a fair comparison.
+
+**The LLM's choice of fix.** The cleaning benchmarks use a fixed fix for each finding. Scoring the explanation
+agent's choices would need an API key and paid calls on every run, and would measure a model that changes under the
+app. It can be added as an option if the fixed mapping and the agent are ever seen to disagree.

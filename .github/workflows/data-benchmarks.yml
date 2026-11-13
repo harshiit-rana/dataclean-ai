@@ -1,0 +1,55 @@
+name: Data benchmarks
+
+# How well the profiler and the cleaning operations do, measured (docs/benchmarks/):
+# - cleaning: known problems injected into clean OpenML data, detection and what fixing them wins back (#125);
+# Never on a push; weekly and on demand. Each job puts its tables on the run's page and keeps its JSON as an artifact.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 0"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        script: [cleaning_benchmark]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Keep the downloaded datasets between runs
+        uses: actions/cache@v5
+        with:
+          path: backend/.benchmark_cache
+          key: data-${{ matrix.script }}-${{ hashFiles('backend/scripts/openml_tasks.py') }}
+
+      - name: Run it
+        run: python scripts/${{ matrix.script }}.py --out ${{ matrix.script }}.json --markdown ${{ matrix.script }}.md
+
+      - name: Show the tables on the run's page
+        if: always()
+        run: if [ -f ${{ matrix.script }}.md ]; then cat ${{ matrix.script }}.md >> "$GITHUB_STEP_SUMMARY"; fi
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ${{ matrix.script }}
+          path: |
+            backend/${{ matrix.script }}.json
+            backend/${{ matrix.script }}.md

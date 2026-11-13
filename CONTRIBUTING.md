@@ -59,7 +59,8 @@ are both running locally, you're ready to make changes.
   model family -- run the accuracy benchmark on the **development** tasks before and after
   (`python scripts/accuracy_benchmark.py --held-out exclude`, see `docs/benchmarks/README.md`) and put both summaries
   in the PR. Never choose a default by its score on the held-out tasks; they exist to show whether a change carries
-  over to tasks it was not chosen on.
+  over to tasks it was not chosen on. A change to the profiler's detectors or the cleaning operations gets the
+  cleaning benchmark (`python scripts/cleaning_benchmark.py --no-repair` takes seconds).
 - If you added anything that **decides** something -- picks a model, a setting, a feature, a
   threshold, a column to drop, a number shown beside the score -- add a case for that decision
   path to `backend/tests/unit/test_evaluation_integrity.py`. It runs the path twice, once with
