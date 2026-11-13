@@ -9,8 +9,10 @@ or a score is evidence about a change, not a pass or a fail for it.
 | `accuracy_benchmark.py` (#124) | How accurate the models are next to other systems, and how well calibrated | 24 OpenML AutoML Benchmark tasks | `Accuracy benchmark` |
 | `cleaning_benchmark.py` (#125) | How many known problems the profiler finds, and what fixing them wins back | 6 of those tasks, with injected problems | `Data benchmarks` |
 | `real_errors_benchmark.py` (#127) | The same, cell by cell, on errors people actually made | The Raha/Baran datasets | `Data benchmarks` |
+| `robustness_benchmark.py` (#128) | What a messy new file does to a model trained on a clean one | 6 OpenML tasks | `Data benchmarks` |
 
-The data benchmarks have their own pages: [cleaning](cleaning.md), [real errors](real-errors.md).
+The data benchmarks have their own pages: [cleaning](cleaning.md), [real errors](real-errors.md),
+[robustness](robustness.md).
 
 ## The accuracy benchmark
 
@@ -79,7 +81,7 @@ The first run downloads the tasks from openml.org into `backend/.benchmark_cache
 same time, and keep the machine from sleeping: the improvement loop and FLAML work to a wall-clock budget, so a busy
 or sleeping machine gives them less search.
 
-The long benchmarks (this one and cleaning) save after every task or seed. If a run is stopped, the same
+The long benchmarks (this one, cleaning and robustness) save after every task or seed. If a run is stopped, the same
 command carries on from where it stopped. A run that finished is not picked up: the same command starts again, so a
 before-and-after comparison measures the change.
 

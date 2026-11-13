@@ -1345,6 +1345,13 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   and well-formed wrong values. It found #129 (the capitals fix re-cased correct values) and #130 (times of day
   erased as dates); with both fixed, the fixes overwrite 161 correct values instead of 7,937. Flagged outliers were
   never errors in these files (0 of 112). Details in `docs/benchmarks/real-errors.md`.
+- **Robustness benchmark (#128).** `backend/scripts/robustness_benchmark.py` trains on a clean file, then scores messier
+  new files through the app's own route for a new file (validation, coercion, the pipeline), as Jenga does. It records
+  how far the score falls, whether the app warned, and whether scoring failed. Results (13 November 2026, 81 runs):
+  scoring never failed, and the app named every corrupted column in 80. The typical fall is small (median 1-3%),
+  except for outliers (27%). Values 10-1000 times too big are scored as they are (abalone's error went from 2.3 to
+  about 2,600; #133). Padded or re-cased text is treated as a category the model never saw (#134). Details in
+  `docs/benchmarks/robustness.md`.
 - **Accessibility pass (#101).** axe runs in the frontend suite on the Upload, Review, Clean, Model, Apply and
   Export pages and on the model results, and found real problems, now fixed: the app had no landmarks (the pages
   now sit in `<main>`, the theme toggle in `<header>`); card titles were `<h3>` straight under the page's `<h1>`
