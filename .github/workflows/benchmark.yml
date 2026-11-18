@@ -2,8 +2,9 @@ name: Benchmark
 
 # Timings for profiling, a plain train and the improvement loop at 1k, 10k and 100k rows (backend/scripts/benchmark.py).
 # Never on a push: it takes a long time, and a timing is not a pass or a fail for a change. Weekly and on demand, its
-# results kept as an artifact; each run compares itself with the last successful one and marks timings more than 30%
-# slower. Same runner image every time, so runs are comparable.
+# results kept as an artifact. Each run compares itself with the last successful one, scaled by a reference workload
+# because runners of the same image differ in speed, and warns about timings more than 30% slower than expected. It
+# does not fail on them: a failed run would also stop being the next run's baseline.
 
 on:
   workflow_dispatch:

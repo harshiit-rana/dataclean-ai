@@ -1314,9 +1314,11 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   waits for a ready backend and has a healthcheck of its own.
 - **Benchmarks (#107).** `backend/scripts/benchmark.py` times profiling, a plain train and the improvement loop
   (fixed budget) on synthetic files of 1,000, 10,000 and 100,000 rows by 20 columns, writes the timings as JSON, and
-  given an earlier run's file flags every timing more than 30% slower. A separate `Benchmark` workflow runs it weekly
-  and on demand -- never on a push, since a timing is not a pass or fail for a change -- compares with the last
-  successful run on the same runner image, and keeps the results as an artifact.
+  given an earlier run's file reports every timing more than 30% slower than expected. Each run also times a fixed
+  reference workload, and the baseline is scaled by how fast that ran, because CI runners of the same image differ in
+  speed (on 9 November 2026 every timing was 45-104% slower on the same commit). A separate `Benchmark` workflow runs
+  it weekly and on demand -- never on a push, since a timing is not a pass or fail for a change -- compares with the
+  last successful run, puts the table on the run's page, and warns about slower timings without failing the run.
 - **Accuracy benchmark (#124).** `backend/scripts/accuracy_benchmark.py` scores the app against a constant
   predictor, a 500-tree random forest, plain histogram gradient boosting and FLAML (same machine, same time budget)
   on 24 tasks of the OpenML AutoML Benchmark with their official folds and AMLB's metrics (AUC, log loss, RMSE).
