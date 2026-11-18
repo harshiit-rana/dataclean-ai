@@ -1,3 +1,4 @@
+import { shownScore } from "@/lib/scores";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,6 +49,7 @@ const METRIC_LABELS: Record<string, string> = {
   brier_score: "Brier score",
   expected_calibration_error: "Calibration error",
   r2: "R²",
+  neg_log_loss: "log loss, lower is better",
   mae: "Mean error",
   rmse: "RMSE",
   mae_vs_baseline: "Error vs. median guess",
@@ -355,7 +357,7 @@ function ModelComparison({ result, keys }: { result: ModelResult; keys: string[]
                       {entry.failed
                         ? "did not train"
                         : entry.cv_score != null
-                          ? entry.cv_score.toFixed(3)
+                          ? shownScore(entry.cv_score, metric).toFixed(3)
                           : "—"}
                     </td>
                     <td className="px-2 py-1.5 text-right tabular-nums text-muted-foreground">

@@ -147,17 +147,31 @@ class SearchResult:
         return {k.replace("model__", ""): v for k, v in self.params.items()}
 
 
-def scoring_for(task: str, y) -> str:
-    """The metric to search against.
-
-    Deliberately the same choice cross_validate_pipeline makes, so the number a search
-    reports and the number the diagnostics panel reports mean the same thing. AUC on a binary
-    target because accuracy is misleading when the classes are lopsided; accuracy when there
-    are more than two classes; R² for regression.
+def chart_metric(task: str, y) -> str:
+    """The metric the diagnostics charts speak, all of them the same one: AUC on a binary target because accuracy
+    is misleading when the classes are lopsided; accuracy when there are more than two classes; R² for regression.
     """
     if task == "regression":
         return "r2"
     return "roc_auc" if pd.Series(y).nunique() == 2 else "accuracy"
+
+
+def scoring_for(task: str, y) -> str:
+    """The metric models are chosen, tuned and improved by.
+
+    The charts' metric, except with more than two classes, where it is log loss (#132): chosen by accuracy, a model
+    that is right as often but far more over-confident won, and the app's probabilities fell well behind FLAML's
+    (on eucalyptus the pick had a log loss of 1.06 where the forest had 0.75). sklearn's `neg_log_loss` is the
+    negative, so higher is still better everywhere a score is compared; `shown` turns it back for people.
+    """
+    if task == "classification" and pd.Series(y).nunique() > 2:
+        return "neg_log_loss"
+    return chart_metric(task, y)
+
+
+def shown(score: float, metric: str | None) -> float:
+    """A score as a person reads it: log loss as the positive number it is (lower is better), the rest unchanged."""
+    return -score if metric == "neg_log_loss" else score
 
 
 # The shuffle seed of the folds a search winner is confirmed on. Any value other than the search's own (42).

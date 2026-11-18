@@ -2214,14 +2214,14 @@ def best_single_column_baseline(
     lead = round(float(chosen_scored["score"]) - float(single.score), 4)
     if adds:
         note = (
-            f"The best input on its own, '{column}', scores {single.score:.3f} on the training folds "
-            f"({metric_label}); the chosen model's {float(chosen_scored['score']):.3f} is ahead by "
+            f"The best input on its own, '{column}', scores {tuning.shown(single.score, metric):.3f} on the training folds "
+            f"({metric_label}); the chosen model's {tuning.shown(float(chosen_scored['score']), metric):.3f} is ahead by "
             f"{_signed(lead)} and the folds agree that lead is more than noise."
         )
     else:
         note = (
-            f"The best input on its own, '{column}', scores {single.score:.3f} on the training folds "
-            f"({metric_label}), and the chosen model's {float(chosen_scored['score']):.3f} is not "
+            f"The best input on its own, '{column}', scores {tuning.shown(single.score, metric):.3f} on the training folds "
+            f"({metric_label}), and the chosen model's {tuning.shown(float(chosen_scored['score']), metric):.3f} is not "
             f"clearly better ({_signed(lead)}): most of what this model does may come from that one column."
         )
     return {
@@ -2240,7 +2240,10 @@ def best_single_column_baseline(
     }
 
 
-_BASELINE_METRIC_LABELS = {"roc_auc": "area under the curve", "accuracy": "accuracy", "r2": "R-squared"}
+_BASELINE_METRIC_LABELS = {
+    "roc_auc": "area under the curve", "accuracy": "accuracy", "r2": "R-squared",
+    "neg_log_loss": "log loss, lower is better",
+}
 
 # Above this many training rows, selection uses three folds instead of five. It fits every
 # candidate once per fold, and on a large file the extra folds cost more than they tell.
@@ -2440,8 +2443,8 @@ def choose_on_training_folds(
     rule_note = None
     if pick["rule"] == "one_standard_error":
         rule_note = (
-            f"{MODELS[top].label} scored highest ({scores[top]['score']:.3f}), but "
-            f"{MODELS[chosen].label} ({scores[chosen]['score']:.3f}) is within one standard "
+            f"{MODELS[top].label} scored best ({tuning.shown(scores[top]['score'], metric):.3f}), but "
+            f"{MODELS[chosen].label} ({tuning.shown(scores[chosen]['score'], metric):.3f}) is within one standard "
             f"error ({pick['standard_error']:.3f}) of it, so the simpler model was kept: a lead "
             f"smaller than the folds' own disagreement is a weak reason to prefer the more "
             f"complex one."

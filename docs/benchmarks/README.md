@@ -122,8 +122,12 @@ the laptop had gone into standby mid-search were run again.
 - **Where the app falls behind is probabilities on many-class targets.** Its log loss is well behind FLAML's on
   eucalyptus, cmc, steel-plates-fault, yeast and segment, and on cmc worse than predicting the class shares. Its
   Brier score is 0.187 against FLAML's 0.168 and the forest's 0.179. The app chooses and tunes models for many
-  classes by accuracy, never by the quality of the probabilities. That is
-  [#132](https://github.com/harshiit-rana/dataclean-ai/issues/132).
+  classes by accuracy, never by the quality of the probabilities. That was
+  [#132](https://github.com/harshiit-rana/dataclean-ai/issues/132), and since 19 November 2026 they are chosen and
+  tuned by log loss. Re-measured on the four development many-class tasks (eucalyptus, vehicle, cmc, car; both
+  official folds, plain train), the chosen model's mean test log loss went from 0.629 to 0.539. The best of the
+  registry's models on each fold would have scored 0.537, and FLAML 0.506. The held-out tasks were not looked at.
+  The rest of the gap is model families, as in #131.
 - **Where it is ahead is numeric targets.** Best of all six on boston, Moneyball and socmob, and close behind FLAML
   on wine_quality and space_ga.
 - **Held-out tasks.** On the ten tasks nothing was ever chosen on, the app's median is 1.00 and its rank 3.30,

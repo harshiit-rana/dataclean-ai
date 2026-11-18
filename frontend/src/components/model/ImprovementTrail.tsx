@@ -1,3 +1,4 @@
+import { shownGain, shownScore } from "@/lib/scores";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ScoreLabel } from "@/components/model/ScoreLabel";
@@ -54,6 +55,7 @@ const METRIC_LABELS: Record<string, string> = {
   roc_auc: "AUC",
   accuracy: "accuracy",
   r2: "R²",
+  neg_log_loss: "log loss (lower is better)",
 };
 
 const STOPPED: Record<Trail["stopped_because"], { title: string; blurb: string; tone: string }> = {
@@ -113,7 +115,7 @@ function confirmationOf(detail: Record<string, unknown> | undefined): Confirmati
 
 function formatScore(value: number | null, metric: string): string {
   if (value === null) return "—";
-  return metric === "r2" ? value.toFixed(3) : value.toFixed(3);
+  return shownScore(value, metric).toFixed(3);
 }
 
 /** What the improvement loop tried, in order, including what didn't work.
@@ -183,8 +185,7 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
                         round.accepted ? "text-primary" : "text-muted-foreground"
                       )}
                     >
-                      {round.gain >= 0 ? "+" : ""}
-                      {round.gain.toFixed(3)}
+                      {shownGain(round.gain, trail.metric)}
                     </span>
                   )}
                 </span>
@@ -197,7 +198,7 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
                     <li key={rung.rung} className="tabular-nums">
                       Rung {rung.rung}: {rung.settings} setting{rung.settings === 1 ? "" : "s"} on{" "}
                       {rung.folds} fold{rung.folds === 1 ? "" : "s"}
-                      {rung.best_score !== null && `, best ${rung.best_score.toFixed(3)}`}
+                      {rung.best_score !== null && `, best ${formatScore(rung.best_score, trail.metric)}`}
                       {rung.kept > 0 && ` → ${rung.kept} went on`}
                     </li>
                   ))}
@@ -214,8 +215,9 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
                 <ul className="mt-2 flex flex-col gap-0.5 text-xs text-muted-foreground" aria-label="Kept combinations">
                   {keptCombinationsOf(round.detail).map((kept) => (
                     <li key={kept.id} className="tabular-nums">
-                      {kept.output}: +{kept.gain.toFixed(3)} on the training folds; on fresh folds{" "}
-                      {kept.confirmation_score.toFixed(3)} against {kept.incumbent_confirmation_score.toFixed(3)}
+                      {kept.output}: {shownGain(kept.gain, trail.metric)} on the training folds; on fresh folds{" "}
+                      {formatScore(kept.confirmation_score, trail.metric)} against{" "}
+                      {formatScore(kept.incumbent_confirmation_score, trail.metric)}
                     </li>
                   ))}
                 </ul>
@@ -232,9 +234,10 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
               )}
               {confirmationOf(round.detail) && (
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Checked on fresh folds: {confirmationOf(round.detail)!.confirmation_score.toFixed(3)} against{" "}
-                  {confirmationOf(round.detail)!.incumbent_confirmation_score.toFixed(3)} for what it would replace (
-                  {confirmationOf(round.detail)!.search_score.toFixed(3)} on the folds it was picked on).
+                  Checked on fresh folds: {formatScore(confirmationOf(round.detail)!.confirmation_score, trail.metric)} against{" "}
+                  {formatScore(confirmationOf(round.detail)!.incumbent_confirmation_score, trail.metric)} for what it
+                  would replace ({formatScore(confirmationOf(round.detail)!.search_score, trail.metric)} on the folds it
+                  was picked on).
                 </p>
               )}
               {typeof round.detail?.note === "string" && (
@@ -249,7 +252,7 @@ export function ImprovementTrail({ trail }: { trail: Trail }) {
           <p className="font-medium">{stopped.title}</p>
           <p className="mt-1 text-muted-foreground">{stopped.blurb}</p>
           <p className="mt-2 text-xs text-muted-foreground">
-            Best cross-validated {metric}: {trail.cv_score.toFixed(3)} (±
+            Best cross-validated {metric}: {formatScore(trail.cv_score, trail.metric)} (±
             {trail.cv_std.toFixed(3)} across folds)
             {trail.goal !== null && ` · your target was ${trail.goal.toFixed(3)}`}
             {strategyUsed(trail) && ` · settings searched by ${strategyUsed(trail)}`}

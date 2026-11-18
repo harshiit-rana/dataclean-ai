@@ -23,7 +23,15 @@ SECTIONS = {
     "improvement": "What the improvement search tried",
 }
 
-_METRIC_NAMES = {"roc_auc": "area under the curve", "accuracy": "accuracy", "r2": "R-squared"}
+_METRIC_NAMES = {
+    "roc_auc": "area under the curve", "accuracy": "accuracy", "r2": "R-squared",
+    "neg_log_loss": "log loss (lower is better)",
+}
+
+
+def _shown(score: float, metric: str | None) -> float:
+    """Log loss is compared as its negative (higher is better) and shown as itself (#132)."""
+    return -float(score) if metric == "neg_log_loss" else float(score)
 
 
 # --- evidence -----------------------------------------------------------------------------------
@@ -180,7 +188,7 @@ def _how_chosen(result: dict) -> list[dict]:
         statements.append(
             _statement(
                 result, "how_chosen_rule", "how_chosen",
-                f"{chosen_label} had the highest fold score ({chosen_cv:.3f}).",
+                f"{chosen_label} had the {'best' if metric == 'neg_log_loss' else 'highest'} fold score ({_shown(chosen_cv, metric):.3f}).",
                 ("selection.rule", "rule"), (f"results[{chosen}].cv_score", f"{chosen_label} fold score"),
             )
         )
@@ -194,6 +202,7 @@ def _alternatives(result: dict) -> list[dict]:
     chosen = result.get("best_model")
     chosen_label = _label(chosen)
     chosen_cv = resolve(result, f"results[{chosen}].cv_score")
+    metric = selection.get("metric")
     top = selection.get("highest_scorer")
     top_cv = resolve(result, f"results[{top}].cv_score")
     standard_error = selection.get("standard_error")
@@ -266,14 +275,14 @@ def _alternatives(result: dict) -> list[dict]:
         if within:
             why = "it is simpler" if _rank(chosen) < _rank(model) else "it scored higher"
             text = (
-                f"{name} scored {cv:.3f} against {chosen_label}'s {chosen_cv:.3f}, within one standard error "
+                f"{name} scored {_shown(cv, metric):.3f} against {chosen_label}'s {_shown(chosen_cv, metric):.3f}, within one standard error "
                 f"of the best, so the folds cannot rule it out; {chosen_label} was preferred because {why}."
             )
             evidence += (("selection.standard_error", "one standard error"),)
         else:
             text = (
-                f"{name} scored {cv:.3f} against {chosen_label}'s {chosen_cv:.3f} "
-                f"({_signed(cv - chosen_cv)}), further behind the best than one standard error, so the "
+                f"{name} scored {_shown(cv, metric):.3f} against {chosen_label}'s {_shown(chosen_cv, metric):.3f} "
+                f"({_signed(_shown(cv, metric) - _shown(chosen_cv, metric))}), further behind the best than one standard error, so the "
                 f"folds favour {chosen_label}."
             )
             evidence += (("selection.standard_error", "one standard error"),)

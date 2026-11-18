@@ -1066,6 +1066,8 @@ export interface ImprovementRound {
   accepted: boolean;
   outcome: string;
   detail: Record<string, unknown>;
+  /** The metric `score` is in; "neg_log_loss" is shown as log loss (lower is better). */
+  metric?: string | null;
 }
 
 export interface ImprovementTrail {

@@ -42,7 +42,7 @@ MIN_GAIN_IN_SDS = 1.0
 MIN_ABSOLUTE_GAIN = 0.002
 
 # sklearn's scorer names read like plumbing. These are what the rounds say out loud.
-METRIC_LABELS = {"roc_auc": "AUC", "accuracy": "accuracy", "r2": "R²"}
+METRIC_LABELS = {"roc_auc": "AUC", "accuracy": "accuracy", "r2": "R²", "neg_log_loss": "log loss"}
 
 # Whether a search winner is re-scored on folds it was not selected on before it can replace the
 # incumbent. It is a module constant so the effect can be measured with it off (see the commit that
@@ -82,6 +82,8 @@ class Round:
     accepted: bool = False
     outcome: str = ""
     detail: dict = field(default_factory=dict)
+    # The metric `score` is in, so a page showing rounds as they arrive can show log loss as itself (#132).
+    metric: str | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -94,6 +96,7 @@ class Round:
             "accepted": self.accepted,
             "outcome": self.outcome,
             "detail": self.detail,
+            "metric": self.metric,
         }
 
 
@@ -193,6 +196,10 @@ def chance_level(metric: str, y) -> float | None:
     if metric == "accuracy":
         shares = pd.Series(y).astype(str).value_counts(normalize=True)
         return float(shares.iloc[0]) if len(shares) else None
+    if metric == "neg_log_loss":
+        # Predicting every row's class shares; negated, as the score is (#132).
+        shares = pd.Series(y).astype(str).value_counts(normalize=True).to_numpy()
+        return float((shares * np.log(shares)).sum()) if len(shares) else None
     return None
 
 
@@ -226,8 +233,9 @@ def _is_real_gain(candidate: float, incumbent: float, std: float | None) -> bool
     return gain >= MIN_GAIN_IN_SDS * float(std or 0.0)
 
 
-def _goal_met(score: float, goal: float | None) -> bool:
-    return goal is not None and score >= goal
+def _goal_met(score: float, goal: float | None, metric: str | None = None) -> bool:
+    """`goal` is as people write it; a log loss target is met at or below it (the score is its negative)."""
+    return goal is not None and score >= (-goal if metric == "neg_log_loss" else goal)
 
 
 def improve(
@@ -280,7 +288,7 @@ def improve(
     is what makes the result a result, and it is a single fit.
 
     `goal` is a target for the same metric the rounds are judged on -- AUC for a two-class
-    target, accuracy for more, R² for regression. None means "get it as good as you can",
+    target, log loss for more (as people write it: met when the log loss is at or below it), R² for regression. None means "get it as good as you can",
     which stops when the rounds stop paying for themselves.
 
     `on_progress` is called after each round so the caller can stream them; the loop is slow
@@ -451,7 +459,16 @@ def improve(
     metric = tuning.scoring_for(task, y_train)
     metric_label = METRIC_LABELS.get(metric, metric)
 
+    def fmt(score: float) -> str:
+        """A score for a sentence: log loss as the positive number people know (lower is better)."""
+        return f"{tuning.shown(score, metric):.3f}"
+
+    def up(gain: float) -> str:
+        """A kept gain in words. Gains are on the higher-is-better scale; log loss goes down by them."""
+        return f"log loss down {gain:.3f}" if metric == "neg_log_loss" else metric_label + f" up {gain:+.3f}"
+
     def emit(entry: Round) -> None:
+        entry.metric = metric
         rounds.append(entry)
         if on_progress:
             on_progress(entry)
@@ -543,13 +560,13 @@ def improve(
             return f"{led}, but it could not be checked on fresh folds, so {kept}."
         if check["status"] == "at_chance":
             return (
-                f"{led}, and on fresh folds it beat what it would replace ({check['confirmation_score']:.3f} against "
-                f"{check['incumbent_confirmation_score']:.3f}), but it is not clear of the {check['chance']:.3f} that "
+                f"{led}, and on fresh folds it beat what it would replace ({fmt(check['confirmation_score'])} against "
+                f"{fmt(check['incumbent_confirmation_score'])}), but it is not clear of the {fmt(check['chance'])} that "
                 f"guessing scores by more than the folds disagree: it only brought the model up to chance, so {kept}."
             )
         return (
-            f"{led} on the folds it was picked on ({check['search_score']:.3f}), but on fresh folds it was "
-            f"{check['confirmation_score']:.3f} against {check['incumbent_confirmation_score']:.3f} for what it "
+            f"{led} on the folds it was picked on ({fmt(check['search_score'])}), but on fresh folds it was "
+            f"{fmt(check['confirmation_score'])} against {fmt(check['incumbent_confirmation_score'])} for what it "
             f"would replace -- not by more than the folds disagree -- so {kept}."
         )
 
@@ -647,7 +664,7 @@ def improve(
             std=best_std,
             gain=None,
             accepted=True,
-            outcome=f"{modeling.MODELS[best_name].label} leads at {best_score:.3f} {metric_label}.",
+            outcome=f"{modeling.MODELS[best_name].label} leads at {fmt(best_score)} {metric_label}.",
             detail={
                 "scores": family_scores,
                 "chosen": best_name,
@@ -660,7 +677,7 @@ def improve(
     cut_short = bool(unscored_for_time)
 
     stopped_because = ""
-    if _goal_met(best_score, goal):
+    if _goal_met(best_score, goal, metric):
         stopped_because = "goal_reached"
 
     # --- Round 2: settings for the leading family ----------------------------------------
@@ -705,10 +722,10 @@ def improve(
                     std=found.std,
                     gain=gain,
                     accepted=True,
-                    outcome=f"Better settings found: {metric_label} up {gain:+.3f}."
+                    outcome=f"Better settings found: {up(gain)}."
                     + (
-                        f" Confirmed on fresh folds: {check['confirmation_score']:.3f} against "
-                        f"{check['incumbent_confirmation_score']:.3f}."
+                        f" Confirmed on fresh folds: {fmt(check['confirmation_score'])} against "
+                        f"{fmt(check['incumbent_confirmation_score'])}."
                         if check
                         else ""
                     ),
@@ -740,7 +757,7 @@ def improve(
                 )
             )
 
-        if _goal_met(best_score, goal):
+        if _goal_met(best_score, goal, metric):
             stopped_because = "goal_reached"
 
     # --- Round 3: tune the runners-up too, in case the ranking changes once they're tuned -
@@ -826,10 +843,10 @@ def improve(
                     gain=gain,
                     accepted=True,
                     outcome=f"{modeling.MODELS[name].label} overtakes it once tuned: "
-                    f"{metric_label} up {gain:+.3f}."
+                    f"{up(gain)}."
                     + (
-                        f" Confirmed on fresh folds: {check3['confirmation_score']:.3f} against "
-                        f"{check3['incumbent_confirmation_score']:.3f}."
+                        f" Confirmed on fresh folds: {fmt(check3['confirmation_score'])} against "
+                        f"{fmt(check3['incumbent_confirmation_score'])}."
                         if check3
                         else ""
                     )
@@ -866,7 +883,7 @@ def improve(
                 )
             )
 
-        if _goal_met(best_score, goal):
+        if _goal_met(best_score, goal, metric):
             stopped_because = "goal_reached"
 
     # --- Round 4: the columns, not the settings ------------------------------------------
@@ -947,10 +964,9 @@ def improve(
                         gain=gain,
                         accepted=True,
                         outcome=(
-                            f"The derived inputs help: {metric_label} up {gain:+.3f}. They stay."
+                            f"The derived inputs help: {up(gain)}. They stay."
                             if trying_on
-                            else f"The model does better without them: {metric_label} up "
-                            f"{gain:+.3f}. They were dropped."
+                            else f"The model does better without them: {up(gain)}. They were dropped."
                         ),
                         detail={"recipes": [r.id for r in alt_recipes]},
                     )
@@ -973,7 +989,7 @@ def improve(
                     )
                 )
 
-        if _goal_met(best_score, goal):
+        if _goal_met(best_score, goal, metric):
             stopped_because = "goal_reached"
 
     # --- Round 5: which of the inputs earn their place ----------------------------------
@@ -1067,7 +1083,7 @@ def improve(
                         gain=gain,
                         accepted=True,
                         outcome=f"The model does better without {len(group)} of its inputs: "
-                        f"{metric_label} up {gain:+.3f}. They were removed.",
+                        f"{up(gain)}. They were removed.",
                         detail=shown,
                     )
                 )
@@ -1091,7 +1107,7 @@ def improve(
                         detail=shown,
                     )
                 )
-        if _goal_met(best_score, goal):
+        if _goal_met(best_score, goal, metric):
             stopped_because = "goal_reached"
 
     # --- Round 6: combinations of the inputs that matter ---------------------------------
@@ -1236,7 +1252,7 @@ def improve(
                     detail={"tried": len(tried_interactions)},
                 )
             )
-        if _goal_met(best_score, goal):
+        if _goal_met(best_score, goal, metric):
             stopped_because = "goal_reached"
 
     # --- Round 7: the strongest models averaged ------------------------------------------
@@ -1311,7 +1327,7 @@ def improve(
                     std=scored.std,
                     gain=gain,
                     accepted=True,
-                    outcome=f"The average of {label} beats either alone: {metric_label} up {gain:+.3f}, and it "
+                    outcome=f"The average of {label} beats either alone: {up(gain)}, and it "
                     f"held on fresh folds. It is the model now.",
                     detail=detail,
                 )
@@ -1339,7 +1355,7 @@ def improve(
                     detail=detail,
                 )
             )
-        if _goal_met(best_score, goal):
+        if _goal_met(best_score, goal, metric):
             stopped_because = "goal_reached"
 
     # --- Round 8: training with the stated costs ------------------------------------------
@@ -1419,7 +1435,7 @@ def improve(
 
     if not stopped_because:
         stopped_because = (
-            "goal_reached" if _goal_met(best_score, goal)
+            "goal_reached" if _goal_met(best_score, goal, metric)
             else "time_limit" if cut_short
             else "goal_out_of_reach" if goal is not None
             else "no_further_gains"

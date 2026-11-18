@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { shownGain, shownScore } from "@/lib/scores";
 import { ScoreLabel } from "@/components/model/ScoreLabel";
 import type { ImprovementRound } from "@/api/types";
 
@@ -54,11 +55,10 @@ export function LiveImprovement({ rounds, stage }: LiveImprovementProps) {
                 {round.accepted && <span className="ml-2 text-xs font-normal text-primary">kept</span>}
               </span>
               <span className="tabular-nums text-muted-foreground">
-                {round.score != null ? round.score.toFixed(3) : "—"}
+                {round.score != null ? shownScore(round.score, round.metric).toFixed(3) : "—"}
                 {round.gain != null && (
                   <span className={cn("ml-2", round.accepted ? "text-primary" : "")}>
-                    {round.gain >= 0 ? "+" : ""}
-                    {round.gain.toFixed(3)}
+                    {shownGain(round.gain, round.metric)}
                   </span>
                 )}
               </span>

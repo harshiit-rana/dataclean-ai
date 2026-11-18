@@ -24,7 +24,7 @@ import logging
 import numpy as np
 import pandas as pd
 
-from app.services.tuning import scoring_for
+from app.services.tuning import chart_metric
 
 logger = logging.getLogger(__name__)
 
@@ -425,7 +425,7 @@ def cross_validate_pipeline(
         cross_val_score,
     )
 
-    scoring = scoring_for(task, y)
+    scoring = chart_metric(task, y)
 
     if ordered:
         # Date-based split: each fold validated on rows later than it trained on. The rule
@@ -518,7 +518,7 @@ def learning_curve_points(
     # The metric the cross-validation spread beside it uses. This chart used to score with
     # accuracy while the spread used AUC, so on a lopsided target the curve could sit flat while
     # the AUC next to it improved, and the two read as disagreeing about the same model.
-    scoring = scoring_for(task, y)
+    scoring = chart_metric(task, y)
     y_input = pd.Series(y).astype(str) if task == "classification" else y
 
     if ordered:
@@ -650,7 +650,7 @@ def permutation_importance_scores(
     # The primary metric, like every other chart beside it. `scoring` lets the caller fix it
     # from the training rows, so a test set that happens to hold one class does not change which
     # metric the chart speaks.
-    scoring = scoring or scoring_for(task, y_test)
+    scoring = scoring or chart_metric(task, y_test)
     y_input = pd.Series(y_test).astype(str) if task == "classification" else y_test
 
     result = permutation_importance(
@@ -719,7 +719,7 @@ def compute_deep_diagnostics(
         (
             "permutation_importance",
             lambda: permutation_importance_scores(
-                pipeline, X_test, y_test, task, scoring=scoring_for(task, y_train)
+                pipeline, X_test, y_test, task, scoring=chart_metric(task, y_train)
             ),
         ),
     ):

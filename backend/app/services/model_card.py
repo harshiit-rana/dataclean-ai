@@ -33,6 +33,10 @@ _VERDICT_HEADINGS = {
 
 _METRIC_LABELS = {
     "accuracy": ("Accuracy", "How often the answer is right overall."),
+    "neg_log_loss": (
+        "log loss",
+        "How far the predicted probabilities are from what happened; 0 is perfect and lower is better.",
+    ),
     "precision": ("Precision", "Of the cases it flags, how many really are."),
     "recall": ("Recall", "Of the real cases, how many it catches."),
     "f1": ("F1", "A single score balancing precision and recall."),
