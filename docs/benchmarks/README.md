@@ -110,9 +110,15 @@ the laptop had gone into standby mid-search were run again.
   normalised score of +10 for FLAML and -5 for the app, and that one task carries the mean (FLAML 1.46, the app
   0.78).
 - **The improvement loop never changed the answer.** On all 24 tasks it ended with the plain train's model and
-  settings. At 120 seconds it rarely gets past its second round, and run to the end it still keeps nothing on small
-  files, because its bar for a real gain is the spread of the fold scores rather than of the paired differences.
-  That is [#131](https://github.com/harshiit-rana/dataclean-ai/issues/131), an open decision.
+  settings. At 120 seconds it rarely gets past its second round. Run to the end it still keeps nothing on small
+  files, and [#131](https://github.com/harshiit-rana/dataclean-ai/issues/131) asked whether its bar was the wrong
+  one: the spread of the fold scores rather than of the paired, fold-by-fold differences. Measured on the 14
+  development tasks (18 November 2026), the paired differences were barely tighter (median 0.71 of the fold spread
+  for other settings of the same model, 1.0 for another model family), and a rule built on them accepted the same 3
+  of 28 real changes as the current one. On blood-transfusion, the rejected settings won 8 of 15 folds by a mean of
+  0.0035 AUC: a coin flip. So the bar is not what holds the loop back. With the current model families there is
+  little left to gain on these tasks, and the gap to FLAML comes from model families the registry does not have
+  yet (deferred under #52). The rule was kept.
 - **Where the app falls behind is probabilities on many-class targets.** Its log loss is well behind FLAML's on
   eucalyptus, cmc, steel-plates-fault, yeast and segment, and on cmc worse than predicting the class shares. Its
   Brier score is 0.187 against FLAML's 0.168 and the forest's 0.179. The app chooses and tunes models for many

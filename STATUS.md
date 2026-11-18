@@ -1330,9 +1330,10 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   0.1 since the last run. First results (4 November 2026, 2 folds, 120 s): the app is level with the forest (median
   1.00) and a little behind FLAML (1.04); average ranks FLAML 2.21, the app 2.94, the forest 3.46, gradient boosting
   3.62, and only the constant predictor is told apart from the rest. It found #126 (both forests silently dropped
-  out on targets coded 0/1, fixed), #131 (the improvement loop kept nothing on any task: its bar is the spread of
-  fold scores, not of paired differences) and #132 (probabilities for more than two classes are chosen by accuracy
-  and fall well behind FLAML's in log loss). Both are open decisions. Details in `docs/benchmarks/README.md`.
+  out on targets coded 0/1, fixed), #131 (the improvement loop kept nothing on any task; measured, its bar is not
+  the reason: paired fold differences are barely tighter and accept the same changes, and what it rejects is within
+  noise, so the rule was kept) and #132 (probabilities for more than two classes are chosen by accuracy and fall
+  well behind FLAML's in log loss). Details in `docs/benchmarks/README.md`.
 - **Cleaning benchmark (#125).** `backend/scripts/cleaning_benchmark.py` injects problems whose every cell is known
   into six of those tasks (blanks, outliers, numbers as text, capitals, spaces, mixed dates, duplicates), as REIN and
   CleanML do. It scores what the profiler finds against what the clean file already shows, then how much model score
