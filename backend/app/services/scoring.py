@@ -15,7 +15,7 @@ import numpy as np
 import pandas as pd
 
 from app.services import features as feature_recipes
-from app.services import modeling
+from app.services import modeling, validation
 
 logger = logging.getLogger(__name__)
 
@@ -58,11 +58,14 @@ def input_columns(result: dict) -> tuple[list[str], list[str]]:
     )
 
 
-def prepare_inputs(frame: pd.DataFrame, result: dict, reference: pd.DataFrame | None = None):
+def prepare_inputs(frame: pd.DataFrame, result: dict, reference: pd.DataFrame | None = None,
+                   schema: dict | None = None):
     """The model's input matrix for `frame`, plus notes on anything that had to be coerced.
 
     Returns (X, notes). Raises ScoringError naming every missing input at once -- a user
-    fixing their export wants the whole list, not one column per attempt.
+    fixing their export wants the whole list, not one column per attempt. `schema` is the
+    model's input schema (by default the result's own), whose categories let a value that
+    differs from one only in spaces or capitals be scored as it (#134).
     """
     frame = feature_recipes.apply(frame, _recipes(result))
     numeric, categorical = input_columns(result)
@@ -94,7 +97,33 @@ def prepare_inputs(frame: pd.DataFrame, result: dict, reference: pd.DataFrame | 
             X[column] = X[column].astype(object).where(X[column].notna(), None).map(
                 lambda v: None if v is None else str(v)
             )
+    notes.extend(_respell_categories(X, schema if schema is not None else result.get("input_schema")))
     return X, notes
+
+
+def _respell_categories(X: pd.DataFrame, schema: dict | None) -> list[str]:
+    """Values that are a training category apart from spaces or capitals (" red ", "RED" for "red"), replaced by it.
+
+    The encoder compares exactly, so these would otherwise count as categories the model never saw and be ignored.
+    Only a value matching exactly one category is changed, and only where the schema lists every category; each
+    change is reported. Nothing that is a category already, or matches none or several, is touched.
+    """
+    notes: list[str] = []
+    for column in (schema or {}).get("columns") or []:
+        name = column.get("name")
+        spellings = validation.known_spellings(column)
+        if not spellings or name not in X.columns or X[name].dtype != object:
+            continue
+        replacement = validation.respelled(X[name], set(column.get("categories") or {}), spellings)
+        changed = replacement.notna()
+        count = int(changed.sum())
+        if count:
+            X.loc[changed, name] = replacement[changed]
+            notes.append(
+                f"{count} value{'s' if count != 1 else ''} in '{name}' differed from a training value only in "
+                f"spaces or capitals and {'were' if count != 1 else 'was'} scored as that value."
+            )
+    return notes
 
 
 def predict(pipeline, X: pd.DataFrame, result: dict) -> pd.DataFrame:

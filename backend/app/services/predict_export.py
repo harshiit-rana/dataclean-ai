@@ -164,7 +164,7 @@ def main(source, destination):
     if report["blocking"]:
         sys.exit(validation.describe_blocking(report))
     reference = pd.DataFrame({column: pd.Series([0.0]) for column in REFERENCE_NUMERIC})
-    X, notes = scoring.prepare_inputs(applied.frame, RESULT, reference=reference)
+    X, notes = scoring.prepare_inputs(applied.frame, RESULT, reference=reference, schema=schema)
     predicted = scoring.predict(load_model(), X, RESULT) if len(X) else pd.DataFrame(index=X.index)
     output = scoring.assemble_output(new, applied.dropped, predicted, row_notes)
     output.to_csv(destination, index=False)
@@ -186,7 +186,7 @@ def predict_in_app(new: pd.DataFrame, steps: list[dict], result: dict, reference
     report, row_notes = validation.validate(schema, applied.frame, result.get("target_column"))
     if report["blocking"]:
         return validation.describe_blocking(report)
-    X, _ = scoring.prepare_inputs(applied.frame, result, reference=reference)
+    X, _ = scoring.prepare_inputs(applied.frame, result, reference=reference, schema=schema)
     predicted = scoring.predict(pipeline, X, result) if len(X) else pd.DataFrame(index=X.index)
     return scoring.assemble_output(new, applied.dropped, predicted, row_notes)
 

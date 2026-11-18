@@ -30,6 +30,25 @@ BLOCKING = "blocking"
 WARNING = "warning"
 
 
+def known_spellings(column: dict) -> dict[str, str] | None:
+    """For a categorical schema column: each training category's key (spaces trimmed, case ignored) mapped to the
+    category, for the keys only one category has. None when the schema lists only some of the categories: a value
+    missing from a partial list may be a real category, so nothing can be matched safely (#134)."""
+    if column.get("kind") != "categorical" or column.get("categories_truncated"):
+        return None
+    by_key: dict[str, list[str]] = {}
+    for category in column.get("categories") or {}:
+        by_key.setdefault(str(category).strip().casefold(), []).append(str(category))
+    return {key: found[0] for key, found in by_key.items() if len(found) == 1}
+
+
+def respelled(values: pd.Series, known: set, spellings: dict[str, str]) -> pd.Series:
+    """For each value that is not a training category but is one apart from spaces or capitals, that category; NaN
+    elsewhere. `values` are the column's present values as text."""
+    unknown = ~values.isin(known)
+    return values.where(unknown).map(lambda v: spellings.get(v.strip().casefold()) if isinstance(v, str) else None)
+
+
 def _examples(mask: pd.Series, frame_index: pd.Index) -> list[int]:
     return [int(i) + 1 for i in frame_index[mask.to_numpy()][:EXAMPLE_ROWS]]
 
@@ -85,7 +104,10 @@ def validate(schema: dict, frame: pd.DataFrame, target_column: str | None = None
         elif column["kind"] == "categorical" and not column.get("categories_truncated"):
             known = set(column.get("categories") or {})
             text = series if is_text else series.astype(str)
-            unseen = present & ~text.isin(known)
+            matched = present & respelled(text, known, known_spellings(column) or {}).notna()
+            unseen = present & ~text.isin(known) & ~matched
+            add(name, "respelled_category", matched,
+                "a training value apart from spaces or capitals; scored as that value", series[matched])
             add(name, "unseen_category", unseen, "a value not seen in training", series[unseen])
 
     report = {

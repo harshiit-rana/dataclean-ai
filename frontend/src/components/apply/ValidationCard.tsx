@@ -10,6 +10,7 @@ import type { FileValidation } from "@/api/types";
 const KIND_LABEL: Record<string, string> = {
   type: "Wrong type",
   unseen_category: "Values not seen in training",
+  respelled_category: "Matched a training value (spaces or capitals)",
   out_of_range: "Outside the training range",
   blank_new: "Blank where training never was",
 };

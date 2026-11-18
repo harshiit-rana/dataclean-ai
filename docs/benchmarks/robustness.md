@@ -72,7 +72,13 @@ of times the clean score. The median is the typical file. The scores, averaged o
 - **Stray spaces count as categories the model never saw.** The spaces and unseen-category columns are identical to
   the last digit: the scoring step does not trim text, so `" red "` is as unknown to the model as a made-up value,
   and the encoder ignores it. The same holds for capitals (`"RED"`). On car, where every input is a category, that
-  costs a lot (log loss 0.008 to about 0.5). Trimming spaces when scoring is cheap, but it changes what the model is
-  given, so it is left to #134 rather than changed here.
+  costs a lot (log loss 0.008 to about 0.5).
+
+  **Fixed in #134 (18 November 2026).** When scoring, a value that matches exactly one training category apart from
+  spaces or capitals is scored as that category, and the check reports it as matched rather than unseen. Rerun on the
+  same seeds, padded and re-cased values cost nothing on car, credit-g and abalone (car's log loss stays 0.0081, the
+  clean score). On house_prices_nominal the extra RMSE fell from about 250 to 20-40: there, some values match no
+  category or more than one, and those are still left alone. A value that matches none, or several, is still treated
+  as unseen, because guessing between two real categories would change the answer silently.
 - **Blanks and numbers stored as text cost what imputation costs**: small on most files, large on car (whose class
   is a fixed rule over its six attributes) and on abalone and vehicle (where 20% of three numeric inputs were lost).

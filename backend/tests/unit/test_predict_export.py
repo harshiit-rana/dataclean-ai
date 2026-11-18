@@ -56,6 +56,7 @@ def new_rows() -> pd.DataFrame:
     frame.loc[59] = frame.loc[10]           # an exact copy, dropped with its reason
     frame.loc[7, "plan"] = "enterprise"     # a category never seen in training
     frame.loc[8, "signal"] = 40.0           # far outside the training range
+    frame.loc[9, "plan"] = " PRO "          # a training category apart from spaces and capitals (#134)
     return frame
 
 
@@ -112,6 +113,7 @@ class TestAcceptance:
         out = pd.read_csv(folder / "out.csv", keep_default_na=False)
         assert out["dataclean_note"].tolist()[59] == "no prediction: it duplicated an earlier row"
         assert "plan: a value not seen in training" in out["dataclean_validation"][7]
+        assert "plan: a training value apart from spaces or capitals" in out["dataclean_validation"][9]
         assert out["predicted_churned"][3] in {"yes", "no"}  # the blank was filled, the row was scored
         assert response["validation"]["rows_with_findings"] >= 2
 

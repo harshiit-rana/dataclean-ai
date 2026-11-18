@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from app.services import validation
+from app.services import scoring, validation
 
 client = TestClient(app)
 
@@ -92,6 +92,40 @@ class TestTheFindings:
                               "code": ["a", "x"]})
         report, notes = validation.validate(SCHEMA, clean)
         assert report["findings"] == [] and (notes == "").all()
+
+
+class TestSpacesAndCapitals:
+    """A value that is a training category apart from spaces or capitals is scored as it (#134)."""
+
+    def rows(self, plans) -> pd.DataFrame:
+        return pd.DataFrame({"amount": [1.0] * len(plans), "plan": plans, "joined": [None] * len(plans),
+                             "code": ["a"] * len(plans)})
+
+    def test_it_is_reported_as_matched_and_not_as_unseen(self):
+        report, notes = validation.validate(SCHEMA, self.rows([" pro ", "BASIC", "gold", "pro"]))
+        matched = finding(report, "plan", "respelled_category")
+        assert matched["rows"] == [1, 2] and matched["values"] == [" pro ", "BASIC"]
+        assert finding(report, "plan", "unseen_category")["values"] == ["gold"]
+        assert "scored as that value" in notes[0] and notes[3] == ""
+
+    def test_scoring_replaces_it_with_the_training_value_and_says_so(self):
+        result = {"features": {"numeric": ["amount"], "categorical": ["plan"]}, "input_schema": SCHEMA}
+        X, notes = scoring.prepare_inputs(self.rows([" pro ", "BASIC", "gold", None]), result)
+        assert X["plan"].tolist()[:3] == ["pro", "basic", "gold"] and X["plan"].isna().tolist()[3]
+        assert notes == ["2 values in 'plan' differed from a training value only in spaces or capitals and were "
+                         "scored as that value."]
+
+    def test_nothing_is_matched_when_two_categories_share_a_spelling_or_the_list_is_partial(self):
+        schema = {"columns": [
+            {"name": "plan", "kind": "categorical", "categories": {"Pro": 3, "pro": 2, "basic": 1},
+             "categories_truncated": False},
+            {"name": "code", "kind": "categorical", "categories": {"a": 1}, "categories_truncated": True}]}
+        result = {"features": {"numeric": [], "categorical": ["plan", "code"]}, "input_schema": schema}
+        frame = pd.DataFrame({"plan": ["PRO", " basic"], "code": [" A", "b"]})
+        X, notes = scoring.prepare_inputs(frame, result)
+        assert X["plan"].tolist() == ["PRO", "basic"] and X["code"].tolist() == [" A", "b"]
+        assert notes == ["1 value in 'plan' differed from a training value only in spaces or capitals and was "
+                         "scored as that value."]
 
 
 class TestSpeed:
