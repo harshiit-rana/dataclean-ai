@@ -1352,7 +1352,8 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   how far the score falls, whether the app warned, and whether scoring failed. Results (13 November 2026, 81 runs):
   scoring never failed, and the app named every corrupted column in 80. The typical fall is small (median 1-3%),
   except for outliers (27%). Values 10-1000 times too big are scored as they are (abalone's error went from 2.3 to
-  about 2,600; #133). Padded or re-cased text was treated as a category the model never saw; since #134 a value that
+  about 2,600). Since #133 a value beyond the training range by more than half its width is reported as far outside
+  it, with the row's prediction called not reliable (never clipped). Padded or re-cased text was treated as a category the model never saw; since #134 a value that
   matches exactly one training category apart from spaces or capitals is scored as it, and reported. Details in
   `docs/benchmarks/robustness.md`.
 - **Accessibility pass (#101).** axe runs in the frontend suite on the Upload, Review, Clean, Model, Apply and

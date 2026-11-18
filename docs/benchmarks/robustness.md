@@ -69,6 +69,14 @@ of times the clean score. The median is the typical file. The scores, averaged o
   abalone's error from 2.3 to about 2,600 rings and vehicle's log loss from 0.47 to 12.8. The app warned every time
   but still returned the predictions, and the scoring step does not clip new values to the range seen in training.
   Whether it should clip, refuse or only warn is a product decision (#133).
+
+  **Changed in #133 (18 November 2026).** The model that blew up was linear on every seed (linear regression on
+  abalone, logistic regression on vehicle), which extrapolates without limit. A value beyond the training range by
+  more than half its width is now reported apart as *far outside the training range*, and the row's note says its
+  prediction is not reliable. Measured on the six tasks' test folds, that line caught 87% of values multiplied by 10
+  to 1000 (most of the rest were zeros, which stay zero) and 2 of 47,466 real values. The predictions are still
+  written, and nothing is clipped: in the real-error benchmark none of the 112 flagged extremes was an error, so
+  changing them silently would be wrong more often than right.
 - **Stray spaces count as categories the model never saw.** The spaces and unseen-category columns are identical to
   the last digit: the scoring step does not trim text, so `" red "` is as unknown to the model as a made-up value,
   and the encoder ignores it. The same holds for capitals (`"RED"`). On car, where every input is a category, that

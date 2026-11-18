@@ -1262,7 +1262,7 @@ export interface FileValidation {
   unexpected_columns: string[];
   findings: {
     column: string;
-    finding: "type" | "unseen_category" | "respelled_category" | "out_of_range" | "blank_new" | string;
+    finding: "type" | "unseen_category" | "respelled_category" | "out_of_range" | "far_out_of_range" | "blank_new" | string;
     severity: "warning" | "blocking";
     count: number;
     /** Up to five 1-based row numbers, header not counted. */

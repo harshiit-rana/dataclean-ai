@@ -12,6 +12,7 @@ const KIND_LABEL: Record<string, string> = {
   unseen_category: "Values not seen in training",
   respelled_category: "Matched a training value (spaces or capitals)",
   out_of_range: "Outside the training range",
+  far_out_of_range: "Far outside the training range (prediction not reliable)",
   blank_new: "Blank where training never was",
 };
 

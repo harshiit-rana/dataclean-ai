@@ -51,9 +51,19 @@ class TestTheFindings:
         assert found["count"] == 1 and found["rows"] == [2] and found["values"] == ["abc"]
         assert found["severity"] == validation.WARNING
 
-    def test_a_number_outside_the_training_range(self):
-        found = finding(validation.validate(SCHEMA, new_rows())[0], "amount", "out_of_range")
+    def test_a_number_far_outside_the_training_range_says_the_prediction_is_not_reliable(self):
+        # 250 against 0-100: beyond the range by more than half its width, the size of a unit slip (#133).
+        report = validation.validate(SCHEMA, new_rows())[0]
+        found = finding(report, "amount", "far_out_of_range")
         assert found["count"] == 1 and found["rows"] == [3] and "0 to 100" in found["message"]
+        assert "not reliable" in found["message"]
+        assert not [f for f in report["findings"] if f["finding"] == "out_of_range"]
+
+    def test_a_number_just_outside_the_training_range_is_only_outside_it(self):
+        rows = new_rows().assign(amount=["10", "120", "-40", "151", "50"])
+        report = validation.validate(SCHEMA, rows)[0]
+        assert finding(report, "amount", "out_of_range")["rows"] == [2, 3]
+        assert finding(report, "amount", "far_out_of_range")["rows"] == [4]
 
     def test_a_blank_where_training_never_had_one(self):
         found = finding(validation.validate(SCHEMA, new_rows())[0], "amount", "blank_new")
@@ -84,7 +94,7 @@ class TestTheFindings:
         report, notes = validation.validate(SCHEMA, new_rows())
         assert notes[0] == ""
         assert notes[1] == "amount: not a number (treated as blank); plan: a value not seen in training"
-        assert "joined: not a date" in notes[2] and "amount: outside the training range" in notes[2]
+        assert "joined: not a date" in notes[2] and "amount: far outside the training range" in notes[2]
         assert report["rows_with_findings"] == 3
 
     def test_a_clean_file_has_no_findings(self):
@@ -186,11 +196,11 @@ class TestOverHttp:
         report = response.json()["validation"]
         assert report["unexpected_columns"] == ["other"]
         assert {(f["column"], f["finding"]) for f in report["findings"]} == {
-            ("signal", "out_of_range"), ("plan", "unseen_category")}
+            ("signal", "far_out_of_range"), ("plan", "unseen_category")}
         predictions = client.get(response.json()["downloads"]["predictions"]).text
         rows = pd.read_csv(io.StringIO(predictions), keep_default_na=False)
         assert rows["dataclean_validation"].tolist()[0] == ""
-        assert "signal: outside the training range" in rows["dataclean_validation"][1]
+        assert "signal: far outside the training range" in rows["dataclean_validation"][1]
         assert "plan: a value not seen in training" in rows["dataclean_validation"][1]
 
     def test_a_file_missing_a_column_is_refused_with_the_column_named(self, trained_session):
