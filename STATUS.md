@@ -1335,7 +1335,11 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   noise, so the rule was kept) and #132 (probabilities for more than two classes were chosen by accuracy and fell
   well behind FLAML's in log loss; now chosen and tuned by log loss, shown as a positive number, lower is better:
   mean test log loss on the four development many-class tasks 0.629 to 0.539, FLAML 0.506; the diagnostics charts
-  stay in accuracy). Details in `docs/benchmarks/README.md`.
+  stay in accuracy). The 28 TabArena tasks (19 November 2026, on a 4-CPU GitHub runner, after #132): the app
+  is level with the forest and gradient boosting (median 1.015 against 1.000 and 0.998) and behind FLAML (1.036)
+  beyond chance (Wilcoxon p = 0.0005; 1 win, 8 ties, 19 losses). Its Brier score is the worst of the four real
+  systems (0.151 against 0.121-0.127), and on MIC its log loss is worse than predicting the class shares (#140).
+  Details in `docs/benchmarks/README.md`.
 - **Cleaning benchmark (#125).** `backend/scripts/cleaning_benchmark.py` injects problems whose every cell is known
   into six of those tasks (blanks, outliers, numbers as text, capitals, spaces, mixed dates, duplicates), as REIN and
   CleanML do. It scores what the profiler finds against what the clean file already shows, then how much model score

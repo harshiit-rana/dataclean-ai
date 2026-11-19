@@ -65,6 +65,9 @@ are never used to choose anything. They show whether a change that helped on the
 tasks it was not chosen on. Tuning on them, or moving a task between the lists, turns the benchmark into a
 measurement of how well the defaults were fitted to it.
 
+A second suite, 28 tasks from **TabArena** (Erickson et al., NeurIPS 2025; OpenML study 457), repeats no AMLB
+dataset and is all held out. Its results are reported, never used to choose a default.
+
 ### Running it
 
 ```bash
@@ -73,6 +76,7 @@ pip install -r requirements-benchmark.txt          # FLAML; without it the other
 python scripts/accuracy_benchmark.py               # all 24 tasks, 2 folds, 120 s budgets: about 4 hours
 python scripts/accuracy_benchmark.py --tasks credit-g boston --folds 1 --budget 30   # a few minutes
 python scripts/accuracy_benchmark.py --held-out exclude --markdown dev.md            # development tasks only
+python scripts/accuracy_benchmark.py --suite tabarena                              # the 28 TabArena tasks, all held out
 python scripts/accuracy_benchmark.py --baseline last.json   # exits non-zero if the app fell > 0.1 on any task
 python scripts/accuracy_benchmark.py --merge a.json b.json --cd-svg diagram.svg      # combine runs, draw the diagram
 ```
@@ -194,6 +198,90 @@ dataclean_improve against each system, Wilcoxon signed-rank on normalised scores
 | socmob (held out) | rmse | 28.5785 | 13.1368 | 10.7685 | 8.1315 | 8.1315 | 8.5083 |
 | house_prices_nominal (held out) | rmse | 84926.0698 | 24270.3491 | 23951.4621 | 24179.1288 | 24179.1288 | 21284.6949 |
 | space_ga (held out) | rmse | 0.1952 | 0.1157 | 0.1078 | 0.1078 | 0.1078 | 0.1057 |
+
+### TabArena results (19 November 2026)
+
+The 28 TabArena tasks, the first two official folds of each, 120-second budgets, on a GitHub runner (4 CPUs,
+Python 3.12, scikit-learn 1.9.1), after #132. Every task is held out. The machine is slower than the laptop above,
+and the app's plain train alone took 25 to 78 seconds of the budget, so the improvement loop had little search time.
+Do not line these numbers up against the AMLB run one for one.
+
+![Critical-difference diagram: FLAML 1.68, the app's improvement loop 3.07, its plain train 3.11, gradient boosting 3.61, random forest 3.64, constant 5.89](tabarena-cd.svg)
+
+| System | Normalised score, mean | median | Average rank | Brier (classes) |
+|---|---:|---:|---:|---:|
+| constant | 0.000 | 0.000 | 5.89 | 0.2581 |
+| random_forest | 1.000 | 1.000 | 3.64 | 0.1272 |
+| hist_gradient_boosting | 0.833 | 0.998 | 3.61 | 0.1254 |
+| dataclean_train | 0.961 | 1.015 | 3.11 | 0.1525 |
+| dataclean_improve | 0.964 | 1.015 | 3.07 | 0.1512 |
+| flaml | 1.069 | 1.036 | 1.68 | 0.1205 |
+
+No system failed a fold.
+
+**What it says.**
+
+- **The app is behind FLAML, and here that is more than chance.** Median normalised score 1.015 against FLAML's
+  1.036, and it beat FLAML on 1 task, tied 8 and lost 19. The paired Wilcoxon test puts it behind by a median of
+  0.035, p = 0.0005 after Holm correction (on AMLB the gap was 0.017, p = 0.17). The Nemenyi grouping does not
+  separate the two (critical difference 1.43 ranks, gap 1.39), but it compares all six systems at once and is
+  conservative; the paired test of these two is the sharper one.
+- **It is level with the forest and gradient boosting.** Median 1.015 against 1.000 and 0.998, average rank 3.07
+  against 3.64 and 3.61. Neither difference is more than chance (Wilcoxon p = 0.58 for both). On numbers the
+  app is ahead of both on three of the six regression tasks, and behind FLAML on all six.
+- **Its probabilities are the weakest of the four real systems.** Brier score over the classification tasks 0.151,
+  against the forest's 0.127, gradient boosting's 0.125 and FLAML's 0.121. On AMLB the gap to the forest was
+  smaller (0.187 against 0.179).
+- **#132 did not close the gap for many classes on these tasks.** There is no TabArena run from before #132, so this
+  says where the app stands, not what #132 changed. On the six many-class tasks it is best of all six systems on
+  anneal and ahead of the forest on splice and students_dropout, but behind the forest and FLAML on
+  maternal_health_risk, website_phishing and MIC. Mean log loss over the six: the app 0.409, the forest 0.383,
+  FLAML 0.322.
+- **On MIC the app is worse than predicting the class shares.** Log loss 0.784 on both folds against 0.709 and 0.706
+  for the constant predictor, and a Brier score of 0.333 against its 0.289, while its accuracy matches the forest's.
+  Its normalised score there is -0.67. Every model in the registry scored worse than chance in its cross-validation there, and
+  the app gave no warning. This is the held-out form of what cmc showed on AMLB, and is
+  [#140](https://github.com/harshiit-rana/dataclean-ai/issues/140). Gradient boosting does worse still on MIC
+  (1.157), which is why its mean normalised score is 0.833: read the median.
+- **The improvement loop changed the result once.** On the second fold of website_phishing it took the plain
+  train's log loss from 0.470 to 0.374. On every other fold it ended with the plain train's model. The summary still
+  counts the two as 28 ties: with one fold changed and one not, the mean difference is within one standard error
+  of the fold differences, which is the benchmark's tie rule. The results file does not
+  say which round was kept.
+
+#### Per task (mean of the two folds)
+
+
+| Task | Metric | constant | random_forest | hist_gradient_boosting | dataclean_train | dataclean_improve | flaml |
+|---|---|---:|---:|---:|---:|---:|---:|
+| diabetes (held out) | auc | 0.5000 | 0.8227 | 0.8027 | 0.8320 | 0.8320 | 0.8242 |
+| Fitness_Club (held out) | auc | 0.5000 | 0.7804 | 0.7737 | 0.8058 | 0.8058 | 0.8075 |
+| Is-this-a-good-customer (held out) | auc | 0.5000 | 0.7191 | 0.7012 | 0.7324 | 0.7324 | 0.7235 |
+| Marketing_Campaign (held out) | auc | 0.5000 | 0.8693 | 0.8959 | 0.8838 | 0.8838 | 0.9053 |
+| hazelnut-spread-contaminant-detection (held out) | auc | 0.5000 | 0.9573 | 0.9703 | 0.9703 | 0.9703 | 0.9733 |
+| seismic-bumps (held out) | auc | 0.5000 | 0.7556 | 0.7225 | 0.7499 | 0.7499 | 0.7609 |
+| polish_companies_bankruptcy (held out) | auc | 0.5000 | 0.9013 | 0.9475 | 0.9475 | 0.9475 | 0.9450 |
+| taiwanese_bankruptcy_prediction (held out) | auc | 0.5000 | 0.9387 | 0.9377 | 0.9300 | 0.9300 | 0.9248 |
+| NATICUSdroid (held out) | auc | 0.5000 | 0.9793 | 0.9850 | 0.9850 | 0.9850 | 0.9830 |
+| coil2000_insurance_policies (held out) | auc | 0.5000 | 0.6854 | 0.7284 | 0.7343 | 0.7343 | 0.7573 |
+| Bank_Customer_Churn (held out) | auc | 0.5000 | 0.8549 | 0.8616 | 0.8553 | 0.8553 | 0.8749 |
+| heloc (held out) | auc | 0.5000 | 0.7956 | 0.7891 | 0.7950 | 0.7950 | 0.7980 |
+| jm1 (held out) | auc | 0.5000 | 0.7528 | 0.7411 | 0.7266 | 0.7266 | 0.7504 |
+| E-CommereShippingData (held out) | auc | 0.5000 | 0.7394 | 0.7322 | 0.7390 | 0.7390 | 0.7407 |
+| online_shoppers_intention (held out) | auc | 0.5000 | 0.9251 | 0.9268 | 0.9277 | 0.9277 | 0.9313 |
+| in_vehicle_coupon_recommendation (held out) | auc | 0.5000 | 0.8094 | 0.8279 | 0.8269 | 0.8269 | 0.8364 |
+| anneal (held out) | log_loss | 0.8251 | 0.0481 | 0.0496 | 0.0336 | 0.0336 | 0.0370 |
+| maternal_health_risk (held out) | log_loss | 1.0853 | 0.4123 | 0.3965 | 0.5022 | 0.5022 | 0.3975 |
+| website_phishing (held out) | log_loss | 0.9013 | 0.3083 | 0.3095 | 0.3955 | 0.3471 | 0.2425 |
+| MIC (held out) | log_loss | 0.7075 | 0.5932 | 1.1571 | 0.7842 | 0.7842 | 0.5791 |
+| splice (held out) | log_loss | 1.0258 | 0.3165 | 0.1711 | 0.1803 | 0.1803 | 0.1090 |
+| students_dropout_and_academic_success (held out) | log_loss | 1.0198 | 0.6183 | 0.6657 | 0.6061 | 0.6061 | 0.5667 |
+| QSAR_fish_toxicity (held out) | rmse | 1.4446 | 0.8704 | 0.9018 | 0.9070 | 0.9070 | 0.8581 |
+| concrete_compressive_strength (held out) | rmse | 16.7697 | 5.4113 | 4.5612 | 4.8421 | 4.8421 | 4.2136 |
+| healthcare_insurance_expenses (held out) | rmse | 12131.4077 | 4976.7774 | 4962.3126 | 4919.3060 | 4919.3060 | 4715.6102 |
+| airfoil_self_noise (held out) | rmse | 6.7678 | 1.8202 | 1.9046 | 1.5539 | 1.5539 | 1.3467 |
+| Another-Dataset-on-used-Fiat-500 (held out) | rmse | 1930.1094 | 738.3202 | 762.4539 | 743.7459 | 743.7459 | 739.8138 |
+| miami_housing (held out) | rmse | 320712.3226 | 97339.8131 | 92227.5242 | 91855.6187 | 91855.6187 | 83191.2196 |
 
 ## What was not done, and why
 
