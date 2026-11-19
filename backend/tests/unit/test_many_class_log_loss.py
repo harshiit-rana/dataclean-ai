@@ -79,3 +79,22 @@ class TestTheTrainAndTheLoop:
         assert "log loss" in baseline["outcome"]
         assert f"{-baseline['score']:.3f}" in baseline["outcome"]
         assert "-0." not in baseline["outcome"]
+
+
+class TestNoSignal:
+    def test_no_round_keeps_a_gain_that_is_not_clear_of_chance(self, monkeypatch):
+        """On cmc with its labels shuffled, dropping inputs pulled a below-chance log loss toward the class shares
+        and was kept: the input rounds did not ask whether the model was clear of chance, as the others do. Here
+        every gain counts as real and nothing is clear of chance, so no round may be kept."""
+        monkeypatch.setattr(improvement, "_is_real_gain", lambda *a, **k: True)
+        monkeypatch.setattr(improvement, "clear_of_chance", lambda *a, **k: False)
+        rng = np.random.default_rng(11)
+        n = 400
+        df = pd.DataFrame({f"x{i}": rng.normal(0, 1, n) for i in range(6)})
+        df["when"] = pd.date_range("2024-01-01", periods=n, freq="D").astype(str)
+        df["y"] = rng.choice(["a", "b", "c"], n, p=[0.45, 0.35, 0.2])
+        out = improvement.improve(
+            df, target_column="y", task="classification", model_names=["logistic_regression"], budget=2,
+        )
+        kept = [r["name"] for r in out["rounds"] if r["accepted"] and r["name"] != "baseline"]
+        assert kept == []

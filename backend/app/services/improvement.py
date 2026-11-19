@@ -948,7 +948,11 @@ def improve(
                         "they were.",
                     )
                 )
-            elif _is_real_gain(scored.score, best_score, scored.std):
+            # Clear of chance too: on a target with no signal a model below chance gains by getting worse at
+            # fitting noise -- fewer or plainer inputs pull log loss toward the class shares (#132).
+            elif _is_real_gain(scored.score, best_score, scored.std) and clear_of_chance(
+                scored.score, scored.std, metric, y_train
+            ):
                 gain = round(scored.score - best_score, 4)
                 best_score, best_std = scored.score, scored.std
                 recipes, features, used = alt_recipes, alt_features, alt_used
@@ -1062,7 +1066,13 @@ def improve(
                         for c in group
                     ],
                 }
-                if last_scored is not None and _is_real_gain(last_scored.score, best_score, last_scored.std):
+                # Clear of chance too: with no signal, dropping inputs pulls a model's log loss toward the class
+                # shares, a real gain that is not learning anything (found on cmc with its labels shuffled, #132).
+                if (
+                    last_scored is not None
+                    and _is_real_gain(last_scored.score, best_score, last_scored.std)
+                    and clear_of_chance(last_scored.score, last_scored.std, metric, y_train)
+                ):
                     winner = (group, last_scored, reduced, reduced_used)
                     break
 
