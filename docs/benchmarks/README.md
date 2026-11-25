@@ -203,7 +203,7 @@ dataclean_improve against each system, Wilcoxon signed-rank on normalised scores
 
 The 28 TabArena tasks, the first two official folds of each, 120-second budgets, on a GitHub runner (4 CPUs,
 Python 3.12, scikit-learn 1.9.1), after #132. Every task is held out. The machine is slower than the laptop above,
-and the app's plain train alone took 25 to 78 seconds of the budget, so the improvement loop had little search time.
+and the app's plain train alone took 11 to 78 seconds (median 25) of the budget, so the improvement loop had little search time.
 Do not line these numbers up against the AMLB run one for one.
 
 ![Critical-difference diagram: FLAML 1.68, the app's improvement loop 3.07, its plain train 3.11, gradient boosting 3.61, random forest 3.64, constant 5.89](tabarena-cd.svg)
@@ -240,7 +240,7 @@ No system failed a fold.
 - **On MIC the app is worse than predicting the class shares.** Log loss 0.784 on both folds against 0.709 and 0.706
   for the constant predictor, and a Brier score of 0.333 against its 0.289, while its accuracy matches the forest's.
   Its normalised score there is -0.67. Every model in the registry scored worse than chance in its cross-validation there, and
-  the app gave no warning. This is the held-out form of what cmc showed on AMLB, and is
+  the model selection did not say so. This is the held-out form of what cmc showed on AMLB, and is
   [#140](https://github.com/harshiit-rana/dataclean-ai/issues/140). Gradient boosting does worse still on MIC
   (1.157), which is why its mean normalised score is 0.833: read the median.
 - **The improvement loop changed the result once.** On the second fold of website_phishing it took the plain

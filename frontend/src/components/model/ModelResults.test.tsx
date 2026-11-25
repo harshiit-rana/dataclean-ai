@@ -896,3 +896,24 @@ describe("ModelResults — accessibility (#101)", () => {
     expect(await axeViolations(container)).toEqual([]);
   });
 });
+
+describe("ModelResults — when no model beats guessing (#140)", () => {
+  const NOTE =
+    "No model here is clearly better than guessing. Predicting every row's class shares scores 0.709 (log loss, lower is better) on these training rows.";
+
+  it("says so above the comparison table", () => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.selection = { ...r.selection!, clear_of_chance: false, chance_note: NOTE };
+    render(<ModelResults result={r} />);
+    const sentence = screen.getByText(/No model here is clearly better than guessing/);
+    const table = screen.getByRole("columnheader", { name: /Fold score/ }).closest("table")!;
+    expect(sentence.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it("says nothing when a model beats it", () => {
+    const r = result({ evaluation: EVAL(1, "independent") });
+    r.selection = { ...r.selection!, clear_of_chance: true, chance_note: null };
+    render(<ModelResults result={r} />);
+    expect(screen.queryByText(/clearly better than guessing/)).not.toBeInTheDocument();
+  });
+});

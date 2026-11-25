@@ -1338,7 +1338,10 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   stay in accuracy). The 28 TabArena tasks (19 November 2026, on a 4-CPU GitHub runner, after #132): the app
   is level with the forest and gradient boosting (median 1.015 against 1.000 and 0.998) and behind FLAML (1.036)
   beyond chance (Wilcoxon p = 0.0005; 1 win, 8 ties, 19 losses). Its Brier score is the worst of the four real
-  systems (0.151 against 0.121-0.127), and on MIC its log loss is worse than predicting the class shares (#140).
+  systems (0.151 against 0.121-0.127), and on MIC its log loss is worse than predicting the class shares (#140): fully grown trees give the true class
+  a probability of exactly 0 on a few rows, and balanced class weights add a smaller distortion. The plain train now
+  says when no candidate beats guessing on its folds (`selection.chance_note`, on the results page and in the model
+  card); the fix for the probabilities themselves is still open.
   Details in `docs/benchmarks/README.md`.
 - **Cleaning benchmark (#125).** `backend/scripts/cleaning_benchmark.py` injects problems whose every cell is known
   into six of those tasks (blanks, outliers, numbers as text, capitals, spaces, mixed dates, duplicates), as REIN and

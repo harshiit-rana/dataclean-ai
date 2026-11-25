@@ -138,6 +138,8 @@ def _selection_tables(result: dict) -> list[str]:
         "Compared on cross-validated folds of the training rows, never on the held-out rows, "
         f"so the choice cannot have been made with the test answers ({selection.get('chosen_on')})."
     )
+    if selection.get("chance_note"):
+        lines += ["", f"**{selection['chance_note']}**"]
     if selection.get("rule_note"):
         lines += ["", selection["rule_note"]]
     lines += [

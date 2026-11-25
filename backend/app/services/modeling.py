@@ -2456,6 +2456,31 @@ def choose_on_training_folds(
                 f"on average (95% range {_signed(gap['low'])} to {_signed(gap['high'])}), so that "
                 f"small lead is not noise."
             )
+    # Whether any candidate beats guessing on the folds (#140). On MIC every one's log loss was worse than
+    # predicting the class shares, and the selection did not say so.
+    clear = [m for m, s in scores.items() if tuning.clear_of_chance(s["score"], s.get("std"), metric, y_train)]
+    chance_note = None
+    floor = tuning.chance_level(metric, y_train)
+    if not clear and floor is not None:
+        label = _BASELINE_METRIC_LABELS.get(metric, metric)
+        guess = (
+            "Predicting every row's class shares" if metric == "neg_log_loss"
+            else "Always answering with the commonest class" if metric == "accuracy"
+            else "Guessing"
+        )
+        compared = (
+            f"{guess} scores {tuning.shown(floor, metric):.3f} ({label}) on these training rows, and no model's fold "
+            f"score beat that by more than its folds disagree (the best, {_in_a_sentence(MODELS[top].label)}, scored "
+            f"{tuning.shown(scores[top]['score'], metric):.3f})."
+        )
+        # Log loss judges the stated probabilities, not the ranking: a model can fail here and still rank well, so
+        # the sentence must not contradict a held-out verdict made on the AUC.
+        chance_note = (
+            f"No model's probabilities here are clearly better than quoting how common each answer is. {compared} "
+            "It may still rank or pick answers well, but do not rely on the probabilities it states."
+            if metric == "neg_log_loss"
+            else f"No model here is clearly better than guessing. {compared}"
+        )
     distinguishable_note = None
     if comparison and not comparison["distinguishable"]:
         gap = comparison["paired_difference"]
@@ -2488,6 +2513,9 @@ def choose_on_training_folds(
         "distinguishable": comparison["distinguishable"] if comparison else None,
         "paired_difference": comparison["paired_difference"] if comparison else None,
         "distinguishable_note": distinguishable_note,
+        # False when no candidate beat guessing by more than its folds disagree; `chance_note` says so.
+        "clear_of_chance": bool(clear) if floor is not None else None,
+        "chance_note": chance_note,
         "chosen_on": (
             f"cross-validated {metric} over {scores[chosen]['folds']} folds of "
             f"{'a sample of ' + format(used_rows, ',') + ' of the ' + format(available, ',') if used_rows < available else 'the'}"

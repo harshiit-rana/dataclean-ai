@@ -98,3 +98,37 @@ class TestNoSignal:
         )
         kept = [r["name"] for r in out["rounds"] if r["accepted"] and r["name"] != "baseline"]
         assert kept == []
+
+
+class TestNoModelBeatsChance:
+    """On MIC every candidate's fold log loss was worse than predicting the class shares, and the selection did
+    not say so (#140). The selection now says so, for any metric with a chance level."""
+
+    @staticmethod
+    def noise(classes, n=400, seed=5):
+        rng = np.random.default_rng(seed)
+        df = pd.DataFrame({f"x{i}": rng.normal(0, 1, n) for i in range(5)})
+        df["y"] = rng.choice(classes, n)
+        return df
+
+    def train(self, df):
+        return modeling.train_candidates(
+            df, target_column="y", task="classification",
+            model_names=["logistic_regression", "random_forest_classifier"], include_deep_diagnostics=False,
+        )["selection"]
+
+    def test_labels_with_no_signal_are_said_to_be_no_better_than_guessing(self):
+        selection = self.train(self.noise(["a", "b", "c"]))
+        assert selection["clear_of_chance"] is False
+        assert "class shares" in selection["chance_note"]
+        assert "do not rely on the probabilities" in selection["chance_note"]
+
+    def test_two_classes_with_no_signal_are_said_so_too(self):
+        selection = self.train(self.noise(["yes", "no"]))
+        assert selection["clear_of_chance"] is False
+        assert "guessing" in selection["chance_note"]
+
+    def test_a_target_with_signal_gets_no_such_note(self):
+        selection = self.train(three_class())
+        assert selection["clear_of_chance"] is True
+        assert selection["chance_note"] is None

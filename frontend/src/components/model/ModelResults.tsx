@@ -312,6 +312,11 @@ function ModelComparison({ result, keys }: { result: ModelResult; keys: string[]
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
+        {selection.chance_note && (
+          <p className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 text-sm">
+            {selection.chance_note}
+          </p>
+        )}
         {selection.rule_note && (
           <p className="rounded-md border border-sky-500/40 bg-sky-500/5 p-3 text-sm">
             {selection.rule_note}

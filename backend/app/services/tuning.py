@@ -174,6 +174,32 @@ def shown(score: float, metric: str | None) -> float:
     return -score if metric == "neg_log_loss" else score
 
 
+def chance_level(metric: str, y) -> float | None:
+    """What a model that has learned nothing scores on this metric: 0.5 AUC, the commonest answer's share of
+    accuracy, 0 R-squared. None for a metric without one."""
+    if metric == "roc_auc":
+        return 0.5
+    if metric == "r2":
+        return 0.0
+    if metric == "accuracy":
+        shares = pd.Series(y).astype(str).value_counts(normalize=True)
+        return float(shares.iloc[0]) if len(shares) else None
+    if metric == "neg_log_loss":
+        # Predicting every row's class shares; negated, as the score is (#132).
+        shares = pd.Series(y).astype(str).value_counts(normalize=True).to_numpy()
+        return float((shares * np.log(shares)).sum()) if len(shares) else None
+    return None
+
+
+def clear_of_chance(score: float, std: float | None, metric: str, y) -> bool:
+    """Whether a fold score is above what guessing scores by more than the folds disagree. A change that only
+    brings a model up to chance -- a default that overfits noise to below 0.5 AUC, replaced by one that
+    predicts the same for everyone -- is not an improvement worth keeping: with no signal every setting is
+    chance, and calling one of them better is the luck the confirmation exists to refuse."""
+    floor = chance_level(metric, y)
+    return floor is None or score - float(std or 0.0) > floor
+
+
 # The shuffle seed of the folds a search winner is confirmed on. Any value other than the search's own (42).
 CONFIRMATION_SEED = 1729
 

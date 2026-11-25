@@ -917,6 +917,10 @@ export interface ModelSelection {
   paired_difference?: { difference: number; low: number; high: number } | null;
   /** Written in code, and present exactly when the two models are within the noise. */
   distinguishable_note?: string | null;
+  /** False when no candidate beat guessing on the folds by more than they disagree (#140). */
+  clear_of_chance?: boolean | null;
+  /** Written in code, and present exactly when `clear_of_chance` is false. */
+  chance_note?: string | null;
   /** Whether the choice survives other random seeds: the chosen model refitted with several, on the
    * same training folds, against the gap to the runner-up. */
   seed_stability?: SeedStability | null;
