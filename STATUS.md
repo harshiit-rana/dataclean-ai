@@ -1341,7 +1341,10 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   systems (0.151 against 0.121-0.127), and on MIC its log loss is worse than predicting the class shares (#140): fully grown trees give the true class
   a probability of exactly 0 on a few rows, and balanced class weights add a smaller distortion. The plain train now
   says when no candidate beats guessing on its folds (`selection.chance_note`, on the results page and in the model
-  card); the fix for the probabilities themselves is still open.
+  card); the model settings
+  were kept. Dropping the class weights improved log loss on the development tasks (-0.016 over 40 folds, SE 0.003)
+  but cost rare answers (cmc's rarest class found 35% of the time instead of 59%); larger leaves and calibration
+  helped only cmc and cost 1.5 to 2.8 times the fits. MIC itself is not fixed.
   Details in `docs/benchmarks/README.md`.
 - **Cleaning benchmark (#125).** `backend/scripts/cleaning_benchmark.py` injects problems whose every cell is known
   into six of those tasks (blanks, outliers, numbers as text, capitals, spaces, mixed dates, duplicates), as REIN and

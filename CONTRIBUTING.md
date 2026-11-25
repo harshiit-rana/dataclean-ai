@@ -494,6 +494,9 @@ are both running locally, you're ready to make changes.
   while the spread beside them was AUC, so on a lopsided target they read as disagreeing about
   one model. The metric is fixed from the training rows, not the test rows, and each chart's
   output carries its `metric` so the page can name it.
+- **Class weights are judged on both sides.** A change to class weights, or to how a label is picked from the
+  probabilities, is measured on balanced accuracy and the rarest class's recall as well as log loss. Unweighted
+  models won on log loss and found cmc's rarest class 35% of the time instead of 59% (#140).
 - **A new model gets a `complexity_rank`.** The one-standard-error rule keeps the simplest
   candidate the folds cannot separate from the best, and "simplest" is the rank written on its
   `ModelSpec` (a linear model before a forest before boosted trees), not an accident of the
