@@ -17,6 +17,18 @@ alerts, all in the frontend's npm dependencies.
 
 The frontend suite (520 tests) and the production build pass on the new versions.
 
+## Fixed (25 November 2026)
+
+| Package | From | To | What it fixed |
+| --- | --- | --- | --- |
+| react-router-dom / react-router | 6.30.6 | 7.18.5 | Open redirect via a backslash in `<Link>` / `useNavigate`; constructor injection in SSR hydration |
+
+A major upgrade, done as its own change. The app uses only the component API (`BrowserRouter`, `Routes`, `Link` and
+hooks), with no data routers, `future` flags or nested splat routes, so no code changed. The frontend suite (543
+tests), the type check and the build pass, and every route of the built app was loaded in a browser without a
+backend: the session pages were seen only in their no-data state. It needs Node 20, which CI and the Docker image
+already use. `npm audit` reports no vulnerabilities.
+
 ## Fixed (18 November 2026)
 
 Dependabot's first version-update PRs arrived once security updates were switched on (#109).
@@ -33,12 +45,11 @@ The frontend suite (541 tests), the type check and the production build pass on 
 
 | Package | Advisory | Why it is accepted for now | What would fix it |
 | --- | --- | --- | --- |
-| react-router 6 | Open redirect via a backslash in `<Link>` / `useNavigate`; constructor injection in SSR hydration | The app has no server-side rendering. Every navigation target is a path the app builds itself, starting with a fixed prefix (`/model/`, `/review/`, ...) and a server-made UUID. The one id a user types ("Open a project with its key") is checked against the UUID format before it is stored or navigated to. | React Router 7 (a major upgrade, with route API changes) |
 | tailwindcss 3 (braces, micromatch, chokidar, fast-glob, postcss-selector-parser, postcss-nested) | Denial of service from deeply nested glob patterns or crafted selectors | Build-time only, and the only globs and CSS they process are the project's own. Nothing from a user reaches them, and none of it ships to the browser. | Tailwind CSS 4 (a major upgrade with a new configuration format) |
 | picomatch (via vite, vitest, tailwindcss and their file watchers) | ReDoS through repeated extglobs (high; npm audit lists it under fdir, tinyglobby, anymatch, readdirp, chokidar, sucrase, micromatch and fast-glob too) | Build- and test-time only: it matches the project's own file globs, never anything a user sends, and none of it ships to the browser. No fixed release exists yet: 4.0.7 and 2.3.2, the newest of each line, are both in the affected range (18 November 2026). | A patched picomatch release, which Dependabot will propose |
 
 These are worth doing as their own pieces of work, each with the frontend suite and a look at every page. They are
-not done here because a major upgrade of the router or the styling system is not a security patch, and doing it in
+not done here because a major upgrade of the styling system is not a security patch, and doing it in
 the same change would hide whatever it breaks.
 
 ## How updates arrive from here
