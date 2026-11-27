@@ -17,14 +17,17 @@ implementing a custom prefix that doesn't exist.
 from __future__ import annotations
 
 import logging
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from typing import AsyncIterator
 
 from langgraph.checkpoint.redis.aio import AsyncRedisSaver
+from redisvl.exceptions import RedisSearchError
 
 from app.config import Settings
 
 logger = logging.getLogger(__name__)
+
+_SETUP_ATTEMPTS = 3
 
 
 @asynccontextmanager
@@ -33,8 +36,22 @@ async def build_checkpointer(settings: Settings) -> AsyncIterator[AsyncRedisSave
     # files separately, which cannot express a project kept until deleted. The sweep is now the one place that
     # decides: it deletes a session's checkpoint thread when it removes the session's folder, and never touches a
     # kept project. See docs/decisions/0004-platform-architecture.md.
-    async with AsyncRedisSaver.from_conn_string(settings.redis_url) as checkpointer:
-        await checkpointer.asetup()
+    #
+    # Entering the saver creates its search indexes, and the library checks for an index and then creates it. On an
+    # empty Redis the backend and the worker do this at the same moment, so one of them can be told the index already
+    # exists and fail startup (#141). Only the entry is retried, and only for that error; a second pass finds the
+    # indexes and skips them. The body below the yield is never retried.
+    stack = AsyncExitStack()
+    for attempt in range(1, _SETUP_ATTEMPTS + 1):
+        try:
+            checkpointer = await stack.enter_async_context(AsyncRedisSaver.from_conn_string(settings.redis_url))
+            break
+        except RedisSearchError as exc:
+            await stack.aclose()
+            if "already exists" not in str(exc).lower() or attempt == _SETUP_ATTEMPTS:
+                raise
+            logger.info("Another process created the checkpoint index first; setting up again (%s)", exc)
+    async with stack:
         yield checkpointer
 
 

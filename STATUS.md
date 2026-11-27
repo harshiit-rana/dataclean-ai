@@ -1269,6 +1269,10 @@ judged stable, and the model scored 0.785 AUC on the later rows against 0.749 wh
   rotated, and is shown once; the browser lists kept projects from `localStorage`. Checkpoints no longer expire on
   their own: the sweep deletes a session's checkpoint with its files. The local-disk implications (unencrypted at
   rest, deletion is not secure erasure, backups keep copies) are in `docs/security/local-storage.md` and the README.
+- **Starting on an empty Redis (#141).** The backend and the worker both create the checkpoint search indexes when
+  they start. On an empty Redis they could do it at the same moment, and the slower one was told the index already
+  existed and failed startup (seen once in CI). That one error now makes setup run again, up to three times; any
+  other setup error still stops startup.
 - **Retention.** Files deleted 24 hours after last use, swept hourly in-process. "Use" now includes reading (#118):
   a session's Redis checkpoint has its expiry refreshed on every read, while its files aged only by writes, so a
   session that was only viewed could keep its checkpoint and lose its files, and then half the routes worked and
